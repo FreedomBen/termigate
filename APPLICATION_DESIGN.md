@@ -106,7 +106,7 @@ Android app (future):
 - **Lifecycle**:
   - Monitors all viewer PIDs — auto-unsubscribes on viewer crash/disconnect
   - On last viewer unsubscribe: starts a configurable grace period timer (default 5s) via `Process.send_after(self(), :grace_period_expired, ...)`. If a new viewer subscribes within the grace period, cancel the timer via `Process.cancel_timer/1`. When the `:grace_period_expired` message arrives in `handle_info`, re-check `MapSet.size(viewers) == 0` before proceeding with shutdown — this eliminates the race between a late subscribe and the timer firing. **Why this is safe**: Even if `Process.cancel_timer/1` returns `false` (the `:grace_period_expired` message is already in the mailbox), the GenServer processes messages sequentially. The subscribe call (which adds the viewer to the MapSet) is a `GenServer.call` that will be processed before or after the timer message. If the subscribe is processed first, the viewer is in the MapSet and the re-check prevents shutdown. If the timer fires first, the re-check sees zero viewers and shuts down — but the subscribe call will then start a fresh PaneStream via the get-or-start logic.
-  - On Port exit (any status): set status to `:dead`, broadcast `{:pane_dead, target}` to all viewers, clean up FIFO, shut down after viewers acknowledge/disconnect. Log at `info` level for exit status 0 (normal pane death); log at `warning` level for non-zero (e.g., permission error, `cat` not found).
+  - On Port exit (any status): set status to `:dead`, broadcast `{:pane_dead, target}` to all viewers via PubSub, clean up FIFO, then terminate. Viewers receive the broadcast independently and do not need to acknowledge. Log at `info` level for exit status 0 (normal pane death); log at `warning` level for non-zero (e.g., permission error, `cat` not found).
 
 #### `RemoteCodeAgents.Tmux.CommandRunner`
 - **Responsibility**: Execute tmux CLI commands and return parsed output
@@ -327,7 +327,7 @@ All viewers — first or late — follow the same path. The ring buffer always c
 5. PaneStream handles all exit statuses uniformly: sets status to `:dead`, broadcasts `{:pane_dead, target}` via PubSub, cleans up FIFO. Logs differ by status: `Logger.info` for status 0 (normal pane death), `Logger.warning` for non-zero (port error — e.g., permission denied, `cat` binary missing).
 6. All TerminalLive viewers receive `handle_info({:pane_dead, _})`, push `"pane_dead"` event to client
 7. Client shows "Session ended" overlay with link back to session list
-8. PaneStream cleans up FIFO, terminates after a short delay
+8. PaneStream cleans up FIFO and terminates
 
 ### Resize Conflict Resolution
 
@@ -588,7 +588,7 @@ config :remote_code_agents,
 
 ## Resolved Design Decisions
 
-1. **Capture strategy → pipe-pane**: True streaming via `tmux pipe-pane` to a FIFO, read by a `cat` Port. Initial scrollback captured via `capture-pane` and written into the ring buffer. The startup sequence (Port first, then pipe-pane, then capture-pane, then seed buffer) avoids both FIFO deadlock and missed output.
+1. **Capture strategy → pipe-pane**: True streaming via `tmux pipe-pane` to a FIFO, read by a `cat` Port. Initial scrollback captured via `capture-pane -e` (with ANSI escape sequences preserved) and written into the ring buffer. The startup sequence (Port first, then pipe-pane, then capture-pane, then seed buffer) avoids both FIFO deadlock and missed output.
 
 2. **History → unified ring buffer**: Initial scrollback is written into the ring buffer at startup. All viewers — first or late — receive history from this single buffer. Buffer size is computed dynamically from the pane's tmux `history-limit` × width, clamped between 256KB and 4MB (default 1MB fallback). Old content rolls off naturally as new output streams in.
 
