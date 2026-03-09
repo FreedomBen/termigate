@@ -135,7 +135,8 @@ PaneStream startup (order matters):
   4. Attach pipe: tmux pipe-pane -t {target} -o 'cat >> {fifo_path}'
      — This opens the write end of the FIFO, unblocking the `cat` reader
   5. Query buffer size: determine ring buffer capacity (see Buffer Sizing below)
-  6. Capture initial scrollback: tmux capture-pane -p -e -S -{max_lines} -t {target}
+  6. Capture initial scrollback: tmux capture-pane -p -e -S - -t {target}
+     — `-S -` captures all available history; the ring buffer's size limit is the real cap
      — Done AFTER pipe-pane attach so no output is lost between steps
      — Any output generated between steps 4 and 6 will appear in both
        the pipe stream and the scrollback capture (minor duplication, but

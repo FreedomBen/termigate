@@ -48,8 +48,8 @@ Added minimum tmux version 2.6+ requirement. `CommandRunner` checks version on f
 ### ~~14. CommandRunner `run/1` argument format unspecified~~ RESOLVED
 `run/1` takes a list of argument strings, prepends the tmux binary path, executes via `System.cmd/3`.
 
-### 15. `capture-pane -S` flag inconsistency
-Line 138 uses `-S -{max_lines}` (e.g., `-S -10000`) but line 529 says `-S -` (all history). These are different behaviors. Pick one and be consistent — `-S -{max_lines}` is correct per the configuration section.
+### ~~15. `capture-pane -S` flag inconsistency~~ RESOLVED
+Standardized on `-S -` (capture all available history). The ring buffer's dynamic size limit is the real cap — no need to artificially limit the capture. Removed `max_scrollback_lines` config (already gone from #5 fix).
 
 ## Minor Issues
 
