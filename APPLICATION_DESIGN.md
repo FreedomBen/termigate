@@ -234,7 +234,7 @@ Example: User types "hi" then Ctrl+C
 - "New Session" button/form — creates a new tmux session (name input with validation, optional starting command)
 - **Session list updates** use a hybrid approach:
   - **Instant**: Subscribes to PubSub topic `"sessions"` on mount. `TmuxManager.create_session/1` and `kill_session/1` broadcast `{:sessions_changed}` on this topic after mutating state, so the session list updates immediately for app-driven changes.
-  - **Polling fallback**: `Process.send_after(self(), :refresh_sessions, interval)` in `handle_info` catches external changes (sessions created/killed from the terminal). Default interval is 5 seconds. This is a lightweight **server-local** call (`tmux list-sessions` reads tmux's in-memory state) — it does not generate network traffic unless the session list actually changed (LiveView only pushes diffs). The interval is configurable via `config :remote_code_agents, session_poll_interval: 5_000`.
+  - **Polling fallback**: `Process.send_after(self(), :refresh_sessions, interval)` in `handle_info` catches external changes (sessions created/killed from the terminal). Default interval is 3 seconds. This is a lightweight **server-local** call (`tmux list-sessions` reads tmux's in-memory state) — it does not generate network traffic unless the session list actually changed (LiveView only pushes diffs). The interval is configurable via `config :remote_code_agents, session_poll_interval: 3_000`.
 - Click a pane to navigate to the terminal view via `push_navigate`
 - Shows pane dimensions and running command (from `tmux list-panes -F` format)
 - Mobile layout: full-width card list, large touch targets
