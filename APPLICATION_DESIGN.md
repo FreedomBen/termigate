@@ -629,9 +629,9 @@ This application is **fully stateless from a storage perspective**. No database 
 
 ---
 
-## Future Features
+## Feature Designs
 
-### Future 1: Authentication & Remote Access
+### Authentication & Remote Access
 
 **Goal**: Access terminal sessions from a phone or remote machine over the internet, securely.
 
@@ -689,7 +689,7 @@ if auth_token = System.get_env("RCA_AUTH_TOKEN") do
 end
 ```
 
-### Future 2: Phoenix Channel + Native Android Client
+### Phoenix Channel + Native Android Client
 
 **Goal**: Android app connects directly to the server via WebSocket, renders terminal natively.
 
@@ -731,7 +731,7 @@ DELETE /api/sessions/:name — kill session
 - **Input**: Android's native keyboard input → convert to terminal bytes → send via Channel `input` event.
 - **Offline/reconnect**: Channel automatically reconnects on network drop. On reconnect, re-join the topic — server sends fresh history from the ring buffer. Native terminal clears and re-renders.
 
-### Future 3: Pane Resize Sync
+### Pane Resize Sync
 
 **Goal**: Viewers can resize the tmux pane, and all viewers stay in sync.
 
@@ -757,7 +757,7 @@ Mobile viewers are **passive resizers** by default:
 - **Throttle**: Server ignores resize events arriving within 500ms of the last resize for the same pane
 - **Display feedback**: When another viewer resizes, show a brief toast: "Terminal resized to {cols}x{rows} by another viewer"
 
-### Future 4: Session Management
+### Session Management
 
 **Goal**: Full session lifecycle management from the UI.
 
@@ -784,7 +784,7 @@ Mobile viewers are **passive resizers** by default:
 - Rename validation uses the same `^[a-zA-Z0-9_-]+$` regex
 - If a viewer is watching a pane that gets killed, they receive the standard `pane_dead` flow
 
-### Future 5: Multi-Pane Split View
+### Multi-Pane Split View
 
 **Goal**: View multiple tmux panes side-by-side in the browser, mirroring tmux's split-pane layout.
 
@@ -806,7 +806,7 @@ Mobile viewers are **passive resizers** by default:
 - On mobile, the session view shows a list of panes — tap one to open full-viewport
 - Alternatively: horizontal swipe between panes in the same window
 
-### Future 6: Quick Actions (Command Buttons)
+### Quick Actions (Command Buttons)
 
 **Goal**: Configurable buttons that send pre-defined commands to the terminal with a single tap — especially valuable on mobile where typing long commands is painful.
 
@@ -1072,7 +1072,7 @@ defp deps do
 end
 ```
 
-### Future 6b: Settings & Quick Actions Management UI + API
+### Settings & Quick Actions Management UI + API
 
 **Goal**: Allow users to manage quick actions and application settings through the web UI (and via a REST API for the native Android app), in addition to hand-editing the YAML config file.
 
@@ -1278,7 +1278,7 @@ end
 live "/settings", SettingsLive
 ```
 
-### Future 7: User Preferences
+### User Preferences
 
 **Goal**: Configurable font size, color theme, and other display settings.
 
@@ -1379,7 +1379,7 @@ CMD ["/app/bin/remote_code_agents", "start"]
 
 ---
 
-## Future Prioritization
+## Implementation Prioritization
 
 | Priority | Feature | Effort | Rationale |
 |----------|---------|--------|-----------|
