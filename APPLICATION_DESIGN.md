@@ -188,16 +188,26 @@ This ensures the buffer automatically scales to match what tmux is retaining, wi
 
 **Problem**: `tmux send-keys -l` (literal mode) sends text literally but does **not** handle control characters. xterm.js `onData` emits raw terminal data including escape sequences (`\x03` for Ctrl+C, `\x1b[A` for arrow up, etc.). These must reach tmux correctly.
 
-**Solution**: Use `tmux send-keys -H` (hex mode) for all input. Convert each byte from xterm.js `onData` to its two-character hex representation and pass them as arguments to `send-keys -H`.
+**Solution**: Use `tmux send-keys -H` (hex mode) for all input. The full encoding pipeline:
+
+1. **Client (JS)**: xterm.js `onData` emits a JavaScript string (UTF-16). Encode to UTF-8 bytes via `new TextEncoder().encode(data)`, then base64-encode the result. Send via `pushEvent("key_input", {data: base64String})`.
+2. **Server (Elixir)**: `Base.decode64!/1` recovers the raw UTF-8 bytes. Convert each byte to its two-character hex representation. Pass to `tmux send-keys -H`.
+
+This mirrors the output path (server base64-encodes, client decodes) for symmetry.
 
 ```
 Example: User types "hi" then Ctrl+C
-  xterm.js onData emits: "hi\x03"
-  Sent to server as: %{"data" => "hi\x03"}
+  xterm.js onData emits: "hi\x03" (JS string)
+  TextEncoder produces: <<0x68, 0x69, 0x03>> (UTF-8 bytes)
+  Base64 encoded: "aGkD"
+  Sent to server as: %{"data" => "aGkD"}
+  Server decodes base64: <<0x68, 0x69, 0x03>>
   PaneStream calls: tmux send-keys -H -t {target} 68 69 03
 ```
 
-**Why hex mode for everything**: Simpler than branching between `-l` for printable chars and raw mode for control chars. No escaping edge cases. Works uniformly for all input including Unicode (send UTF-8 bytes as hex).
+**Why base64 for transport**: LiveView events are JSON-serialized. While raw control characters (`\x03`) are valid in JSON strings, base64 is more explicit, avoids edge cases with binary-unsafe intermediaries, and is symmetric with the output path.
+
+**Why hex mode for tmux**: Simpler than branching between `-l` for printable chars and raw mode for control chars. No escaping edge cases. Works uniformly for all input including Unicode (UTF-8 bytes as hex).
 
 **Performance**: For typical interactive use, `send-keys -H` with a handful of hex bytes per keystroke is negligible overhead. For bulk paste operations, we batch into a single `send-keys -H` call with all bytes.
 
@@ -218,7 +228,7 @@ Example: User types "hi" then Ctrl+C
 - Full-viewport xterm.js terminal
 - **LiveView Hook (`TerminalHook`)**:
   - `mounted()`: Creates xterm.js `Terminal` + `FitAddon`, opens terminal in container div, calls `FitAddon.fit()`, sends initial `resize` event to server
-  - `onData`: xterm.js keyboard input → `this.pushEvent("key_input", {data: rawBytes})`
+  - `onData`: xterm.js keyboard input → UTF-8 encode via `TextEncoder` → base64 encode → `this.pushEvent("key_input", {data: base64String})`
   - `onResize`: debounced (300ms) → `this.pushEvent("resize", {cols, rows})`
   - Server pushes `"output"` → `term.write(data)`
   - Server pushes `"history"` → `term.write(data)` (before streaming begins)
@@ -231,7 +241,7 @@ Example: User types "hi" then Ctrl+C
   - Subscribes to PubSub topic `"pane:#{target}"`
   - `handle_info({:pane_output, data})` → `push_event(socket, "output", %{data: data})`
   - `handle_info({:pane_dead, _target})` → `push_event(socket, "pane_dead", %{})`
-  - `handle_event("key_input", %{"data" => data})` → `PaneStream.send_keys(target, data)`
+  - `handle_event("key_input", %{"data" => b64})` → `Base.decode64!/1` → `PaneStream.send_keys(target, bytes)`
   - `handle_event("resize", %{"cols" => c, "rows" => r})` → resize handling (see Resize Conflicts below)
   - `terminate/2`: calls `PaneStream.unsubscribe(target)`
 - Mobile: on-screen virtual keyboard toolbar (see Mobile UI section)
@@ -262,7 +272,7 @@ For native Android client only. Not used by the web UI.
 4. `TerminalLive` receives via `handle_info`, calls `push_event(socket, "output", %{data: Base.encode64(bytes)})`
 5. `TerminalHook` decodes base64, calls `term.write(bytes)` on xterm.js instance
 
-Note: Binary data is base64-encoded for LiveView push_event since LiveView events are JSON-serialized. For the future Channel implementation, raw binary frames can be used instead.
+Note: Both input and output are base64-encoded for LiveView transport since LiveView events are JSON-serialized. Output: server encodes, client decodes. Input: client encodes (via `TextEncoder` + base64), server decodes. For the future Channel implementation, raw binary frames can be used instead.
 
 ### Initial Attach (history)
 
@@ -279,10 +289,11 @@ All viewers — first or late — follow the same path. The ring buffer always c
 
 ### Keyboard Input (browser → tmux)
 
-1. xterm.js `onData` callback fires with raw terminal bytes
-2. Hook calls `this.pushEvent("key_input", {data: rawBytes})`
-3. `TerminalLive.handle_event("key_input", %{"data" => data})` calls `PaneStream.send_keys(target, data)`
-4. PaneStream converts bytes to hex, executes `tmux send-keys -H -t {target} {hex_bytes}`
+1. xterm.js `onData` callback fires with a JavaScript string
+2. Hook encodes to UTF-8 via `TextEncoder`, then base64-encodes the bytes
+3. Hook calls `this.pushEvent("key_input", {data: base64String})`
+4. `TerminalLive.handle_event("key_input", %{"data" => b64})` decodes base64 via `Base.decode64!/1`, calls `PaneStream.send_keys(target, bytes)`
+5. PaneStream converts bytes to hex, executes `tmux send-keys -H -t {target} {hex_bytes}`
 
 ### Pane Resize
 

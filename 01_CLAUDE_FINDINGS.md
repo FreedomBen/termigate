@@ -19,13 +19,11 @@ Moved the get-or-start logic into the `subscribe/1` description directly — it 
 ### ~~5. Scrollback vs ring buffer overlap for late joiners~~ RESOLVED
 Unified into a single ring buffer. Scrollback is written into the ring buffer at startup; all viewers receive `{:ok, history}` from the same buffer. Buffer sized dynamically from tmux `history-limit` × pane width (clamped 256KB–4MB, default 1MB fallback). Renamed all events from `"scrollback"` to `"history"`.
 
-### 6. Input encoding path underspecified
-Line 241 says output is base64-encoded for push_event, but line 264 shows `pushEvent("key_input", {data: rawBytes})` without mentioning base64. xterm.js `onData` emits a JavaScript string (UTF-16), not raw bytes. The doc should clarify:
-- Is input also base64-encoded?
-- Where does the JS string → UTF-8 bytes → hex conversion happen (client-side or server-side)?
+### ~~6. Input encoding path underspecified~~ RESOLVED
+Specified full encoding pipeline: client uses `TextEncoder` (JS string → UTF-8 bytes) then base64, server decodes base64 then converts to hex for `send-keys -H`. Symmetric with the output path.
 
-### 7. `send-keys -H` and multi-byte characters
-Line 178 says "send UTF-8 bytes as hex" but doesn't address how the JavaScript string from `onData` gets converted to UTF-8 byte representation. Specify whether this conversion happens client-side (send hex directly) or server-side (receive string, encode to UTF-8, then hex).
+### ~~7. `send-keys -H` and multi-byte characters~~ RESOLVED
+Covered by #6 fix — `TextEncoder` handles the JS string → UTF-8 conversion client-side.
 
 ### 8. PubSub topic contains multiple colons
 Line 209 uses `"pane:#{target}"` where target is `"session:window.pane"`, producing topics like `"pane:mysession:0.1"`. This works but is worth an explicit note that the format is intentionally `pane:<session>:<window>.<pane>`.
