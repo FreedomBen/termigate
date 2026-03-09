@@ -214,7 +214,7 @@ Example: User types "hi" then Ctrl+C
 
 **Why base64 for transport**: LiveView events are JSON-serialized. While raw control characters (`\x03`) are valid in JSON strings, base64 is more explicit, avoids edge cases with binary-unsafe intermediaries, and is symmetric with the output path.
 
-**Why hex mode for tmux**: Simpler than branching between `-l` for printable chars and raw mode for control chars. No escaping edge cases. Works uniformly for all input including Unicode (UTF-8 bytes as hex).
+**Why hex mode for tmux**: Simpler than branching between `-l` for printable chars and raw mode for control chars. No escaping edge cases. Works uniformly for all input including Unicode (UTF-8 bytes as hex). Multi-byte UTF-8 sequences (e.g., emoji like 😀 = 4 bytes `F0 9F 98 80`) are sent as individual hex bytes and tmux reassembles them correctly. This should have an explicit integration test.
 
 **Performance**: For typical interactive use, `send-keys -H` with a handful of hex bytes per keystroke is negligible overhead. For bulk paste operations, we batch into a single `send-keys -H` call with all bytes.
 
@@ -394,8 +394,8 @@ A fixed bottom toolbar providing keys that don't exist on mobile keyboards:
 
 | Component          | Choice              | Rationale                                              |
 |--------------------|---------------------|--------------------------------------------------------|
-| Language           | Elixir 1.16+        | User preference; excellent for concurrent I/O          |
-| Runtime            | OTP 26+             | Required by modern Phoenix/LiveView                    |
+| Language           | Elixir 1.17+        | User preference; excellent for concurrent I/O          |
+| Runtime            | OTP 27+             | Required by modern Phoenix/LiveView                    |
 | Web framework      | Phoenix 1.7+        | Standard Elixir web framework                          |
 | Real-time UI       | Phoenix LiveView 0.20+ | WebSocket-based, no separate API needed             |
 | Terminal rendering | @xterm/xterm 5.x    | Battle-tested terminal emulator; handles ANSI, cursor  |
@@ -1280,7 +1280,11 @@ scope "/api", RemoteCodeAgentsWeb do
   put "/quick-actions/order", QuickActionController, :reorder
 end
 
-live "/settings", SettingsLive
+scope "/", RemoteCodeAgentsWeb do
+  pipe_through [:browser, :require_auth]
+
+  live "/settings", SettingsLive
+end
 ```
 
 ### User Preferences

@@ -58,15 +58,14 @@ Fixed: `mount/3` documents target construction as `"#{session}:#{window}.#{pane}
 ### 14. ~~Session list polling vs streaming philosophy~~ RESOLVED
 Fixed: Hybrid approach — instant PubSub updates for app-driven changes (`TmuxManager` broadcasts `{:sessions_changed}` on create/kill), 3s polling fallback for external changes only.
 
-### 15. `send-keys -H` and multi-byte UTF-8
-**Location**: Line 211
-Hex bytes are space-separated. Confirm tmux handles multi-byte UTF-8 sequences correctly (e.g., emoji = 4 bytes sent as 4 separate hex values). It does, but worth an explicit test case.
+### 15. ~~`send-keys -H` and multi-byte UTF-8~~ RESOLVED
+Fixed: Added explicit note that multi-byte UTF-8 (e.g., emoji) works correctly with per-byte hex encoding, and flagged for an integration test.
 
-## Minor Nits
+## ~~Minor Nits~~ ALL RESOLVED
 
-- **Line 406**: `yaml_elixir 2.9+` — current version is `2.11`, pin to `~> 2.11`
-- **Line 394**: `Elixir 1.16+` — consider `1.17+` since that's current
-- **Line 1278**: Settings page route is outside any scope/pipeline — needs to be inside the authenticated pipeline
+- ~~`yaml_elixir 2.9+`~~ → Updated to `~> 2.11`, added `ymlr ~> 5.0`
+- ~~`Elixir 1.16+`~~ → Updated to `1.17+`, OTP to `27+`
+- ~~Settings route outside auth pipeline~~ → Wrapped in `scope` with `pipe_through [:browser, :require_auth]`
 
 ## Recommendations Before Implementation
 
