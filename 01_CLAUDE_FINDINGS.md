@@ -16,8 +16,8 @@ Moved the get-or-start logic into the `subscribe/1` description directly — it 
 
 ## Ambiguities
 
-### 5. Scrollback vs ring buffer overlap for late joiners
-`subscribe/1` returns `{:ok, scrollback_binary, recent_ring_buffer}`. For late joiners, the scrollback was captured at PaneStream startup (potentially hours ago) and the ring buffer has the most recent 64KB. There may be a large gap or overlap between them. The doc hand-waves xterm.js handling "redrawn content gracefully" (line 142) for the brief pipe-pane/capture-pane overlap, but the late-joiner case is much worse — stale scrollback followed by recent output with a gap in between. Specify the client-side strategy.
+### ~~5. Scrollback vs ring buffer overlap for late joiners~~ RESOLVED
+Unified into a single ring buffer. Scrollback is written into the ring buffer at startup; all viewers receive `{:ok, history}` from the same buffer. Buffer sized dynamically from tmux `history-limit` × pane width (clamped 256KB–4MB, default 1MB fallback). Renamed all events from `"scrollback"` to `"history"`.
 
 ### 6. Input encoding path underspecified
 Line 241 says output is base64-encoded for push_event, but line 264 shows `pushEvent("key_input", {data: rawBytes})` without mentioning base64. xterm.js `onData` emits a JavaScript string (UTF-16), not raw bytes. The doc should clarify:

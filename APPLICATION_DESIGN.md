@@ -95,12 +95,11 @@ Android app (future):
   - `target` — the `session:window.pane` identifier
   - `pipe_port` — Elixir Port running `cat` on the FIFO
   - `viewers` — `MapSet` of subscriber PIDs (monitored)
-  - `buffer` — ring buffer of recent output (configurable max size, default 64KB) for late-joining viewers
-  - `scrollback` — initial scrollback binary captured at startup
+  - `buffer` — ring buffer of all output (scrollback + streaming). Sized dynamically based on the pane's tmux `history-limit` and width (see Buffer Sizing below). All viewers — first or late — receive the same contiguous history from this buffer.
   - `status` — `:streaming | :dead`
 - **Interface**:
   - `start_link/1` — starts streaming for a target pane
-  - `subscribe/1` — called by a viewer process. Uses `self()` to identify the caller. Checks Registry for an existing PaneStream; if not found, starts one under DynamicSupervisor. Monitors the caller PID and returns `{:ok, scrollback, recent_buffer}`.
+  - `subscribe/1` — called by a viewer process. Uses `self()` to identify the caller. Checks Registry for an existing PaneStream; if not found, starts one under DynamicSupervisor. Monitors the caller PID and returns `{:ok, history}` where `history` is the current ring buffer contents (a single contiguous binary).
   - `unsubscribe/1` — called by a viewer process. Uses `self()` to identify the caller. Removes the caller from the viewer set. If no viewers remain, starts the grace period timer.
   - `send_keys/2` — sends input to the pane via `tmux send-keys`
 - **Lifecycle**:
@@ -134,16 +133,23 @@ PaneStream startup (order matters):
        because it runs in a separate OS process and won't block the GenServer
   4. Attach pipe: tmux pipe-pane -t {target} -o 'cat >> {fifo_path}'
      — This opens the write end of the FIFO, unblocking the `cat` reader
-  5. Capture initial scrollback: tmux capture-pane -p -e -S -{max_lines} -t {target}
+  5. Query buffer size: determine ring buffer capacity (see Buffer Sizing below)
+  6. Capture initial scrollback: tmux capture-pane -p -e -S -{max_lines} -t {target}
      — Done AFTER pipe-pane attach so no output is lost between steps
-     — Any output generated between steps 4 and 5 will appear in both
+     — Any output generated between steps 4 and 6 will appear in both
        the pipe stream and the scrollback capture (minor duplication, but
        xterm.js handles redrawn content gracefully)
+  7. Write scrollback into ring buffer as initial content
+     — From this point on, the ring buffer is the single source of history
+     — Streaming output from the pipe appends to the same buffer
+     — Old content naturally rolls off as the buffer fills
 ```
 
 **Startup sequence rationale**: The key insight is that `cat` on a FIFO blocks at the OS level until a writer opens the pipe, but since it's a Port (separate OS process), it doesn't block the Elixir GenServer. The GenServer can proceed to call `pipe-pane` which opens the write end, unblocking `cat`. This avoids the FIFO deadlock without needing `O_NONBLOCK` or `O_RDWR` hacks.
 
 Scrollback is captured *after* pipe-pane is attached. This means there's a brief window where output appears in both the pipe stream and the scrollback capture. This is acceptable — xterm.js re-rendering overlapping content is invisible to the user, and it's far better than the alternative (capturing scrollback first and missing output between capture and pipe-pane attach).
+
+The captured scrollback is written into the ring buffer as its initial content, making the ring buffer the single source of history for all viewers. As new output streams in, old scrollback naturally rolls off the end of the buffer. This eliminates the gap/overlap problem for late-joining viewers — every subscriber receives one contiguous block of history from the ring buffer.
 
 **Shutdown sequence:**
 
@@ -160,6 +166,23 @@ PaneStream shutdown:
   3. Re-run the normal startup sequence
 
 **FIFO naming**: Target strings like `mysession:0.1` are sanitized for filesystem use by replacing `:` and `.` with `-`, giving FIFO names like `pane-mysession-0-1.fifo`.
+
+### Buffer Sizing
+
+The ring buffer is the single source of history for all viewers. Its size is computed dynamically per pane at PaneStream startup:
+
+1. Query the pane's effective `history-limit`: `tmux show-option -wv -t {target} history-limit` (falls back to `tmux show-option -gv history-limit` for the global default)
+2. Query the pane width: `tmux list-panes -t {target} -F '#{pane_width}'`
+3. Compute: `history_limit × pane_width` bytes (one byte per cell is a conservative estimate — ANSI escape sequences add overhead but most lines aren't full-width)
+4. Clamp the result between `ring_buffer_min_size` (default 256KB) and `ring_buffer_max_size` (default 4MB)
+5. If either tmux query fails, use `ring_buffer_default_size` (default 1MB)
+
+**Examples**:
+- Default tmux (2000 lines × 120 cols) = 240KB → clamped to 256KB (floor)
+- Heavy user (50000 lines × 200 cols) = 10MB → clamped to 4MB (ceiling)
+- Typical dev (10000 lines × 120 cols) = 1.2MB → used as-is
+
+This ensures the buffer automatically scales to match what tmux is retaining, without requiring manual configuration. The initial scrollback capture is written into this buffer, and streaming output appends to it — old content naturally rolls off as the buffer fills.
 
 ### Input Handling (send-keys)
 
@@ -198,13 +221,13 @@ Example: User types "hi" then Ctrl+C
   - `onData`: xterm.js keyboard input → `this.pushEvent("key_input", {data: rawBytes})`
   - `onResize`: debounced (300ms) → `this.pushEvent("resize", {cols, rows})`
   - Server pushes `"output"` → `term.write(data)`
-  - Server pushes `"scrollback"` → `term.write(data)` (before streaming begins)
+  - Server pushes `"history"` → `term.write(data)` (before streaming begins)
   - Server pushes `"pane_dead"` → display overlay message "Session ended", offer link back to session list
   - Clipboard: `onSelectionChange` → auto-copy to clipboard; paste handler intercepts Ctrl+Shift+V / toolbar button
   - `destroyed()`: Clean up xterm.js instance
 - **Server side** (`handle_params/3`):
-  - Calls `PaneStream.subscribe(target)` — gets `{:ok, scrollback, recent_buffer}`
-  - Pushes scrollback + recent buffer to client via `push_event`
+  - Calls `PaneStream.subscribe(target)` — gets `{:ok, history}`
+  - Pushes history to client via `push_event(socket, "history", %{data: ...})`
   - Subscribes to PubSub topic `"pane:#{target}"`
   - `handle_info({:pane_output, data})` → `push_event(socket, "output", %{data: data})`
   - `handle_info({:pane_dead, _target})` → `push_event(socket, "pane_dead", %{})`
@@ -224,7 +247,7 @@ For native Android client only. Not used by the web UI.
   - `"resize"` — `%{"cols" => int, "rows" => int}`
 - **Server → Client events**:
   - `"output"` — `%{"data" => binary}` — terminal output bytes
-  - `"scrollback"` — `%{"data" => binary}` — initial scrollback history on join
+  - `"history"` — `%{"data" => binary}` — ring buffer contents on join
   - `"pane_dead"` — pane/session no longer exists
 - **Join handler**: Calls `PaneStream.subscribe/1`, subscribes to PubSub, same as TerminalLive
 - **Auth**: Token-based authentication on join (future)
@@ -241,21 +264,18 @@ For native Android client only. Not used by the web UI.
 
 Note: Binary data is base64-encoded for LiveView push_event since LiveView events are JSON-serialized. For the future Channel implementation, raw binary frames can be used instead.
 
-### Initial Attach (scrollback)
+### Initial Attach (history)
 
 1. Viewer calls `PaneStream.subscribe(target)`
-2. If PaneStream not running, `get_or_start/1` starts it under DynamicSupervisor:
+2. If PaneStream not running, starts it under DynamicSupervisor:
    a. Port starts `cat` on FIFO (blocks at OS level, not in GenServer)
    b. `pipe-pane` attached (unblocks `cat`)
-   c. `capture-pane` captures scrollback
-3. PaneStream returns `{:ok, scrollback_binary, recent_ring_buffer}`
-4. TerminalLive pushes scrollback to client as `"scrollback"` event
-5. Client writes scrollback to xterm.js, then streaming output follows
+   c. `capture-pane` captures scrollback, writes it into the ring buffer
+3. PaneStream returns `{:ok, history}` — the current ring buffer contents
+4. TerminalLive pushes history to client as `"history"` event
+5. Client writes history to xterm.js, then streaming output follows
 
-For late-joining viewers (PaneStream already running):
-1. `subscribe/1` returns the cached scrollback + current ring buffer contents
-2. Ring buffer ensures late joiners see recent context even if they missed the live stream
-3. PubSub subscription starts, new output flows normally
+All viewers — first or late — follow the same path. The ring buffer always contains contiguous history (initial scrollback plus all subsequent streaming output, with old content rolling off as the buffer fills). No separate scrollback handling is needed.
 
 ### Keyboard Input (browser → tmux)
 
@@ -304,8 +324,7 @@ For low-bandwidth / high-latency connections:
 3. **Compression**: Enable WebSocket per-message deflate compression in Phoenix endpoint config — terminal output (mostly text + ANSI codes) compresses very well
 4. **Debounced resize**: Client debounces resize events (300ms) to avoid flooding during orientation changes
 5. **Input batching**: Buffer rapid keystrokes client-side and send in batches (configurable, e.g. every 16ms) to reduce round-trip count
-6. **Scrollback cap**: Limit initial scrollback to configurable max (default 10,000 lines) to avoid a huge payload on attach
-7. **Ring buffer cap**: Recent output buffer capped at 64KB — enough context for late joiners without excessive memory or transfer
+6. **Ring buffer cap**: History buffer sized dynamically per pane (see Buffer Sizing), clamped between 256KB and 4MB. Provides full scrollback context for all viewers without excessive memory or transfer
 
 ## Clipboard Integration
 
@@ -443,12 +462,13 @@ Application
 ```elixir
 # config/config.exs
 config :remote_code_agents,
-  # Max scrollback lines to capture on initial attach
-  max_scrollback_lines: 10_000,
   # Grace period (ms) before shutting down a PaneStream with zero viewers
   pane_stream_grace_period: 5_000,
-  # Ring buffer max size (bytes) for recent output
-  ring_buffer_size: 65_536,
+  # Ring buffer size bounds (bytes) — actual size is computed dynamically per pane
+  # from tmux history-limit × pane width, clamped to these bounds
+  ring_buffer_min_size: 262_144,    # 256 KB floor
+  ring_buffer_max_size: 4_194_304,  # 4 MB ceiling
+  ring_buffer_default_size: 1_048_576,  # 1 MB fallback if tmux query fails
   # Default terminal dimensions (used when creating new sessions)
   default_cols: 120,
   default_rows: 40,
@@ -525,9 +545,9 @@ config :remote_code_agents,
 
 ## Resolved Design Decisions
 
-1. **Capture strategy → pipe-pane**: True streaming via `tmux pipe-pane` to a FIFO, read by a `cat` Port. Initial scrollback captured separately via `capture-pane -p -e -S -`. The startup sequence (Port first, then pipe-pane, then capture-pane) avoids both FIFO deadlock and missed output.
+1. **Capture strategy → pipe-pane**: True streaming via `tmux pipe-pane` to a FIFO, read by a `cat` Port. Initial scrollback captured via `capture-pane` and written into the ring buffer. The startup sequence (Port first, then pipe-pane, then capture-pane, then seed buffer) avoids both FIFO deadlock and missed output.
 
-2. **Scrollback → Yes**: Capture full scrollback (up to configurable max) on initial attach. Sent to client as a `"scrollback"` event before streaming begins. Late joiners also get the ring buffer of recent output.
+2. **History → unified ring buffer**: Initial scrollback is written into the ring buffer at startup. All viewers — first or late — receive history from this single buffer. Buffer size is computed dynamically from the pane's tmux `history-limit` × width, clamped between 256KB and 4MB (default 1MB fallback). Old content rolls off naturally as new output streams in.
 
 3. **Multiple viewers → Shared PaneStream**: One PaneStream per pane, shared across all viewers via PubSub. Reference-counted via monitored PIDs with a grace period on last-viewer-disconnect.
 
@@ -552,7 +572,7 @@ config :remote_code_agents,
 1. List tmux sessions and panes on the index page
 2. Create new tmux sessions from the UI (with name validation)
 3. Click a pane to open a full-viewport terminal view with xterm.js
-4. Stream output from the pane using pipe-pane (with scrollback on attach)
+4. Stream output from the pane using pipe-pane (with history on attach)
 5. Send keyboard input from the browser to the pane (via send-keys -H)
 6. Shared PaneStream with viewer ref counting and grace period
 7. Clipboard copy/paste
@@ -655,13 +675,13 @@ The `TerminalChannel` speaks a simple protocol over the Phoenix Channel WebSocke
 
 **Connection**: Client connects to `wss://host:port/socket/websocket` with token param.
 
-**Join**: `"terminal:{session}:{window}:{pane}"` — server calls `PaneStream.subscribe/1`, returns scrollback.
+**Join**: `"terminal:{session}:{window}:{pane}"` — server calls `PaneStream.subscribe/1`, returns history.
 
 **Events**:
 
 | Direction | Event | Payload | Notes |
 |-----------|-------|---------|-------|
-| S→C | `scrollback` | `%{"data" => base64_binary}` | Sent once on join |
+| S→C | `history` | `%{"data" => base64_binary}` | Ring buffer contents, sent once on join |
 | S→C | `output` | `%{"data" => base64_binary}` | Streaming terminal output |
 | S→C | `pane_dead` | `%{}` | Pane/session ended |
 | S→C | `resized` | `%{"cols" => int, "rows" => int}` | Pane was resized by another viewer |
@@ -685,7 +705,7 @@ DELETE /api/sessions/:name — kill session
 - **Terminal rendering**: Use [Termux's terminal-emulator](https://github.com/termux/termux-app/tree/master/terminal-emulator) library or a similar Android terminal widget. Receives raw bytes from the Channel, renders natively.
 - **WebSocket client**: Use Phoenix's official JavaScript client via a WebView bridge, or a native Kotlin WebSocket client implementing the Phoenix Channel protocol (libraries exist, e.g., `JavaPhoenixClient`).
 - **Input**: Android's native keyboard input → convert to terminal bytes → send via Channel `input` event.
-- **Offline/reconnect**: Channel automatically reconnects on network drop. On reconnect, re-join the topic — server sends fresh scrollback + ring buffer. xterm.js/native terminal clears and re-renders.
+- **Offline/reconnect**: Channel automatically reconnects on network drop. On reconnect, re-join the topic — server sends fresh history from the ring buffer. Native terminal clears and re-renders.
 
 ### Future 3: Pane Resize Sync
 
