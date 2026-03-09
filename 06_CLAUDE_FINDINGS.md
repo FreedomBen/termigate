@@ -16,11 +16,9 @@ Clarified in the Channel section that the Channel join topic (`"terminal:..."`) 
 
 Added dual Registry key (`{:pane_id, pane_id}`) and a supersede mechanism. During startup, the new PaneStream detects collisions with stale PaneStreams via the secondary key, sends `:superseded`, and takes over. The old PaneStream cleans up and notifies its viewers. Updated in: Registration, startup sequence step 0b, Lifecycle, Session/Window Renamed Externally section, and Resolved Design Decisions #12.
 
-### 3. No Consolidated Event Table
+### ~~3. No Consolidated Event Table~~ — Resolved
 
-Events are defined across scattered sections (`"output"`, `"pane_dead"`, `"key_input"`, `"resize"`, `"quick_action"`, etc.) but there is no single reference table listing all LiveView push_event/handle_event names with their payloads and directions.
-
-- Should a consolidated event contract table be added?
+Added an "Event Reference" subsection under Data Flow with five tables: LiveView events (TerminalLive), LiveView events (SettingsLive), PubSub messages (pane topic), PubSub messages (other topics), and Phoenix Channel events (future). All events, directions, payloads, and descriptions in one place.
 
 ### 4. Channel Protocol Underspecified
 

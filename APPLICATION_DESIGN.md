@@ -350,6 +350,56 @@ For native Android client only. Not used by the web UI. The design below is docu
 
 ## Data Flow
 
+### Event Reference
+
+#### LiveView Events (TerminalLive ↔ TerminalHook)
+
+| Direction | Event | Payload | Description |
+|-----------|-------|---------|-------------|
+| Client → Server | `"key_input"` | `%{"data" => base64_string}` | Keyboard/paste input. Decoded to UTF-8 bytes, sent via `send-keys -H`. Max 128KB decoded. |
+| Client → Server | `"resize"` | `%{"cols" => int, "rows" => int}` | Terminal dimensions after browser resize. Debounced 300ms client-side. Phase 1: stored only, no `resize-pane` call. |
+| Client → Server | `"quick_action"` | `%{"id" => string}` | User tapped a quick action button. May trigger confirmation dialog. |
+| Client → Server | `"confirm_action"` | `%{}` | User confirmed a quick action that requires confirmation. |
+| Client → Server | `"cancel_action"` | `%{}` | User cancelled a quick action confirmation dialog. |
+| Server → Client | `"output"` | `%{"data" => base64_string}` | Streaming terminal output bytes. |
+| Server → Client | `"history"` | `%{"data" => base64_string}` | Ring buffer contents on initial attach. |
+| Server → Client | `"reconnected"` | `%{"data" => base64_string}` | Full buffer after PaneStream crash recovery. Client calls `term.reset()` first. |
+| Server → Client | `"pane_dead"` | `%{}` | Pane/session no longer exists. Client shows "Session ended" overlay. |
+
+#### LiveView Events (SettingsLive)
+
+| Direction | Event | Payload | Description |
+|-----------|-------|---------|-------------|
+| Client → Server | `"save_action"` | `%{"action" => action_params}` | Create or update a quick action. |
+| Client → Server | `"delete_action"` | `%{"id" => string}` | Delete a quick action. |
+| Client → Server | `"reorder_actions"` | `%{"ids" => [string]}` | Reorder quick actions by ID list. |
+
+#### PubSub Messages (PaneStream → viewers via `"pane:#{target}"`)
+
+| Message | Payload | Description |
+|---------|---------|-------------|
+| `{:pane_output, bytes}` | raw binary | Streaming output from tmux pane. |
+| `{:pane_dead, target}` | target string | Pane died (Port EOF status 0). |
+| `{:pane_superseded, old_target, new_target}` | target strings | PaneStream replaced after session/window rename. |
+| `{:pane_resized, cols, rows}` | integers | Pane dimensions changed (future). |
+
+#### PubSub Messages (other topics)
+
+| Topic | Message | Description |
+|-------|---------|-------------|
+| `"sessions"` | `{:sessions_changed}` | Session created or killed via `TmuxManager`. |
+| `"config"` | `{:config_changed, config}` | Config file changed (manual edit or UI save). |
+
+#### Phoenix Channel Events (TerminalChannel — future, Phase 2+)
+
+| Direction | Event | Payload | Description |
+|-----------|-------|---------|-------------|
+| Client → Server | `"input"` | `%{"data" => binary}` | Keyboard input. |
+| Client → Server | `"resize"` | `%{"cols" => int, "rows" => int}` | Terminal dimensions. |
+| Server → Client | `"output"` | `%{"data" => binary}` | Terminal output bytes. |
+| Server → Client | `"history"` | `%{"data" => binary}` | Ring buffer contents on join. |
+| Server → Client | `"pane_dead"` | `%{}` | Pane no longer exists. |
+
 ### Terminal Output (tmux → browser)
 
 1. tmux writes output → `pipe-pane` writes to FIFO
