@@ -8,11 +8,11 @@ Removed duplicate section, renamed "MVP Scope" → "Scope", replaced all "MVP"/"
 ### ~~2. TmuxManager "Not a GenServer for MVP"~~ RESOLVED
 Removed "for MVP" qualifier — now just "Not a GenServer".
 
-### 3. PaneStream subscribe/unsubscribe arity unclear
-Line 103: `subscribe/1` "adds a viewer, monitors the viewer PID" but doesn't take a PID argument. Presumably uses `self()`. Similarly `unsubscribe/1` (line 104) — does it take `target` or caller PID? Clarify the interface.
+### ~~3. PaneStream subscribe/unsubscribe arity unclear~~ RESOLVED
+Clarified that both `subscribe/1` and `unsubscribe/1` use `self()` to identify the caller.
 
-### 4. `get_or_start/1` ownership unspecified
-Line 107 mentions a `get_or_start/1` helper without specifying which module owns it. Line 103 implies `subscribe/1` itself triggers the start — state this explicitly in the PaneStream interface section.
+### ~~4. `get_or_start/1` ownership unspecified~~ RESOLVED
+Moved the get-or-start logic into the `subscribe/1` description directly — it now explicitly states it checks Registry and starts under DynamicSupervisor if needed.
 
 ## Ambiguities
 

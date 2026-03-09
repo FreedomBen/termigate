@@ -100,11 +100,10 @@ Android app (future):
   - `status` — `:streaming | :dead`
 - **Interface**:
   - `start_link/1` — starts streaming for a target pane
-  - `subscribe/1` — adds a viewer, monitors the viewer PID, returns `{:ok, scrollback, recent_buffer}`. Starts the PaneStream via DynamicSupervisor if not already running.
-  - `unsubscribe/1` — removes a viewer. If no viewers remain, starts the grace period timer.
+  - `subscribe/1` — called by a viewer process. Uses `self()` to identify the caller. Checks Registry for an existing PaneStream; if not found, starts one under DynamicSupervisor. Monitors the caller PID and returns `{:ok, scrollback, recent_buffer}`.
+  - `unsubscribe/1` — called by a viewer process. Uses `self()` to identify the caller. Removes the caller from the viewer set. If no viewers remain, starts the grace period timer.
   - `send_keys/2` — sends input to the pane via `tmux send-keys`
 - **Lifecycle**:
-  - Created on first `subscribe/1` call (via a `get_or_start/1` helper that checks Registry then starts under DynamicSupervisor)
   - Monitors all viewer PIDs — auto-unsubscribes on viewer crash/disconnect
   - On last viewer unsubscribe: starts a configurable grace period timer (default 5s). If a new viewer subscribes within the grace period, cancel the timer. Otherwise, shut down (detach pipe-pane, clean up FIFO, terminate).
   - On Port EOF (tmux pane died): set status to `:dead`, broadcast `{:pane_dead, target}` to all viewers, clean up FIFO, shut down after viewers acknowledge/disconnect.
