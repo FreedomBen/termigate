@@ -105,12 +105,12 @@ Android app (future):
       1. Subscribes the caller to the PubSub topic `"pane:#{target}"` — this happens in the caller's process context (since `Phoenix.PubSub.subscribe/2` always subscribes `self()`), ensuring PubSub messages are delivered directly to the viewer (e.g., the LiveView), not to the GenServer.
       2. Checks Registry for an existing PaneStream; if not found, starts one under DynamicSupervisor via `start_link/1`. If `start_link/1` returns `{:error, {:already_started, pid}}` (race with another concurrent `subscribe/1` call), uses the existing PID.
       3. Makes a `GenServer.call` to the (now-running) PaneStream to register the viewer: monitors the caller PID and returns `{:ok, history, pane_stream_pid}` where `history` is the current ring buffer contents (a single contiguous binary from `RingBuffer.read/1`) and `pane_stream_pid` is the PaneStream's PID (so the caller can monitor it for crash recovery).
-    The PubSub subscription (step 1) happens before history is returned (step 3), guaranteeing no messages are lost between receiving history and streaming — any messages arriving during step 2-3 queue in the caller's mailbox and are processed after mount completes. Returns `{:error, :pane_not_found}` if the tmux pane does not exist (detected during startup when `pipe-pane` fails). On error, the function unsubscribes from the PubSub topic before returning to avoid a leaked subscription.
+    The PubSub subscription (step 1) happens before history is returned (step 3), guaranteeing no messages are lost between receiving history and streaming — any messages arriving during step 2-3 queue in the caller's mailbox and are processed after mount completes. Returns `{:error, :pane_not_found}` if the tmux pane does not exist (detected during startup when `pipe-pane` fails), or `{:error, :max_pane_streams}` if the DynamicSupervisor's child limit has been reached. On error, the function unsubscribes from the PubSub topic before returning to avoid a leaked subscription.
   - `unsubscribe/1` — called by a viewer process. Uses `self()` to identify the caller. Removes the caller from the viewer set and demonitors the PID. Idempotent — safe to call multiple times or after the monitor has already fired (e.g., `terminate/2` calls `unsubscribe` but the DOWN message may also arrive). If no viewers remain after removal, starts the grace period timer.
   - `send_keys/2` — sends input (as a binary) to the pane via `tmux send-keys -H`. Each byte of the binary is converted to its two-character hex representation. If status is `:dead`, skips the call and returns `{:error, :pane_dead}`. If the `send-keys` command fails (e.g., pane died between checks), logs a warning and returns `:ok` — pane death notification will follow shortly via the Port EOF flow.
 - **Lifecycle**:
   - Monitors all viewer PIDs — auto-unsubscribes on viewer crash/disconnect
-  - On last viewer unsubscribe: starts a configurable grace period timer (default 5s) via `Process.send_after(self(), :grace_period_expired, ...)`. If a new viewer subscribes within the grace period, cancel the timer via `Process.cancel_timer/1`. When the `:grace_period_expired` message arrives in `handle_info`, re-check `MapSet.size(viewers) == 0` before proceeding with shutdown — this eliminates the race between a late subscribe and the timer firing. **Why this is safe**: Even if `Process.cancel_timer/1` returns `false` (the `:grace_period_expired` message is already in the mailbox), the GenServer processes messages sequentially. The subscribe call (which adds the viewer to the MapSet) is a `GenServer.call` that will be processed before or after the timer message. If the subscribe is processed first, the viewer is in the MapSet and the re-check prevents shutdown. If the timer fires first, the re-check sees zero viewers and shuts down — but the subscribe call will then start a fresh PaneStream via the get-or-start logic.
+  - On last viewer unsubscribe: starts a configurable grace period timer (default 5s) via `Process.send_after(self(), :grace_period_expired, ...)`. If a new viewer subscribes within the grace period, cancel the timer via `Process.cancel_timer/1`. When the `:grace_period_expired` message arrives in `handle_info`, re-check `MapSet.size(viewers) == 0` before proceeding with shutdown — this eliminates the race between a late subscribe and the timer firing. **Why this is safe**: Even if `Process.cancel_timer/1` returns `false` (the `:grace_period_expired` message is already in the mailbox), the GenServer processes messages sequentially. The subscribe call (which adds the viewer to the MapSet) is a `GenServer.call` that will be processed before or after the timer message. If the subscribe is processed first, the viewer is in the MapSet and the re-check prevents shutdown. If the timer fires first, the re-check sees zero viewers and shuts down — but the subscribe call will then start a fresh PaneStream via the get-or-start logic. Note: in this case, the new PaneStream runs the full startup sequence (including scrollback re-capture), which is correct — the ring buffer from the old PaneStream is gone, so fresh history must be loaded. This is a brief reconnect, not data loss.
   - On Port exit with status 0 (normal EOF — pane died, pipe-pane closed the FIFO): cancel any active grace period timer, set status to `:dead`, broadcast `{:pane_dead, target}` to all viewers via PubSub, clean up FIFO, then terminate. Log at `info` level.
   - On Port exit with non-zero status (`cat` crashed — e.g., OOM-killed, signal): the tmux pane may still be alive. The PaneStream attempts pipeline recovery:
       1. Check if the pane still exists: `tmux has-session -t {target}` (or `tmux display-message -p -t {target} '#{pane_id}'`).
@@ -204,11 +204,13 @@ PaneStream shutdown:
 
 The `:shutting_down` status prevents the Port exit (triggered by step 2 closing the FIFO write end) from being misinterpreted as pane death. The `handle_info` for `{port, {:exit_status, _}}` checks status and ignores the event if already `:shutting_down`.
 
-**PaneStream crash recovery (primary cleanup mechanism)**: If a single PaneStream crashes, the supervisor restarts it (PaneStream children use `restart: :transient`, so only abnormal exits trigger restart). The `init/1` callback runs the full startup sequence above — steps 0-8 — which inherently handles cleanup: step 0 detaches any stale pipe-pane, step 1 removes any stale FIFO. This per-PaneStream cleanup is the primary safety net — it runs on every start, whether after a crash, a restart, or first boot.
+**PaneStream crash recovery (primary cleanup mechanism)**: There are two distinct recovery paths:
+1. **Port crash (cat dies, GenServer alive)**: Handled *inside* the running GenServer via `handle_info({port, {:exit_status, n}})` — the GenServer checks if the pane is still alive and restarts the pipeline (FIFO + Port + pipe-pane) without restarting the GenServer process itself. See "Port exit with non-zero status" above. Viewers are unaware.
+2. **GenServer crash (unhandled exception)**: The supervisor restarts the GenServer process (PaneStream children use `restart: :transient`, so only abnormal exits trigger restart). The `init/1` callback runs the full startup sequence above — steps 0-9 — which inherently handles cleanup: step 0 detaches any stale pipe-pane, step 1 removes any stale FIFO. Viewers detect the crash via their monitor `:DOWN` message and re-subscribe to the new PaneStream (see TerminalLive `:DOWN` handler). This per-PaneStream cleanup is the primary safety net — it runs on every start, whether after a crash, a restart, or first boot.
 
 **Application startup cleanup (defense-in-depth)**: In `Application.start/2`, before the supervision tree starts: (1) detach all stale pipe-pane attachments by iterating `tmux list-panes -a -F '#{pane_id}'` and running `tmux pipe-pane -t {pane_id}` on each (this is a no-op for panes that don't have pipe-pane attached); (2) clear the FIFO directory (`File.rm_rf(fifo_dir)` then `File.mkdir_p(fifo_dir)`). This catches both orphaned pipe-pane attachments and stale FIFOs left by a hard kill (SIGKILL) of the entire application, where no cleanup callbacks run. It only takes effect on the *next* application boot.
 
-**FIFO naming**: Target strings like `mysession:0.1` are sanitized for filesystem use using percent-encoding: `:` becomes `%3A` and `.` becomes `%2E`, giving FIFO names like `pane-mysession%3A0%2E1.fifo`. This is collision-free because `%` cannot appear in tmux session names (which match `^[a-zA-Z0-9_-]+$`) or in the window/pane numeric indices.
+**FIFO naming and shell safety**: Target strings like `mysession:0.1` are sanitized for filesystem use using percent-encoding: `:` becomes `%3A` and `.` becomes `%2E`, giving FIFO names like `pane-mysession%3A0%2E1.fifo`. This is collision-free because `%` cannot appear in tmux session names (which match `^[a-zA-Z0-9_-]+$`) or in the window/pane numeric indices. **Shell injection safety**: The resulting FIFO paths contain only `[a-zA-Z0-9_%.-/]` characters, making them safe for interpolation into the `open_port({:spawn, "cat {fifo_path}"})` shell string (step 4) and the `pipe-pane` command's single-quoted argument (step 5). This safety is guaranteed by the composition of: (1) session name validation (`^[a-zA-Z0-9_-]+$`), (2) window/pane indices being numeric, and (3) percent-encoding replacing `:` and `.` with `%XX` sequences. No shell metacharacters can appear in the path.
 
 ### Buffer Sizing
 
@@ -294,8 +296,9 @@ Example: User types "hi" then Ctrl+C
   - `handle_info({:pane_dead, _target})` → `push_event(socket, "pane_dead", %{})`
   - `handle_info({:DOWN, ref, :process, _pid, _reason})` — PaneStream crashed. The viewer demonitors the old ref, then calls `PaneStream.subscribe(target)` again (which starts or finds the restarted PaneStream). If successful, pushes fresh history to the client (xterm.js `term.reset()` + `term.write(history)` via a `"reconnected"` push event) and monitors the new PID. If the pane no longer exists, transitions to the pane-dead UI. This recovery is transparent to the user — output briefly pauses, then the terminal refreshes with full history.
   - `handle_event("key_input", %{"data" => b64})` → `Base.decode64/1` with error handling (invalid base64 is logged and ignored, not crashed on) → `PaneStream.send_keys(target, bytes)`
-  - `handle_event("resize", %{"cols" => c, "rows" => r})` → resize handling (see Resize Conflicts below)
+  - `handle_event("resize", %{"cols" => c, "rows" => r})` → Phase 1: stored in assigns for future use but no `tmux resize-pane` call is made (resize is disabled). See Resize Conflicts below for the future strategy.
   - `terminate/2`: calls `PaneStream.unsubscribe(target)`. Note: `terminate/2` is best-effort — it does not run on node crash or hard network timeout. The real safety net is PaneStream's monitor on the viewer PID, which fires a `:DOWN` message and triggers auto-unsubscribe regardless of how the viewer process exits.
+  - **LiveView crash recovery**: If the LiveView process itself crashes (or the WebSocket disconnects), Phoenix LiveView automatically reconnects and re-mounts. The `mount/3` callback re-runs the full subscribe flow (subscribe to PubSub, get-or-start PaneStream, receive history), making recovery transparent. The old LiveView PID triggers a `:DOWN` in the PaneStream (auto-unsubscribe); the new LiveView PID subscribes fresh. No special handling is needed beyond the standard mount logic.
 - Mobile: on-screen virtual keyboard toolbar (see Mobile UI section)
 - Back button / navigation header to return to session list
 
@@ -370,7 +373,7 @@ All viewers — first or late — follow the same path. The ring buffer always c
 3. PaneStream checks if the tmux pane is still alive
 4. If alive: restarts the pipeline (new FIFO, new Port, re-attach pipe-pane), resumes streaming. Viewers are unaware — output briefly pauses then resumes.
 5. If dead (or recovery fails, or retry limit exceeded): follows the normal death path above (steps 5-7)
-8. PaneStream cleans up FIFO and terminates
+6. PaneStream cleans up FIFO and terminates
 
 ### Resize Conflict Resolution
 
@@ -474,7 +477,6 @@ remote_code_agents/
         session.ex                  # Session struct
         pane.ex                     # Pane struct
       tmux_manager.ex               # Session/pane discovery + creation (stateless module)
-      config.ex                     # YAML config loader + writer (~/.config/remote_code_agents/config.yaml)
       ring_buffer.ex                # Circular byte buffer with fixed capacity (new/1, append/2, read/1, size/1)
       pane_stream.ex                # Per-pane streaming GenServer (pipe-pane + FIFO)
       pane_stream_supervisor.ex     # DynamicSupervisor for PaneStreams
@@ -874,6 +876,10 @@ Mobile viewers are **passive resizers** by default:
 ### Quick Actions (Command Buttons)
 
 **Goal**: Configurable buttons that send pre-defined commands to the terminal with a single tap — especially valuable on mobile where typing long commands is painful.
+
+#### New Module
+
+This feature introduces `RemoteCodeAgents.Config` (`lib/remote_code_agents/config.ex`) — a YAML config loader and writer for `~/.config/remote_code_agents/config.yaml`. Not part of the base scope.
 
 #### Configuration File
 
