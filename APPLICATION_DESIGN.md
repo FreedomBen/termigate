@@ -93,7 +93,9 @@ Android app (future):
 
 #### `RemoteCodeAgents.PaneStream`
 - **Responsibility**: Bidirectional bridge between a tmux pane and one or more viewers
-- **Registration**: Via `Registry` with key `{:pane, target}` where `target` is the `"session:window.pane"` string. Lookup via `Registry.lookup(RemoteCodeAgents.PaneRegistry, {:pane, target})`.
+- **Registration**: Dual-key via `Registry`:
+    1. `{:pane, target}` — primary key, set via GenServer `name:` option at `start_link`. Used by `subscribe/1` to find an existing PaneStream for a given target. Lookup: `Registry.lookup(RemoteCodeAgents.PaneRegistry, {:pane, target})`.
+    2. `{:pane_id, pane_id}` — secondary key, registered manually via `Registry.register/3` during init after resolving the stable `pane_id`. Used to detect stale PaneStreams after a session/window rename (see "Stale PaneStream detection" in Lifecycle below).
 - **State**:
   - `target` — the `session:window.pane` identifier (human-readable, used for Registry key, PubSub topic, display, and URL routing)
   - `pane_id` — tmux's stable pane identifier (e.g., `%0`), resolved during startup via `tmux display-message -p -t {target} '#{pane_id}'`. Used for `send-keys` and pane existence checks. Stable across session/window renames.
@@ -115,6 +117,7 @@ Android app (future):
 - **Lifecycle**:
   - Monitors all viewer PIDs — auto-unsubscribes on viewer crash/disconnect
   - On last viewer unsubscribe: starts a configurable grace period timer (default 5s) via `Process.send_after(self(), :grace_period_expired, ...)`. If a new viewer subscribes within the grace period, cancel the timer via `Process.cancel_timer/1`. When the `:grace_period_expired` message arrives in `handle_info`, re-check `MapSet.size(viewers) == 0` before proceeding with shutdown — this eliminates the race between a late subscribe and the timer firing. **Why this is safe**: Even if `Process.cancel_timer/1` returns `false` (the `:grace_period_expired` message is already in the mailbox), the GenServer processes messages sequentially. The subscribe call (which adds the viewer to the MapSet) is a `GenServer.call` that will be processed before or after the timer message. If the subscribe is processed first, the viewer is in the MapSet and the re-check prevents shutdown. If the timer fires first, the re-check sees zero viewers and shuts down — but the subscribe call will then start a fresh PaneStream via the get-or-start logic. Note: in this case, the new PaneStream runs the full startup sequence (including scrollback re-capture), which is correct — the ring buffer from the old PaneStream is gone, so fresh history must be loaded. This is a brief reconnect, not data loss.
+  - On `{:superseded, new_target}` cast (another PaneStream claimed this `pane_id` under a new target after a rename): detach `pipe-pane`, clean up FIFO, broadcast `{:pane_superseded, target, new_target}` to viewers via PubSub (viewers can use `new_target` to redirect), then terminate normally. Viewers that don't handle `:pane_superseded` will still recover via the `:DOWN` monitor on the PaneStream PID. Log at `info` level: "PaneStream #{target} superseded by #{new_target} (pane #{pane_id} was renamed)".
   - On Port exit with status 0 (normal EOF — pane died, pipe-pane closed the FIFO): cancel any active grace period timer, set status to `:dead`, broadcast `{:pane_dead, target}` to all viewers via PubSub, clean up FIFO, then terminate. Log at `info` level.
   - On Port exit with non-zero status (`cat` crashed — e.g., OOM-killed, signal): the tmux pane may still be alive. The PaneStream attempts pipeline recovery:
       1. Check if the pane still exists: `tmux display-message -p -t {pane_id} '#{pane_id}'` (using the stored stable pane_id).
@@ -147,6 +150,20 @@ PaneStream startup (order matters):
      — Returns the stable pane identifier (e.g., "%0"). Stored in state
        as `pane_id` and used for all subsequent tmux commands that target
        this pane (send-keys, has-session, display-message). If this fails,
+
+  0b. Register pane_id and detect stale PaneStreams:
+     — Call `Registry.register(PaneRegistry, {:pane_id, pane_id}, nil)`.
+     — If it returns `{:ok, _}`, no collision — proceed normally.
+     — If it returns `{:error, {:already_registered, old_pid}}`, a stale
+       PaneStream exists for this pane under an old target (session/window
+       was renamed). Send `GenServer.cast(old_pid, {:superseded, target})`
+       to tell it to shut down, then retry the registration after a brief
+       `Process.sleep(100)` (the old process needs time to terminate and
+       release the key). If the retry also fails, log a warning and proceed
+       without the secondary registration — the stale one will still
+       eventually clean up via grace period.
+
+
        the pane does not exist — return {:error, :pane_not_found}.
   1. Detach any existing pipe-pane on the target: tmux pipe-pane -t {pane_id}
      — No-op if nothing is attached. Prevents conflict with a stale pipe-pane
@@ -664,9 +681,14 @@ config :remote_code_agents,
 - Client shows non-intrusive "Session ended" overlay with options: "Back to Sessions" or "Reconnect" (if the session was recreated)
 
 ### Session/Window Renamed Externally
-- If a user renames a session or window via tmux directly (e.g., `tmux rename-session`), the PaneStream continues working because all tmux commands (`send-keys`, `pipe-pane`, `capture-pane`) use the stable `pane_id` (e.g., `%0`), not the human-readable `target` string. Both input and output are unaffected.
-- **Display impact**: The PaneStream's `target` field and the URL still reflect the old name. The polling fallback in `SessionListLive` (every 3s) will show the updated session name. The user can navigate to the renamed pane via the new URL. The stale PaneStream (registered under the old target) will eventually shut down via the grace period when the viewer disconnects, and a new one will be created under the new target on next visit.
-- **Registry key staleness**: The PaneStream remains registered under `{:pane, "old-name:0.1"}`. A viewer navigating to the new name (e.g., `"new-name:0.1"`) will start a fresh PaneStream. This briefly results in two PaneStreams for the same underlying pane — both reading from separate pipe-pane/FIFO pipelines. The old one shuts down via grace period when its last viewer leaves. This is harmless but wasteful; a future optimization could detect this via `pane_id` collision in the Registry.
+- If a user renames a session or window via tmux directly (e.g., `tmux rename-session`), the existing PaneStream continues working because all tmux commands (`send-keys`, `pipe-pane`, `capture-pane`) use the stable `pane_id` (e.g., `%0`), not the human-readable `target` string. Both input and output are unaffected.
+- **Display impact**: The PaneStream's `target` field and the URL still reflect the old name. The polling fallback in `SessionListLive` (every 3s) will show the updated session name. The user can navigate to the renamed pane via the new URL.
+- **Stale PaneStream detection and cleanup**: When a viewer navigates to the new name, `subscribe/1` starts a new PaneStream under the new target. During init, the new PaneStream resolves `pane_id` and attempts to register `{:pane_id, pane_id}` in the Registry. This collides with the old PaneStream's registration, triggering the supersede flow:
+    1. The new PaneStream sends `{:superseded, new_target}` to the old PaneStream.
+    2. The old PaneStream detaches its `pipe-pane`, cleans up its FIFO, broadcasts `{:pane_superseded, old_target, new_target}` to its viewers, and terminates normally.
+    3. Viewers of the old PaneStream receive the `{:pane_superseded, old_target, new_target}` message and can redirect to the new URL. Viewers that don't handle this message recover via the `:DOWN` monitor.
+    4. The new PaneStream retries its `{:pane_id, pane_id}` registration, succeeds, and proceeds with normal startup.
+  This ensures at most one PaneStream per underlying tmux pane, with no duplicate `pipe-pane`/FIFO pipelines.
 
 ### FIFO Errors
 - FIFO directory doesn't exist → create it in PaneStream init
@@ -697,7 +719,7 @@ config :remote_code_agents,
 
 11. **Session name validation → strict**: Only `^[a-zA-Z0-9_-]+$` allowed. Prevents tmux target format breakage from colons/periods in names.
 
-12. **Pane targeting → stable pane_id**: PaneStream resolves tmux's stable `pane_id` (e.g., `%0`) during startup and uses it for all tmux commands (`send-keys`, `pipe-pane`, `capture-pane`, existence checks). The human-readable `target` (`session:window.pane`) is used only for Registry keys, PubSub topics, display, and URL routing. This makes PaneStreams resilient to session/window renames.
+12. **Pane targeting → stable pane_id with dual registration**: PaneStream resolves tmux's stable `pane_id` (e.g., `%0`) during startup and uses it for all tmux commands (`send-keys`, `pipe-pane`, `capture-pane`, existence checks). The human-readable `target` (`session:window.pane`) is used only for the primary Registry key, PubSub topics, display, and URL routing. A secondary Registry key `{:pane_id, pane_id}` detects stale PaneStreams after session/window renames — the new PaneStream supersedes the old one, ensuring at most one PaneStream per underlying tmux pane.
 
 ## Scope
 

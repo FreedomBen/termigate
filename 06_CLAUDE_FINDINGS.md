@@ -12,11 +12,9 @@
 
 Clarified in the Channel section that the Channel join topic (`"terminal:..."`) is a client-facing concern, not a PubSub topic. The join handler converts it to the canonical target and subscribes to the same `"pane:#{target}"` PubSub topic that LiveView uses. No format unification needed.
 
-### 2. Session/Window Rename Fragility
+### ~~2. Session/Window Rename Fragility~~ — Resolved
 
-The doc acknowledges that renaming a session via tmux causes a stale Registry key and a temporary duplicate PaneStream. It says "a future optimization could detect this via `pane_id` collision in the Registry."
-
-- Is this sufficient as documented, or should a concrete detection/cleanup mechanism be specified now?
+Added dual Registry key (`{:pane_id, pane_id}`) and a supersede mechanism. During startup, the new PaneStream detects collisions with stale PaneStreams via the secondary key, sends `:superseded`, and takes over. The old PaneStream cleans up and notifies its viewers. Updated in: Registration, startup sequence step 0b, Lifecycle, Session/Window Renamed Externally section, and Resolved Design Decisions #12.
 
 ### 3. No Consolidated Event Table
 
