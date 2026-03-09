@@ -49,12 +49,11 @@ The design mentions `Process.cancel_timer/1` for the grace period but the PaneSt
 
 ## Ambiguities
 
-### 12. What happens when PaneStream starts but the tmux pane doesn't exist?
-The startup sequence assumes the pane exists. If someone navigates to `/sessions/foo/0/0` and `foo` doesn't exist, `pipe-pane` will fail. Need to specify the error path — return `{:error, :pane_not_found}` from `subscribe/1` and have TerminalLive show an error.
+### 12. ~~What happens when PaneStream starts but the tmux pane doesn't exist?~~ RESOLVED
+Fixed: `subscribe/1` returns `{:error, :pane_not_found}` and `mount/3` shows error UI.
 
-### 13. URL param format for window and pane
-**Location**: Route `/sessions/:session/:window/:pane`
-The design doesn't specify the format of `:window` and `:pane` params. The tmux target format is `session:window.pane` where window/pane are integer indices. Clarify that the URL uses integer indices and document the conversion to tmux target format.
+### 13. ~~URL param format for window and pane~~ RESOLVED
+Fixed: `mount/3` documents target construction as `"#{session}:#{window}.#{pane}"` with window and pane as integer indices.
 
 ### 14. Session list polling vs streaming philosophy
 **Location**: Line 226
