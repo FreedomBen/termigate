@@ -320,7 +320,7 @@ Example: User types "hi" then Ctrl+C
 
 For native Android client only. Not used by the web UI. The design below is documented for future reference but is explicitly out of scope for the initial implementation.
 
-- Topic: `"terminal:{session}:{window}:{pane}"` — note: the Channel topic uses colons as delimiters (Phoenix Channel convention), while the internal PaneStream target uses tmux's native format `"session:window.pane"`. The join handler converts between formats: `"terminal:foo:0:1"` → target `"foo:0.1"`.
+- Topic: `"terminal:{session}:{window}:{pane}"` — note: this is the client-facing Channel join topic, not a PubSub topic. The join handler converts it to the internal PaneStream target format (`"terminal:foo:0:1"` → `"foo:0.1"`) and then calls `PaneStream.subscribe/1`, which subscribes to the canonical PubSub topic `"pane:foo:0.1"` — the same topic LiveView uses. The Channel join topic uses colons as delimiters (Phoenix Channel convention), while the internal target uses tmux's native `"session:window.pane"` format.
 - **Client → Server events**:
   - `"input"` — `%{"data" => binary}` — keyboard input
   - `"resize"` — `%{"cols" => int, "rows" => int}`
