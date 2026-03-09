@@ -96,7 +96,7 @@ Android app (future):
   - `pane_id` — tmux's stable pane identifier (e.g., `%0`), resolved during startup via `tmux display-message -p -t {target} '#{pane_id}'`. Used for `send-keys` and pane existence checks. Stable across session/window renames.
   - `pipe_port` — Elixir Port running `cat` on the FIFO
   - `viewers` — `MapSet` of subscriber PIDs (monitored)
-  - `buffer` — ring buffer (`RemoteCodeAgents.RingBuffer`, a fixed-capacity circular binary buffer; API: `new(capacity)`, `append(buffer, binary)` — overwrites oldest data when full, `read(buffer)` — returns a single contiguous binary by concatenating the two halves, `size(buffer)` — current byte count) of all output (scrollback + streaming). Sized dynamically based on the pane's tmux `history-limit` and width (see Buffer Sizing below). All viewers — first or late — receive the same history from this buffer. `RingBuffer.read/1` returns a single contiguous binary by concatenating the two halves of the circular buffer internally. Note: this allocates a copy up to `ring_buffer_max_size` (default 4MB) per call. This is acceptable for the expected viewer count (single-user tool with a handful of concurrent tabs); if many viewers connect simultaneously to a large-buffer pane, the transient memory spike is bounded by `max_pane_streams × ring_buffer_max_size`. Because `subscribe/1` makes a `GenServer.call` that triggers `RingBuffer.read/1`, concurrent subscribes to the same pane serialize through the GenServer — during high-throughput output, each subscribe briefly blocks output processing. This is acceptable for the expected concurrency (a few tabs); the call returns quickly since `read/1` is a memory copy, not I/O.
+  - `buffer` — ring buffer (`RemoteCodeAgents.RingBuffer`, a fixed-capacity circular binary buffer; API: `new(capacity)`, `append(buffer, binary)` — overwrites oldest data when full, `read(buffer)` — returns a single contiguous binary by concatenating the two halves, `size(buffer)` — current byte count) of all output (scrollback + streaming). Sized dynamically based on the pane's tmux `history-limit` and width (see Buffer Sizing below). All viewers — first or late — receive the same history from this buffer. `RingBuffer.read/1` returns a single contiguous binary by concatenating the two halves of the circular buffer internally. Note: this allocates a copy up to `ring_buffer_max_size` (default 8MB) per call. This is acceptable for the expected viewer count (single-user tool with a handful of concurrent tabs); if many viewers connect simultaneously to a large-buffer pane, the transient memory spike is bounded by `max_pane_streams × ring_buffer_max_size`. Because `subscribe/1` makes a `GenServer.call` that triggers `RingBuffer.read/1`, concurrent subscribes to the same pane serialize through the GenServer — during high-throughput output, each subscribe briefly blocks output processing. This is acceptable for the expected concurrency (a few tabs); the call returns quickly since `read/1` is a memory copy, not I/O.
   - `status` — `:starting | :streaming | :dead | :shutting_down`. Transitions: `:starting` (init, before pipe-pane attach) → `:streaming` (after startup sequence completes successfully, and on successful pipeline recovery) → `:dead` (Port EOF with status 0, or recovery failure/exhaustion) or `:shutting_down` (grace period expired, deliberate shutdown). `:starting` prevents `send_keys` calls during the startup window (treated same as `:dead` — returns `{:error, :not_ready}`).
   - `grace_timer_ref` — reference from `Process.send_after/3` for the grace period timer, or `nil`. Used by `Process.cancel_timer/1` when a new viewer subscribes during the grace period.
   - `port_recovery` — `%{attempts: non_neg_integer, window_start: integer | nil}` tracking pipeline recovery attempts. Reset when 60 seconds elapse since `window_start` with no further crashes. Max 3 attempts per window.
@@ -227,13 +227,16 @@ The ring buffer is the single source of history for all viewers. Its size is com
 1. Query the pane's effective `history-limit`: `tmux show-option -wv -t {target} history-limit` (falls back to `tmux show-option -gv history-limit` for the global default)
 2. Query the pane width: `tmux list-panes -t {target} -F '#{pane_width}'`
 3. Compute: `history_limit × pane_width` bytes (one byte per cell is a rough estimate; ANSI escape sequences from `capture-pane -e` and multi-byte UTF-8 characters add overhead that can exceed this, but most lines aren't full-width, so it roughly balances out)
-4. Clamp the result between `ring_buffer_min_size` (default 256KB) and `ring_buffer_max_size` (default 4MB)
-5. If either tmux query fails, use `ring_buffer_default_size` (default 1MB)
+4. Clamp the result between `ring_buffer_min_size` (default 512KB) and `ring_buffer_max_size` (default 8MB)
+5. If either tmux query fails, use `ring_buffer_default_size` (default 2MB)
+6. **Memory pressure check**: Before allocating, check `:erlang.memory(:total)` against `memory_high_watermark` (default 768MB). If BEAM memory exceeds the watermark, use `ring_buffer_min_size` instead of the computed size and log a warning: "Memory pressure detected ({current}MB used, watermark {watermark}MB) — using minimum ring buffer size for pane {target}". Existing PaneStreams are not affected — only new ones are constrained. This provides graceful degradation without requiring a central memory coordinator.
 
 **Examples**:
-- Default tmux (2000 lines × 120 cols) = 240KB → clamped to 256KB (floor)
-- Heavy user (50000 lines × 200 cols) = 10MB → clamped to 4MB (ceiling)
+- Default tmux (2000 lines × 120 cols) = 240KB → clamped to 512KB (floor)
+- Heavy user (50000 lines × 200 cols) = 10MB → clamped to 8MB (ceiling)
 - Typical dev (10000 lines × 120 cols) = 1.2MB → used as-is
+
+**Aggregate memory budget**: With `max_pane_streams: 100` and `ring_buffer_max_size: 8MB`, the theoretical worst case is 800MB. In practice, most panes use 1-2MB buffers, so typical usage with 10-20 active panes is 10-40MB. The `memory_high_watermark` check ensures new panes degrade to minimum buffers before the application hits system memory limits.
 
 This ensures the buffer automatically scales to match what tmux is retaining, without requiring manual configuration. The initial scrollback capture is written into this buffer, and streaming output appends to it — old content naturally rolls off as the buffer fills.
 
@@ -406,7 +409,7 @@ For low-bandwidth / high-latency connections:
 3. **Compression**: Enable WebSocket per-message deflate compression in Phoenix endpoint config — terminal output (mostly text + ANSI codes) compresses very well
 4. **Debounced resize**: Client debounces resize events (300ms) to avoid flooding during orientation changes
 5. **Input batching**: Buffer rapid keystrokes client-side and send in batches (configurable, e.g. every 16ms) to reduce round-trip count
-6. **Ring buffer cap**: History buffer sized dynamically per pane (see Buffer Sizing), clamped between 256KB and 4MB. Provides full scrollback context for all viewers without excessive memory or transfer
+6. **Ring buffer cap**: History buffer sized dynamically per pane (see Buffer Sizing), clamped between 512KB and 8MB. Provides full scrollback context for all viewers without excessive memory or transfer. New panes fall back to minimum buffer size under memory pressure.
 
 ## Clipboard Integration
 
@@ -563,9 +566,12 @@ config :remote_code_agents,
   pane_stream_grace_period: 5_000,
   # Ring buffer size bounds (bytes) — actual size is computed dynamically per pane
   # from tmux history-limit × pane width, clamped to these bounds
-  ring_buffer_min_size: 262_144,    # 256 KB floor
-  ring_buffer_max_size: 4_194_304,  # 4 MB ceiling
-  ring_buffer_default_size: 1_048_576,  # 1 MB fallback if tmux query fails
+  ring_buffer_min_size: 524_288,      # 512 KB floor
+  ring_buffer_max_size: 8_388_608,    # 8 MB ceiling
+  ring_buffer_default_size: 2_097_152, # 2 MB fallback if tmux query fails
+  # BEAM memory threshold (bytes) — new PaneStreams use ring_buffer_min_size
+  # when :erlang.memory(:total) exceeds this. Existing streams are unaffected.
+  memory_high_watermark: 805_306_368,  # 768 MB
   # Maximum concurrent PaneStream processes (bounds FIFOs, ports, memory)
   max_pane_streams: 100,
   # Maximum decoded input payload size (bytes) per key_input event
@@ -668,7 +674,7 @@ config :remote_code_agents,
 
 1. **Capture strategy → pipe-pane**: True streaming via `tmux pipe-pane` to a FIFO, read by a `cat` Port. Initial scrollback captured via `capture-pane -e` (with ANSI escape sequences preserved) and written into the ring buffer. The startup sequence (Port first, then pipe-pane, then capture-pane, then seed buffer) avoids both FIFO deadlock and missed output. Brief overlap between scrollback capture and pipe stream is accepted (not deduplicated) — the format mismatch between capture-pane and raw pipe-pane output makes byte-level deduplication infeasible without server-side terminal emulation.
 
-2. **History → unified ring buffer**: Initial scrollback is written into the ring buffer at startup. All viewers — first or late — receive history from this single buffer. Buffer size is computed dynamically from the pane's tmux `history-limit` × width, clamped between 256KB and 4MB (default 1MB fallback). Old content rolls off naturally as new output streams in.
+2. **History → unified ring buffer**: Initial scrollback is written into the ring buffer at startup. All viewers — first or late — receive history from this single buffer. Buffer size is computed dynamically from the pane's tmux `history-limit` × width, clamped between 512KB and 8MB (default 2MB fallback). Under memory pressure (BEAM memory exceeds `memory_high_watermark`), new panes use the minimum buffer size. Old content rolls off naturally as new output streams in.
 
 3. **Multiple viewers → Shared PaneStream**: One PaneStream per pane, shared across all viewers via PubSub. Reference-counted via monitored PIDs with a grace period on last-viewer-disconnect.
 

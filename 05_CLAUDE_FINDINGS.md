@@ -14,11 +14,6 @@ Issues found during review that require a design decision before implementation.
 
 **Decision: Option A** — `Config` is now a GenServer that serializes all reads/writes, holds parsed config in memory, polls the file's mtime every 2s to detect external edits, and broadcasts `{:config_changed, config}` on PubSub topic `"config"`. LiveViews (`TerminalLive`, `SettingsLive`) subscribe on mount and update assigns on change. `QuickActionController` calls the same GenServer API. Malformed file on reload keeps last-good config in memory. Added to supervision tree (after PubSub, before Endpoint). Updated in `APPLICATION_DESIGN.md`.
 
-## 4. Ring Buffer Aggregate Memory
+## ~~4. Ring Buffer Aggregate Memory~~ — RESOLVED
 
-10 panes at 4MB each = 40MB just for ring buffers. The `max_pane_streams: 100` cap bounds worst case to 400MB. No global memory budget exists.
-
-**Options:**
-- **A)** Add a global memory budget (e.g., `ring_buffer_total_max: 32_MB`) and reduce per-pane sizes when approaching the limit
-- **B)** Keep per-pane limits as-is. Document the worst-case math (100 × 4MB = 400MB) and accept it for a server-class machine.
-- **C)** Lower the default `ring_buffer_max_size` ceiling (e.g., 1MB instead of 4MB)
+**Decision: Generous defaults + simple memory pressure check.** Raised limits: `ring_buffer_min_size` 256KB → 512KB, `ring_buffer_max_size` 4MB → 8MB, `ring_buffer_default_size` 1MB → 2MB. Worst case: 100 × 8MB = 800MB, acceptable for target machines. For low memory defense: each PaneStream checks `:erlang.memory(:total)` against `memory_high_watermark` (default 768MB) at startup. If exceeded, new panes use `ring_buffer_min_size` and log a warning. Existing streams are untouched. No central coordinator needed — `max_pane_streams` is the hard bound, memory check is the soft degradation. Updated in `APPLICATION_DESIGN.md`.
