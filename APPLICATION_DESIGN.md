@@ -426,11 +426,15 @@ remote_code_agents/
       channels/                     # Future
         terminal_channel.ex         # Raw terminal I/O channel (for native clients)
         user_socket.ex              # Socket configuration
+      controllers/                  # REST API (for native clients)
+        quick_action_controller.ex  # CRUD API for quick actions
       live/
         session_list_live.ex        # Session listing + creation page
         session_list_live.html.heex # Template
         terminal_live.ex            # Terminal view page
         terminal_live.html.heex     # Template
+        settings_live.ex            # Settings panel (quick actions CRUD)
+        settings_live.html.heex     # Settings template
       components/
         layouts.ex                  # App shell layout
         core_components.ex          # Shared UI components
@@ -1066,6 +1070,212 @@ defp deps do
     {:yaml_elixir, "~> 2.9"},
   ]
 end
+```
+
+### Future 6b: Settings & Quick Actions Management UI + API
+
+**Goal**: Allow users to manage quick actions and application settings through the web UI (and via a REST API for the native Android app), in addition to hand-editing the YAML config file.
+
+#### Design Principles
+
+- **YAML remains the source of truth**: The UI and API read from and write to `~/.config/remote_code_agents/config.yaml`. No database introduced.
+- **Round-trip safe**: The YAML writer preserves comments and formatting where possible (using `yaml_elixir`'s encoding or a template approach). If full comment preservation proves impractical, the file is rewritten cleanly with a header comment explaining the format.
+- **Immediate effect**: After a save, the updated config is available on the next LiveView mount (already the case — config is re-read per mount).
+- **Conflict-free**: Single-user tool — no concurrent write concerns. The UI reads the current file, presents it for editing, and writes it back atomically (write to temp file + rename).
+
+#### Web UI: Settings Panel
+
+Accessible via a gear icon in the terminal header or session list.
+
+**Quick Actions Management**:
+```
+┌─ Settings ──────────────────────────────────────────────┐
+│                                                         │
+│  Quick Actions                                          │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │ [Status]  git status                    [✎] [✕] │    │
+│  │ [Push ⚠]  git add . && git commit ...   [✎] [✕] │    │
+│  │ [Tests]   mix test                      [✎] [✕] │    │
+│  └─────────────────────────────────────────────────┘    │
+│  [+ Add Quick Action]                                   │
+│                                                         │
+│  ── Add / Edit Quick Action ──                          │
+│  Label:   [________]                                    │
+│  Command: [________________________]                    │
+│  Color:   [default ▾]                                   │
+│  ☐ Confirm before running                               │
+│                    [Cancel] [Save]                       │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+- Drag-to-reorder support (sets display order in the YAML list)
+- Inline edit and delete with confirmation
+- Mobile-friendly: full-screen panel with large touch targets
+
+#### LiveView Implementation
+
+A new LiveView or LiveComponent for the settings panel:
+
+```elixir
+defmodule RemoteCodeAgentsWeb.SettingsLive do
+  use RemoteCodeAgentsWeb, :live_view
+
+  def mount(_params, _session, socket) do
+    config = RemoteCodeAgents.Config.load()
+    {:ok, assign(socket, :config, config)}
+  end
+
+  def handle_event("save_action", %{"action" => action_params}, socket) do
+    config = socket.assigns.config
+    updated = RemoteCodeAgents.Config.upsert_action(config, action_params)
+    RemoteCodeAgents.Config.save(updated)
+    {:noreply, assign(socket, :config, updated)}
+  end
+
+  def handle_event("delete_action", %{"index" => index}, socket) do
+    config = socket.assigns.config
+    updated = RemoteCodeAgents.Config.delete_action(config, String.to_integer(index))
+    RemoteCodeAgents.Config.save(updated)
+    {:noreply, assign(socket, :config, updated)}
+  end
+
+  def handle_event("reorder_actions", %{"order" => order}, socket) do
+    config = socket.assigns.config
+    updated = RemoteCodeAgents.Config.reorder_actions(config, order)
+    RemoteCodeAgents.Config.save(updated)
+    {:noreply, assign(socket, :config, updated)}
+  end
+end
+```
+
+#### Config Module Extensions
+
+Add write capabilities to `RemoteCodeAgents.Config`:
+
+```elixir
+defmodule RemoteCodeAgents.Config do
+  # ... existing load/parse functions ...
+
+  @doc "Write config back to YAML file atomically."
+  def save(config) do
+    path = config_path() |> Path.expand()
+    yaml = to_yaml(config)
+    tmp = path <> ".tmp"
+
+    File.mkdir_p!(Path.dirname(path))
+    File.write!(tmp, yaml)
+    File.rename!(tmp, path)
+    :ok
+  end
+
+  defp to_yaml(config) do
+    """
+    # Remote Code Agents configuration
+    # Edit this file directly or use the web UI at /settings
+    #
+    # Quick actions appear as buttons above the terminal.
+    # Fields: label (required), command (required), confirm, color, icon
+
+    """ <> YamlElixir.Encoder.encode(%{
+      "quick_actions" => Enum.map(config.quick_actions, &action_to_map/1)
+    })
+  end
+
+  def upsert_action(config, params) do
+    # ... validate and insert/update action in config.quick_actions
+  end
+
+  def delete_action(config, index) do
+    %{config | quick_actions: List.delete_at(config.quick_actions, index)}
+  end
+
+  def reorder_actions(config, new_order) do
+    # new_order is a list of indices representing the desired order
+    reordered = Enum.map(new_order, &Enum.at(config.quick_actions, &1))
+    %{config | quick_actions: reordered}
+  end
+end
+```
+
+#### REST API (for Android App)
+
+Extends the future REST API (described in Future 2) with config endpoints:
+
+```
+GET    /api/config              — returns full config as JSON
+GET    /api/quick-actions       — returns quick actions list
+POST   /api/quick-actions       — add a new quick action
+PUT    /api/quick-actions/:index — update a quick action
+DELETE /api/quick-actions/:index — delete a quick action
+PUT    /api/quick-actions/order — reorder quick actions (body: {"order": [2,0,1]})
+```
+
+All endpoints require the same bearer token auth as other API routes.
+
+**Response format**:
+```json
+{
+  "quick_actions": [
+    {"label": "Status", "command": "git status", "confirm": false, "color": "default", "icon": null},
+    {"label": "Push", "command": "git add . && git commit -m . && git push", "confirm": true, "color": "default", "icon": null}
+  ]
+}
+```
+
+#### Controller
+
+```elixir
+defmodule RemoteCodeAgentsWeb.QuickActionController do
+  use RemoteCodeAgentsWeb, :controller
+
+  def index(conn, _params) do
+    config = RemoteCodeAgents.Config.load()
+    json(conn, %{quick_actions: config.quick_actions})
+  end
+
+  def create(conn, %{"action" => action_params}) do
+    config = RemoteCodeAgents.Config.load()
+    updated = RemoteCodeAgents.Config.upsert_action(config, action_params)
+    RemoteCodeAgents.Config.save(updated)
+    json(conn, %{quick_actions: updated.quick_actions})
+  end
+
+  def update(conn, %{"index" => index, "action" => action_params}) do
+    config = RemoteCodeAgents.Config.load()
+    updated = RemoteCodeAgents.Config.update_action(config, String.to_integer(index), action_params)
+    RemoteCodeAgents.Config.save(updated)
+    json(conn, %{quick_actions: updated.quick_actions})
+  end
+
+  def delete(conn, %{"index" => index}) do
+    config = RemoteCodeAgents.Config.load()
+    updated = RemoteCodeAgents.Config.delete_action(config, String.to_integer(index))
+    RemoteCodeAgents.Config.save(updated)
+    json(conn, %{quick_actions: updated.quick_actions})
+  end
+
+  def reorder(conn, %{"order" => order}) do
+    config = RemoteCodeAgents.Config.load()
+    updated = RemoteCodeAgents.Config.reorder_actions(config, order)
+    RemoteCodeAgents.Config.save(updated)
+    json(conn, %{quick_actions: updated.quick_actions})
+  end
+end
+```
+
+#### Routes
+
+```elixir
+# router.ex
+scope "/api", RemoteCodeAgentsWeb do
+  pipe_through [:api, :require_auth_token]
+
+  resources "/quick-actions", QuickActionController, only: [:index, :create, :update, :delete]
+  put "/quick-actions/order", QuickActionController, :reorder
+end
+
+live "/settings", SettingsLive
 ```
 
 ### Future 7: User Preferences
