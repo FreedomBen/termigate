@@ -36,8 +36,8 @@ Added inline note clarifying the multiple colons are intentional.
 ### ~~10. No FIFO cleanup on application crash~~ RESOLVED
 Added application startup cleanup step: `File.rm_rf` then `File.mkdir_p` on the FIFO directory at boot.
 
-### 11. Port `cat` non-zero exit unhandled
-Line 279 only covers `cat` exiting with status 0 (normal EOF / pane death). What happens on non-zero exit (permission error, missing binary, etc.)? PaneStream should handle both cases.
+### ~~11. Port `cat` non-zero exit unhandled~~ RESOLVED
+All exit statuses handled uniformly (set `:dead`, broadcast, clean up). Log level differs: `info` for status 0, `warning` for non-zero.
 
 ### 12. Grace period race condition
 Lines 106-109: If the last viewer disconnects and the grace period timer fires, but a new viewer subscribes concurrently — is there a race between shutdown and the new subscription? The doc should note that shutdown must check viewer count atomically within the GenServer `handle_info` before proceeding.

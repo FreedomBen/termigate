@@ -105,7 +105,7 @@ Android app (future):
 - **Lifecycle**:
   - Monitors all viewer PIDs — auto-unsubscribes on viewer crash/disconnect
   - On last viewer unsubscribe: starts a configurable grace period timer (default 5s). If a new viewer subscribes within the grace period, cancel the timer. Otherwise, shut down (detach pipe-pane, clean up FIFO, terminate).
-  - On Port EOF (tmux pane died): set status to `:dead`, broadcast `{:pane_dead, target}` to all viewers, clean up FIFO, shut down after viewers acknowledge/disconnect.
+  - On Port exit (any status): set status to `:dead`, broadcast `{:pane_dead, target}` to all viewers, clean up FIFO, shut down after viewers acknowledge/disconnect. Log at `info` level for exit status 0 (normal pane death); log at `warning` level for non-zero (e.g., permission error, `cat` not found).
 
 #### `RemoteCodeAgents.Tmux.CommandRunner`
 - **Responsibility**: Execute tmux CLI commands and return parsed output
@@ -307,9 +307,9 @@ All viewers — first or late — follow the same path. The ring buffer always c
 
 1. tmux pane exits (process ends, user runs `exit`, session killed externally)
 2. `pipe-pane` closes the write end of the FIFO
-3. `cat` Port receives EOF, exits with status 0
-4. PaneStream receives `{port, {:exit_status, 0}}` in `handle_info`
-5. PaneStream sets status to `:dead`, broadcasts `{:pane_dead, target}` via PubSub
+3. `cat` Port receives EOF, exits
+4. PaneStream receives `{port, {:exit_status, status}}` in `handle_info`
+5. PaneStream handles all exit statuses uniformly: sets status to `:dead`, broadcasts `{:pane_dead, target}` via PubSub, cleans up FIFO. Logs differ by status: `Logger.info` for status 0 (normal pane death), `Logger.warning` for non-zero (port error — e.g., permission denied, `cat` binary missing).
 6. All TerminalLive viewers receive `handle_info({:pane_dead, _})`, push `"pane_dead"` event to client
 7. Client shows "Session ended" overlay with link back to session list
 8. PaneStream cleans up FIFO, terminates after a short delay
