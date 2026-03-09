@@ -95,13 +95,14 @@ Android app (future):
   - `target` — the `session:window.pane` identifier
   - `pipe_port` — Elixir Port running `cat` on the FIFO
   - `viewers` — `MapSet` of subscriber PIDs (monitored)
-  - `buffer` — ring buffer of all output (scrollback + streaming). Sized dynamically based on the pane's tmux `history-limit` and width (see Buffer Sizing below). All viewers — first or late — receive the same contiguous history from this buffer.
+  - `buffer` — ring buffer (`RemoteCodeAgents.RingBuffer`) of all output (scrollback + streaming). Sized dynamically based on the pane's tmux `history-limit` and width (see Buffer Sizing below). All viewers — first or late — receive the same history from this buffer. `RingBuffer.read/1` returns a single contiguous binary by concatenating the two halves of the circular buffer internally.
   - `status` — `:streaming | :dead`
+  - `grace_timer_ref` — reference from `Process.send_after/3` for the grace period timer, or `nil`. Used by `Process.cancel_timer/1` when a new viewer subscribes during the grace period.
 - **Interface**:
   - `start_link/1` — starts streaming for a target pane
-  - `subscribe/1` — called by a viewer process. Uses `self()` to identify the caller. Checks Registry for an existing PaneStream; if not found, starts one under DynamicSupervisor. Monitors the caller PID and returns `{:ok, history}` where `history` is the current ring buffer contents (a single contiguous binary).
+  - `subscribe/1` — called by a viewer process. Uses `self()` to identify the caller. Checks Registry for an existing PaneStream; if not found, starts one under DynamicSupervisor. Monitors the caller PID, subscribes the caller to the PubSub topic `"pane:#{target}"`, and returns `{:ok, history}` where `history` is the current ring buffer contents (a single contiguous binary from `RingBuffer.read/1`). PubSub subscription happens inside the GenServer call before history is returned, guaranteeing no messages are lost between receiving history and streaming. Returns `{:error, :pane_not_found}` if the tmux pane does not exist (detected during startup when `pipe-pane` fails).
   - `unsubscribe/1` — called by a viewer process. Uses `self()` to identify the caller. Removes the caller from the viewer set. If no viewers remain, starts the grace period timer.
-  - `send_keys/2` — sends input to the pane via `tmux send-keys`. If status is `:dead`, skips the call and returns `{:error, :pane_dead}`. If the `send-keys` command fails (e.g., pane died between checks), logs a warning and returns `:ok` — pane death notification will follow shortly via the Port EOF flow.
+  - `send_keys/2` — sends input (as a binary) to the pane via `tmux send-keys -H`. Each byte of the binary is converted to its two-character hex representation. If status is `:dead`, skips the call and returns `{:error, :pane_dead}`. If the `send-keys` command fails (e.g., pane died between checks), logs a warning and returns `:ok` — pane death notification will follow shortly via the Port EOF flow.
 - **Lifecycle**:
   - Monitors all viewer PIDs — auto-unsubscribes on viewer crash/disconnect
   - On last viewer unsubscribe: starts a configurable grace period timer (default 5s) via `Process.send_after(self(), :grace_period_expired, ...)`. If a new viewer subscribes within the grace period, cancel the timer via `Process.cancel_timer/1`. When the `:grace_period_expired` message arrives in `handle_info`, re-check `MapSet.size(viewers) == 0` before proceeding with shutdown — this eliminates the race between a late subscribe and the timer firing.
@@ -133,8 +134,8 @@ PaneStream startup (order matters):
      — `cat` blocks on FIFO open until a writer connects, which is fine
        because it runs in a separate OS process and won't block the GenServer
   4. Attach pipe: tmux pipe-pane -t {target} -o 'cat >> {fifo_path}'
-     — `-o` flag captures output only (not input echo), preventing doubled
-       input when the pane has echo enabled
+     — `-o` flag captures output only (the stdout side of the pty), preventing
+       the input side from being captured and doubled
      — This opens the write end of the FIFO, unblocking the `cat` reader
   5. Query buffer size: determine ring buffer capacity (see Buffer Sizing below)
   6. Capture initial scrollback: tmux capture-pane -p -e -S - -t {target}
@@ -164,7 +165,7 @@ PaneStream shutdown:
   3. Remove the FIFO: File.rm({fifo_path})
 ```
 
-**Application startup cleanup**: On application boot, the FIFO directory is cleared (`File.rm_rf(fifo_dir)` then `File.mkdir_p(fifo_dir)`). This removes any stale FIFOs left behind by a previous crash or hard kill of the entire application.
+**Application startup cleanup**: In `Application.start/2`, before the supervision tree starts, the FIFO directory is cleared (`File.rm_rf(fifo_dir)` then `File.mkdir_p(fifo_dir)`). This removes any stale FIFOs left behind by a previous crash or hard kill of the entire application.
 
 **PaneStream crash recovery**: If a single PaneStream crashes, the supervisor restarts it. The `init/1` callback must:
   1. Check for and remove stale FIFO from previous instance
@@ -241,13 +242,13 @@ Example: User types "hi" then Ctrl+C
   - Server pushes `"pane_dead"` → display overlay message "Session ended", offer link back to session list
   - Clipboard: `onSelectionChange` → auto-copy to clipboard; paste handler intercepts Ctrl+Shift+V / toolbar button
   - `destroyed()`: Clean up xterm.js instance
-- **Server side** (`handle_params/3`):
-  - Calls `PaneStream.subscribe(target)` — gets `{:ok, history}`
+- **Server side** (`mount/3`):
+  - Constructs target from URL params: `"#{session}:#{window}.#{pane}"` (where session, window, pane are from the route `/sessions/:session/:window/:pane` — window and pane are integer indices)
+  - Calls `PaneStream.subscribe(target)` — gets `{:ok, history}` (PubSub subscription is handled internally by `subscribe/1`, so no messages are lost between receiving history and streaming) or `{:error, :pane_not_found}` (show error UI)
   - Pushes history to client via `push_event(socket, "history", %{data: ...})`
-  - Subscribes to PubSub topic `"pane:#{target}"` (where target is e.g. `"mysession:0.1"`, giving a topic like `"pane:mysession:0.1"` — the multiple colons are intentional)
   - `handle_info({:pane_output, data})` → `push_event(socket, "output", %{data: data})`
   - `handle_info({:pane_dead, _target})` → `push_event(socket, "pane_dead", %{})`
-  - `handle_event("key_input", %{"data" => b64})` → `Base.decode64!/1` → `PaneStream.send_keys(target, bytes)`
+  - `handle_event("key_input", %{"data" => b64})` → `Base.decode64/1` with error handling (invalid base64 is logged and ignored, not crashed on) → `PaneStream.send_keys(target, bytes)`
   - `handle_event("resize", %{"cols" => c, "rows" => r})` → resize handling (see Resize Conflicts below)
   - `terminate/2`: calls `PaneStream.unsubscribe(target)`
 - Mobile: on-screen virtual keyboard toolbar (see Mobile UI section)
@@ -403,7 +404,8 @@ A fixed bottom toolbar providing keys that don't exist on mobile keyboards:
 | Process registry   | Elixir Registry     | Built-in, lightweight process lookup by key            |
 | Process management | DynamicSupervisor   | One child per active pane stream                       |
 | Pub/Sub            | Phoenix.PubSub      | Built-in; connects PaneStreams to viewers               |
-| User config        | yaml_elixir 2.9+    | Human-editable YAML for quick actions + future settings |
+| User config (read) | yaml_elixir 2.11+   | YAML parser for quick actions + future settings        |
+| User config (write)| ymlr 5.0+           | YAML encoder for writing config back to file           |
 | Mobile terminal    | xterm.js + toolbar  | Works in mobile browsers; virtual key toolbar for special keys |
 | Android (future)   | Phoenix Channel     | Direct WebSocket connection; native terminal renderer   |
 
@@ -419,7 +421,8 @@ remote_code_agents/
         session.ex                  # Session struct
         pane.ex                     # Pane struct
       tmux_manager.ex               # Session/pane discovery + creation (stateless module)
-      config.ex                     # YAML config loader (~/.config/remote_code_agents/config.yaml)
+      config.ex                     # YAML config loader + writer (~/.config/remote_code_agents/config.yaml)
+      ring_buffer.ex                # Circular byte buffer with fixed capacity (new/1, append/2, read/1, size/1)
       pane_stream.ex                # Per-pane streaming GenServer (pipe-pane + FIFO)
       pane_stream_supervisor.ex     # DynamicSupervisor for PaneStreams
     remote_code_agents_web/
@@ -584,7 +587,7 @@ config :remote_code_agents,
 
 8. **FIFO blocking → cat Port**: The `cat` command runs as a Port (separate OS process), blocking on FIFO open without blocking the GenServer. `pipe-pane` opens the write end, unblocking `cat`. Simple and reliable.
 
-9. **Process lookup → Elixir Registry**: PaneStreams registered in `RemoteCodeAgents.PaneRegistry` with key `{:pane, target}`. `get_or_start/1` checks Registry, starts under DynamicSupervisor if not found.
+9. **Process lookup → Elixir Registry**: PaneStreams registered in `RemoteCodeAgents.PaneRegistry` with key `{:pane, target}`. `subscribe/1` checks Registry for an existing PaneStream; if not found, starts one under DynamicSupervisor. This "get or start" logic lives inside `subscribe/1` — there is no separate public `get_or_start` function.
 
 10. **Resize conflicts → disabled**: Panes keep their existing dimensions and viewers adapt. Future: last-writer-wins with dimension broadcast to all viewers; mobile viewers are passive (read-only resize).
 
@@ -1021,10 +1024,9 @@ def handle_event("cancel_action", _params, socket) do
 end
 
 defp send_quick_action(socket, action) do
-  # Send the command text followed by Enter (newline)
+  # Send the command text followed by Enter (newline) as a binary
   command_with_enter = action.command <> "\n"
-  bytes = :binary.bin_to_list(command_with_enter)
-  PaneStream.send_keys(socket.assigns.target, bytes)
+  PaneStream.send_keys(socket.assigns.target, command_with_enter)
   {:noreply, socket}
 end
 ```
@@ -1061,13 +1063,14 @@ This means:
 
 #### Dependencies
 
-Add `yaml_elixir` to `mix.exs`:
+Add `yaml_elixir` (parser) and `ymlr` (encoder) to `mix.exs`:
 
 ```elixir
 defp deps do
   [
     # ... existing deps ...
-    {:yaml_elixir, "~> 2.9"},
+    {:yaml_elixir, "~> 2.11"},
+    {:ymlr, "~> 5.0"},
   ]
 end
 ```
@@ -1079,7 +1082,7 @@ end
 #### Design Principles
 
 - **YAML remains the source of truth**: The UI and API read from and write to `~/.config/remote_code_agents/config.yaml`. No database introduced.
-- **Round-trip safe**: The YAML writer preserves comments and formatting where possible (using `yaml_elixir`'s encoding or a template approach). If full comment preservation proves impractical, the file is rewritten cleanly with a header comment explaining the format.
+- **Round-trip safe**: The YAML writer rewrites the file cleanly using `ymlr` (a YAML encoder library) with a header comment explaining the format. Comments in the original file are not preserved — this is acceptable since the structure is simple and the header documents the format.
 - **Immediate effect**: After a save, the updated config is available on the next LiveView mount (already the case — config is re-read per mount).
 - **Conflict-free**: Single-user tool — no concurrent write concerns. The UI reads the current file, presents it for editing, and writes it back atomically (write to temp file + rename).
 
@@ -1177,7 +1180,7 @@ defmodule RemoteCodeAgents.Config do
     # Quick actions appear as buttons above the terminal.
     # Fields: label (required), command (required), confirm, color, icon
 
-    """ <> YamlElixir.Encoder.encode(%{
+    """ <> Ymlr.document!(%{
       "quick_actions" => Enum.map(config.quick_actions, &action_to_map/1)
     })
   end
