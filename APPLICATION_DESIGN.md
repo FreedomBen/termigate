@@ -618,6 +618,7 @@ A fixed bottom toolbar providing keys that don't exist on mobile keyboards:
 | xterm.js addons    | @xterm/addon-fit    | Required — auto-sizes terminal to container            |
 |                    | @xterm/addon-web-links | Nice-to-have — makes URLs clickable in terminal     |
 | CSS                | Tailwind CSS 3.x    | Ships with Phoenix 1.7+; utility-first, good for responsive |
+| Auth               | bcrypt_elixir 3.x   | Password hashing via bcrypt (+ comeonin interface). Standard in Phoenix ecosystem. |
 | Terminal backend   | tmux pipe-pane      | True streaming, lower latency than polling              |
 | Process registry   | Elixir Registry     | Built-in, lightweight process lookup by key            |
 | Process management | DynamicSupervisor   | One child per active pane stream                       |
@@ -883,12 +884,12 @@ This application is **fully stateless from a storage perspective**. No database 
 | Session/pane state     | tmux itself (source of truth)                          |
 | Streaming state        | PaneStream GenServer memory (ephemeral)                |
 | Viewer tracking        | PaneStream GenServer memory (ephemeral)                |
-| Auth tokens            | Config file / environment variable (static)            |
+| Auth credentials       | `~/.config/remote_code_agents/credentials` (bcrypt hash) or `RCA_AUTH_TOKEN` env var |
 | Quick actions          | YAML config file, cached in `Config` GenServer memory      |
 | User preferences       | Browser `localStorage` (client-side)                   |
 | Layout preferences     | Browser `localStorage` (client-side)                   |
 
-**Rationale**: tmux is the source of truth for all terminal state. Runtime coordination lives in GenServer memory and PubSub. Auth is single-user, handled by a static token. User preferences (font size, theme, layout) are per-device and belong in the browser. There is no data that requires durable server-side storage.
+**Rationale**: tmux is the source of truth for all terminal state. Runtime coordination lives in GenServer memory and PubSub. Auth is single-user, handled by a bcrypt-hashed credentials file (or optional static token for headless setups). User preferences (font size, theme, layout) are per-device and belong in the browser. There is no data that requires durable server-side storage.
 
 **Implications**:
 - No Ecto dependency, no migrations, no database process to manage
@@ -904,37 +905,47 @@ This application is **fully stateless from a storage perspective**. No database 
 
 **Goal**: Access terminal sessions from a phone or remote machine over the internet, securely.
 
-#### Token-Based Authentication
+#### Username + Password Authentication
 
-- **Single static token**: Generated once, stored in config or environment variable. Suitable for a personal/single-user tool.
-- **Token generation**: `mix rca.gen.token` Mix task generates a cryptographically random token, prints it, and writes to `~/.config/remote_code_agents/token`. Alternatively, set `RCA_AUTH_TOKEN` environment variable.
-- **Token storage**: Read from `Application.get_env(:remote_code_agents, :auth_token)` at runtime. Loaded from env var in `runtime.exs`:
-  ```elixir
-  # config/runtime.exs
-  config :remote_code_agents,
-    auth_token: System.get_env("RCA_AUTH_TOKEN")
-  ```
-- **No token configured**: If `auth_token` is `nil`, auth is disabled (localhost-only mode). If the endpoint is bound to `0.0.0.0` and no token is set, log a warning on startup.
+- **Credentials**: Username and bcrypt-hashed password stored in `~/.config/remote_code_agents/credentials`. The username defaults to the system user running the application. The user chooses a memorable password — no random tokens to transfer between devices.
+- **Setup**: `mix rca.setup` Mix task (also triggered on first launch if no credentials file exists):
+  1. Prompts for username (pre-filled with `whoami` output)
+  2. Prompts for password (with confirmation)
+  3. Hashes password via `Bcrypt.hash_pwd_salt/1`
+  4. Writes `%{username: username, password_hash: hash}` to `~/.config/remote_code_agents/credentials` (Erlang term format via `:erlang.term_to_binary/1`, or a simple `username:hash` text format)
+- **Password change**: `mix rca.change_password` — prompts for current password (verified against stored hash), then new password with confirmation.
+- **Dependencies**: `bcrypt_elixir` (+ `comeonin`) — the standard password hashing library in the Phoenix ecosystem.
+
+#### Fallback: Static Token (for headless/automated setups)
+
+- **`RCA_AUTH_TOKEN` env var**: If set, the login page accepts this token in the password field (with any username). Verified via `Plug.Crypto.secure_compare/2` (constant-time comparison). This supports systemd services, CI, and scripted deployments where interactive setup isn't possible.
+- **Precedence**: If `RCA_AUTH_TOKEN` is set, both token auth and credentials auth are accepted — whichever matches. If neither credentials file nor env var exists, auth is disabled (localhost-only mode). If the endpoint is bound to `0.0.0.0` and no auth is configured, log a warning on startup.
 
 #### Auth Flow — Web
 
 1. User navigates to the app. If no valid session cookie, redirect to `/login`.
-2. `/login` page shows a single "Token" input field.
-3. On submit, server verifies token via `Plug.Crypto.secure_compare/2` (constant-time comparison).
-4. On success, set a signed session cookie (`Plug.Session` with `:cookie` store, signed with `secret_key_base`). Cookie expiry configurable (default 30 days).
+2. `/login` page shows username and password fields.
+3. On submit, server checks:
+   a. If `RCA_AUTH_TOKEN` is set and the password matches (constant-time compare), authenticate.
+   b. Otherwise, verify username matches stored username and password matches stored hash via `Bcrypt.verify_pass/2`. On mismatch, call `Bcrypt.no_user_verify/0` to prevent timing attacks.
+4. On success, set a signed session cookie (`Plug.Session` with `:cookie` store, signed with `secret_key_base`). Cookie TTL is configurable (default 30 days; 0 = never expire, re-auth only on explicit logout). Configured via `auth.session_ttl_days` in `config.yaml`.
 5. All LiveView mounts check `on_mount` hook for valid session. Redirect to `/login` if missing.
 
-#### Auth Flow — Phoenix Channel (Android)
+#### Auth Flow — Phoenix Channel (Android, future)
 
-1. Android app sends token as a param on socket connect: `socket("/socket", UserSocket, params: {"token" => "..."})`
-2. `UserSocket.connect/3` verifies the token. Returns `{:ok, socket}` or `:error`.
-3. On `:error`, the client receives a connection rejection and prompts for a new token.
+1. Android app POSTs credentials to `/api/login` — returns a signed bearer token (Phoenix.Token) on success.
+2. App stores the token in local preferences.
+3. WebSocket connect sends token as a param: `socket("/socket", UserSocket, params: {"token" => "..."})`
+4. `UserSocket.connect/3` verifies the token via `Phoenix.Token.verify/4`. Returns `{:ok, socket}` or `:error`.
+5. On `:error`, the client receives a connection rejection and prompts the user to re-authenticate.
+6. Token TTL matches the web session TTL (`auth.session_ttl_days`).
 
 #### Implementation Modules
 
 - `RemoteCodeAgentsWeb.Plugs.RequireAuth` — Plug that checks session cookie, redirects to `/login`
-- `RemoteCodeAgentsWeb.AuthLive` — LiveView for the login page
+- `RemoteCodeAgentsWeb.AuthLive` — LiveView for the login page (username + password form)
 - `RemoteCodeAgentsWeb.AuthHook` — `on_mount` hook for LiveView auth checks
+- `RemoteCodeAgents.Auth` — module that handles credential verification (bcrypt check, token fallback, credentials file I/O)
 
 #### HTTPS
 
@@ -949,13 +960,11 @@ For remote access, HTTPS is required (both for security and Clipboard API).
 
 ```elixir
 # config/runtime.exs — remote access example
-if auth_token = System.get_env("RCA_AUTH_TOKEN") do
-  config :remote_code_agents,
-    auth_token: auth_token
+config :remote_code_agents,
+  auth_token: System.get_env("RCA_AUTH_TOKEN")  # optional fallback for headless setups
 
-  config :remote_code_agents, RemoteCodeAgentsWeb.Endpoint,
-    http: [ip: {0, 0, 0, 0}, port: 4000]
-end
+config :remote_code_agents, RemoteCodeAgentsWeb.Endpoint,
+  http: [ip: {0, 0, 0, 0}, port: 4000]
 ```
 
 ### Phoenix Channel + Native Android Client

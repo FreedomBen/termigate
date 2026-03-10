@@ -1,0 +1,53 @@
+# APPLICATION_DESIGN.md Review Findings
+
+## Fixes Applied
+
+1. **Memory spike bound formula**: Fixed from `max_pane_streams × ring_buffer_max_size` to `concurrent_viewers × ring_buffer_max_size`, with note that serialization through the GenServer means only one copy exists at a time in practice.
+2. **Resize inconsistency between LiveView and Channel**: Added clarifying note to both Channel event tables (Data Flow and Feature Designs) that Channel resize calls `tmux resize-pane`, unlike Phase 1 LiveView which stores only.
+3. **PubSub ordering safety**: Added note explaining why subscribing to PubSub before the PaneStream exists is safe (no publisher yet).
+4. **Android table row formatting**: Moved the Android row back inside the Technology Choices table (was orphaned after the TERM paragraph).
+5. **Quick Actions `confirm` behavior**: Expanded the schema description to specify LiveView modal (not `window.confirm()`), with command text display and mobile-friendly buttons.
+6. **Scope vs Prioritization link**: Added introductory sentence to Implementation Prioritization clarifying it covers post-Phase-1 features.
+
+## Open Questions
+
+### ~~1. Auth token storage — two locations~~ RESOLVED
+
+Replaced token-based auth with username+password authentication. Credentials (username + bcrypt hash) stored in `~/.config/remote_code_agents/credentials`. `RCA_AUTH_TOKEN` env var retained as fallback for headless/automated setups. `mix rca.setup` handles initial credential creation; `mix rca.change_password` for updates. Added `bcrypt_elixir` dependency. Updated: auth section, storage table, runtime.exs snippet, technology choices table.
+
+### 2. Grace period duration
+
+Line 119 says "default 5s". Is that the right default, or should it be longer (e.g., 30s) to avoid restarting PaneStreams when someone briefly closes a tab?
+
+### 3. `max_pane_streams` — where configured, what default?
+
+Where should this be configured and what should the default be?
+- (a) DynamicSupervisor's `max_children` option
+- (b) Application config checked in `subscribe/1`
+- (c) Both
+
+Is 100 the right default (implied by the "100 × 8MB = 800MB" aggregate memory example)?
+
+### 4. CSRF protection for REST API
+
+The REST API endpoints (`POST /api/sessions`, quick actions CRUD) don't mention CSRF. Should the REST API rely solely on bearer token auth (no CSRF needed since tokens aren't cookie-based), or should CSRF tokens be required too?
+
+### 5. Rate limiting on `send_keys`
+
+Should there be a server-side rate limit on `key_input` events (e.g., max N events/second per viewer), or is the 128KB payload cap + client-side 16ms batching sufficient?
+
+### 6. tmux socket path
+
+Should the doc address non-default tmux socket paths (`-L`/`-S` flags)? E.g., a config option like `tmux_socket_path` passed to all `CommandRunner` calls?
+
+### 7. Testing strategy
+
+The section is quite thin for a doc this detailed. Should it be expanded with specific approaches (mock `CommandRunner` for unit tests, real tmux for integration tests, LiveView test helpers, etc.), or left lean?
+
+### 8. Logging strategy
+
+Should a section on structured logging / log format be added, or is the current inline approach (log levels mentioned per-event) sufficient?
+
+### ~~9. HTTPS for remote access~~ RESOLVED
+
+The HTTPS section already existed in the doc (under Feature Designs > Authentication & Remote Access > HTTPS) with three options (reverse proxy, Phoenix direct TLS, Tailscale/WireGuard) and a recommendation for Tailscale. The clipboard section just needed to reference it — no additional content needed.
