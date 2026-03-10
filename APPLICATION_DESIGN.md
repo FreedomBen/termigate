@@ -548,7 +548,7 @@ socket "/live", Phoenix.LiveView.Socket,
   websocket: [compress: true]  # enables permessage-deflate
 
 socket "/socket", RemoteCodeAgentsWeb.UserSocket,
-  websocket: [compress: true]  # Phoenix Channel socket for native clients
+  websocket: [compress: true, connect_info: [:peer_data, :x_headers]]  # Phoenix Channel socket for native clients
 ```
 
 This is configured on the socket, not on the HTTP listener — `permessage-deflate` is a WebSocket extension negotiated during the HTTP→WebSocket upgrade handshake.
@@ -865,10 +865,10 @@ config :remote_code_agents,
   | Endpoint | Limit | Window | Response on exceed |
   |----------|-------|--------|--------------------|
   | `POST /api/login` | 5 requests | 1 minute | `429 Too Many Requests` with `{"error": "rate_limited", "retry_after": seconds}` and `Retry-After` header |
-  | WebSocket upgrade (`/socket/websocket`) | 10 attempts | 1 minute | Connection rejected (HTTP 429 before upgrade) |
+  | WebSocket upgrade (`/socket/websocket`) | 10 attempts | 1 minute | Connection rejected (`:error` from `UserSocket.connect/3`) |
   | `POST /api/sessions` | 10 requests | 1 minute | `429 Too Many Requests` with same format |
 
-  **Implementation**: `RemoteCodeAgentsWeb.Plugs.RateLimit` — a Plug that uses an ETS table (`:set`, `:public`, with `read_concurrency: true`) to track `{ip, endpoint_key, window_start}` → `count`. The window start is truncated to the current minute (`System.system_time(:second) |> div(60)`). Stale entries are cleaned up lazily — on each request, if the window has rolled over, the old entry is replaced. A periodic cleanup (every 5 minutes via a `Process.send_after` loop inside the `RateLimit` module's companion GenServer, started in the supervision tree) sweeps entries older than 2 minutes to prevent unbounded ETS growth from many distinct IPs. The GenServer owns the ETS table; the Plug reads from it directly (`:public` table with `read_concurrency: true`).
+  **Implementation**: `RemoteCodeAgentsWeb.Plugs.RateLimit` — a Plug for HTTP endpoints (login, session create). WebSocket rate limiting is handled in `UserSocket.connect/3` instead of a Plug, since WebSocket upgrades bypass the router pipeline — `connect/3` reads the peer IP from `connect_info` and calls `RateLimitStore.check/2` directly. Both paths use the same ETS table (`:set`, `:public`, with `read_concurrency: true`) to track `{ip, endpoint_key, window_start}` → `count`. The window start is truncated to the current minute (`System.system_time(:second) |> div(60)`). Stale entries are cleaned up lazily — on each request, if the window has rolled over, the old entry is replaced. A periodic cleanup (every 5 minutes via a `Process.send_after` loop inside the `RateLimit` module's companion GenServer, started in the supervision tree) sweeps entries older than 2 minutes to prevent unbounded ETS growth from many distinct IPs. The GenServer owns the ETS table; the Plug reads from it directly (`:public` table with `read_concurrency: true`).
 
   **Configuration**:
   ```elixir
@@ -1056,8 +1056,8 @@ This application is **fully stateless from a storage perspective**. No database 
 3. On submit, server checks:
    a. If `RCA_AUTH_TOKEN` is set and the password matches (constant-time compare), authenticate.
    b. Otherwise, look up the stored username. If the username doesn't match, call `Bcrypt.no_user_verify/0` (performs a dummy hash to prevent timing-based username enumeration) and reject. If the username matches, verify the password via `Bcrypt.verify_pass/2`.
-4. On success, set a signed session cookie (`Plug.Session` with `:cookie` store, signed with `secret_key_base`). Cookie TTL is configurable (default 30 days; `nil` = never expire, re-auth only on explicit logout). Configured via `config :remote_code_agents, auth_session_ttl_days: 30` in application config (not `config.yaml` — auth settings use application config, not the YAML config file, to avoid a circular dependency on the Config GenServer during boot).
-5. All LiveView mounts check `on_mount` hook for valid session. Redirect to `/login` if missing.
+4. On success, set a signed session cookie (`Plug.Session` with `:cookie` store, signed with `secret_key_base`). Store `authenticated_at: System.system_time(:second)` in the session data. Configured via `config :remote_code_agents, auth_session_ttl_days: 30` in application config (not `config.yaml` — auth settings use application config, not the YAML config file, to avoid a circular dependency on the Config GenServer during boot).
+5. All LiveView mounts check `on_mount` hook (`AuthHook`) for valid session. `AuthHook` reads `authenticated_at` from the session and compares against `auth_session_ttl_days` (default 30 days; `nil` = never expire, re-auth only on explicit logout). If the timestamp is missing or expired, redirect to `/login` with a flash message ("Session expired, please log in again" for expired vs no message for missing). This gives the server authoritative control over session lifetime — config changes take effect immediately for all existing sessions.
 6. **Logout**: `DELETE /logout` (handled by `AuthController`) clears the session cookie and redirects to `/login`. A "Logout" link is shown in the settings panel. For the Android app, logout clears the stored token from `EncryptedSharedPreferences` and navigates to the Login Screen — no server call needed since Phoenix.Token is stateless (the server doesn't track issued tokens).
 
 #### Auth Flow — Phoenix Channel (Android)
@@ -1065,13 +1065,13 @@ This application is **fully stateless from a storage perspective**. No database 
 1. Android app POSTs credentials to `/api/login` — returns a signed bearer token (Phoenix.Token) on success.
 2. App stores the token in local preferences.
 3. WebSocket connect sends token as a param: `socket("/socket", UserSocket, params: {"token" => "..."})`
-4. `UserSocket.connect/3` verifies the token via `Phoenix.Token.verify/4`. Returns `{:ok, socket}` or `:error`.
-5. On `:error`, the client receives a connection rejection and prompts the user to re-authenticate.
+4. `UserSocket.connect/3` checks the per-IP WebSocket rate limit via `RateLimitStore.check(:websocket, peer_ip)` (IP extracted from `connect_info: [:peer_data, :x_headers]`), then verifies the token via `Phoenix.Token.verify/4`. Returns `{:ok, socket}` or `:error`.
+5. On `:error` (rate limited or invalid token), the client receives a connection rejection and prompts the user to re-authenticate.
 6. Token TTL matches the web session TTL (`auth_session_ttl_days` application config).
 
 #### Implementation Modules
 
-- `RemoteCodeAgentsWeb.Plugs.RequireAuth` — Plug that checks session cookie, redirects to `/login`
+- `RemoteCodeAgentsWeb.Plugs.RequireAuth` — Plug that checks session cookie exists, redirects to `/login` if missing. Does not check TTL — that's handled by `AuthHook` on LiveView mount (Plugs run on the initial HTTP request; `AuthHook` runs on every LiveView mount including reconnects, so TTL expiry is checked more frequently).
 - `RemoteCodeAgentsWeb.Plugs.RequireAuthToken` — Plug that reads bearer token from `Authorization` header, verifies via `Phoenix.Token.verify/4`, returns 401 on failure. Used by the `:require_auth_token` pipeline for REST API routes.
 - `RemoteCodeAgentsWeb.AuthLive` — LiveView for the web login page (username + password form, submits via `handle_event`). The REST API login (`POST /api/login`) is handled by `AuthController` — a separate path for native clients.
 - `RemoteCodeAgentsWeb.AuthController` — handles `POST /api/login` (returns Phoenix.Token for native clients) and `DELETE /logout` (clears session cookie, redirects to `/login`)
@@ -1106,7 +1106,7 @@ config :remote_code_agents, RemoteCodeAgentsWeb.Endpoint,
 
 The `TerminalChannel` speaks a simple protocol over the Phoenix Channel WebSocket:
 
-**Connection**: Client connects to `wss://host:port/socket/websocket` with `%{"token" => "..."}` param. `UserSocket.connect/3` verifies the token. Rejected connections receive a socket error — the client should prompt for a new token.
+**Connection**: Client connects to `wss://host:port/socket/websocket` with `%{"token" => "..."}` param. `UserSocket.connect/3` checks the per-IP rate limit, then verifies the token. Rejected connections receive a socket error — the client should prompt for a new token.
 
 **Join**: `"terminal:{session}:{window}:{pane}"` — server converts to target format, calls `PaneStream.subscribe/1`.
 - **Success reply**: `{:ok, %{"history" => base64_string, "cols" => int, "rows" => int}}` — ring buffer contents and current pane dimensions. The reply is a JSON text frame (Phoenix Channel replies are always JSON), so history is base64-encoded — the only exception to the raw binary convention. All subsequent data events use binary frames.
