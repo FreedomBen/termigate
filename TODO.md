@@ -2,7 +2,7 @@
 
 - On startup, if the config file doesn't already exist, write the default config file to the file location
 
-- Let's define out tech stack.  Write decision to TECH_STACK.md.  Write out what we already know, and let's discuss the remaining options.  We do want to use tailwind css.  I bought a tailwind UI/tailwind Plus license and have files in ~/gitclone/tailwind-ui-tailwind-plus/tailwindplus that you can and should use as a starting point.  
+- Let's define out tech stack.  Write decision to TECH_STACK.md.  Write out what we already know, and let's discuss the remaining options.  We do want to use tailwind css.  I bought a tailwind UI/tailwind Plus license and have files in ~/gitclone/tailwind-ui-tailwind-plus/tailwindplus that you can and should use as a starting point.  What else do we need to decide on for the tech stack?
 
 # Already Run
 
