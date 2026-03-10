@@ -16,10 +16,10 @@ Resolved: Option (b) — standard TLS only, no pinning or TOFU. TOFU is complex 
 
 Resolved: Switched to Ktor Client + kotlinx.serialization. Pure Kotlin, first-class serialization support, coroutine-native. Uses `ktor-client-okhttp` engine to share the OkHttp instance with the WebSocket layer. Updated tech stack table, architecture diagram, project structure (`ApiService.kt` → `ApiClient.kt`, `AuthInterceptor.kt` → `AuthPlugin.kt`), and DI module description.
 
-## #7/#8 — Android Quick Action Validation & Termux Dependency
+## ~~#7/#8 — Android Quick Action Validation & Termux Dependency~~ RESOLVED
 
-Two implementation details that could be fleshed out now or deferred:
+Resolved:
 
-1. **Quick action execution path on Android**: The web path validates input size (128KB) in `handle_event`. The Android path sends commands via Channel `"input"` which has the same server-side limit, but there's no mention of client-side validation in the Android app. Should the Android `TerminalRepository` or `TerminalViewModel` validate before sending?
+1. **Quick action validation**: No client-side validation needed. Quick action commands are user-configured strings (typically a few hundred bytes). The server enforces the 128KB limit on all Channel `"input"` events, covering all input paths. Documented in Android Terminal Screen lifecycle.
 
-2. **Termux library dependency coordinates**: The doc says to fork `terminal-emulator` and `terminal-view` into a standalone library repo and publish to GitHub Packages, but doesn't show the Maven dependency declaration in `build.gradle.kts` or `libs.versions.toml`. Worth specifying now, or leave for implementation time?
+2. **Termux dependency**: Local Gradle module at `android/terminal-lib/` instead of a separate published package. App depends via `implementation(project(":terminal-lib"))`. Updated Resolved Decisions section and project structure.

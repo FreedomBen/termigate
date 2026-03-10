@@ -2123,7 +2123,7 @@ The primary screen. Full-screen terminal with an action bar overlay.
 4. Channel `"output"` events → feed raw bytes into terminal emulator (streaming)
 5. Keyboard input → convert to terminal byte sequences → send via Channel `"input"` event
 6. Special key toolbar taps → emit corresponding escape sequences/control codes via Channel `"input"`
-7. Quick action tap → send command + `\n` as bytes via Channel `"input"` (with confirmation dialog if `confirm: true`)
+7. Quick action tap → send command + `\n` as bytes via Channel `"input"` (with confirmation dialog if `confirm: true`). No client-side size validation needed — quick action commands are user-configured strings (typically a few hundred bytes). The server enforces the 128KB limit on all Channel `"input"` events, which covers all input paths including quick actions.
 8. Channel `"pane_superseded"` event → leave the current topic, convert `new_target` (e.g., `"new-name:0.1"`) to Channel topic format (`"terminal:new-name:0:1"`), rejoin under the new topic. The rejoin provides fresh history — clear the terminal emulator and re-render. The user sees a brief reload, same as the web redirect.
 9. On screen exit: leave the Channel topic (server auto-unsubscribes via monitor)
 
@@ -2345,6 +2345,13 @@ android/
     src/test/                        # Unit tests (JUnit 5)
     src/androidTest/                 # Instrumented tests (Espresso + Compose)
   build.gradle.kts
+  terminal-lib/                      # Forked Termux terminal-emulator + terminal-view
+    src/main/java/
+      com/termux/terminal/           # TerminalEmulator, TerminalBuffer, etc.
+      com/termux/view/               # TerminalView, TerminalRenderer
+    build.gradle.kts                 # Android library module
+  build.gradle.kts                   # Root build file
+  settings.gradle.kts                # includes :app, :terminal-lib
   gradle/
     libs.versions.toml               # Version catalog
 ```
@@ -2395,7 +2402,7 @@ android {
 
 #### Termux Library Integration
 
-**Decision**: Fork the `terminal-emulator` and `terminal-view` modules into a standalone library repo. Publish to GitHub Packages alongside the main repo. The code is stable and changes infrequently — maintaining the fork is low effort, and it gives clean Maven dependency management without coupling to the full Termux app build.
+**Decision**: Fork the `terminal-emulator` and `terminal-view` modules into a local Gradle module within this repository at `android/terminal-lib/`. The app module depends on it via `implementation(project(":terminal-lib"))`. No separate repo, no published package — everything builds together. The Termux code is stable and changes infrequently, so maintaining the fork in-tree is low effort. Updates are done by copying updated source files from the Termux repo as needed.
 
 #### Phoenix Channel Client
 
