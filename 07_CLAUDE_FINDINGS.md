@@ -15,9 +15,9 @@
 
 Replaced token-based auth with username+password authentication. Credentials (username + bcrypt hash) stored in `~/.config/remote_code_agents/credentials`. `RCA_AUTH_TOKEN` env var retained as fallback for headless/automated setups. `mix rca.setup` handles initial credential creation; `mix rca.change_password` for updates. Added `bcrypt_elixir` dependency. Updated: auth section, storage table, runtime.exs snippet, technology choices table.
 
-### 2. Grace period duration
+### ~~2. Grace period duration~~ RESOLVED
 
-Line 119 says "default 5s". Is that the right default, or should it be longer (e.g., 30s) to avoid restarting PaneStreams when someone briefly closes a tab?
+Changed default from 5s to 30s. Updated in both the PaneStream lifecycle description and config.exs (`pane_stream_grace_period: 30_000`).
 
 ### 3. `max_pane_streams` — where configured, what default?
 
