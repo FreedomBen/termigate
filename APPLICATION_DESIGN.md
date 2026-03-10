@@ -544,9 +544,15 @@ config :remote_code_agents,
 
 ### 4. Binary Frames on Phoenix Channel
 
-LiveView requires JSON-serializable payloads, so terminal data is base64-encoded (~33% overhead). The Phoenix Channel for native Android clients can use raw binary payloads instead, eliminating this overhead entirely.
+LiveView requires JSON-serializable payloads, so terminal data is base64-encoded (~33% overhead). The Phoenix Channel for native Android clients uses binary WebSocket frames instead, eliminating this overhead entirely.
 
-**Implementation**: The Channel `handle_info({:pane_output, bytes})` pushes bytes directly without base64 encoding. The Android client receives raw bytes and passes them to the terminal renderer. This is a pure win — less CPU (no encode/decode) and 33% less bandwidth.
+**Implementation**: `UserSocket` is configured with Phoenix's V2 JSON serializer (the default for new Phoenix apps). This serializer handles two frame types on the same WebSocket connection:
+- **Text frames** (JSON): used for control messages — join, leave, heartbeat, replies, and events with JSON-only payloads (e.g., `resize`, `pane_dead`).
+- **Binary frames**: used for data-heavy events — terminal output, input, and history. The binary frame format is: `<<join_ref_size::8, topic_size::8, event_size::8, join_ref::binary, topic::binary, event::binary, payload::binary>>` — a compact header followed by raw payload bytes.
+
+The Channel `handle_info({:pane_output, bytes})` pushes `{:binary, bytes}` as the payload. The serializer encodes this as a binary WebSocket frame automatically. The Android client receives raw bytes via OkHttp's `onMessage(webSocket, bytes: ByteString)` callback and parses the binary header to extract the event name and payload.
+
+This is a pure win — less CPU (no encode/decode) and 33% less bandwidth compared to base64-over-JSON.
 
 ### 5. Client-Side Input Batching
 
@@ -999,17 +1005,19 @@ The `TerminalChannel` speaks a simple protocol over the Phoenix Channel WebSocke
 **Connection**: Client connects to `wss://host:port/socket/websocket` with `%{"token" => "..."}` param. `UserSocket.connect/3` verifies the token. Rejected connections receive a socket error — the client should prompt for a new token.
 
 **Join**: `"terminal:{session}:{window}:{pane}"` — server converts to target format, calls `PaneStream.subscribe/1`.
-- **Success reply**: `{:ok, %{"history" => raw_binary, "cols" => int, "rows" => int}}` — ring buffer contents and current pane dimensions. Binary data is sent as raw bytes (no base64 encoding) — see "Binary Frames on Phoenix Channel" in Bandwidth Optimization.
+- **Success reply**: `{:ok, %{"history" => binary, "cols" => int, "rows" => int}}` — ring buffer contents and current pane dimensions. The reply itself is a JSON text frame (Phoenix Channel replies are always JSON); `history` is base64-encoded in this one message. Immediately after, the server pushes a `reconnected` binary frame with the same data — the client can use whichever arrives, but the binary frame is preferred. Alternatively, the join reply can omit history and the client waits for the initial `output` binary push.
 - **Error reply**: `{:error, %{"reason" => "pane_not_found" | "max_pane_streams"}}`.
 
 **Events**:
 
-| Direction | Event | Payload | Notes |
-|-----------|-------|---------|-------|
-| C→S | `input` | `%{"data" => raw_binary}` | Keyboard/touch input. Raw bytes, no base64. Max 128KB. |
-| C→S | `resize` | `%{"cols" => int, "rows" => int}` | Client requests pane resize. Validated: cols 1–500, rows 1–200. Calls `tmux resize-pane`. |
-| S→C | `output` | `%{"data" => raw_binary}` | Streaming terminal output. Raw bytes, no base64. |
-| S→C | `reconnected` | `%{"data" => raw_binary}` | Full buffer after PaneStream crash recovery. Client should clear and re-render. |
+Events carrying terminal data (`output`, `reconnected`, `input`) are sent as **binary WebSocket frames** using the V2 binary format (see "Binary Frames on Phoenix Channel" in Bandwidth Optimization). Control events (`resize`, `pane_dead`, `pane_superseded`, `resized`) use **JSON text frames**.
+
+| Direction | Event | Frame type | Payload | Notes |
+|-----------|-------|------------|---------|-------|
+| C→S | `input` | binary | raw bytes | Keyboard/touch input. Max 128KB. |
+| C→S | `resize` | JSON | `%{"cols" => int, "rows" => int}` | Client requests pane resize. Validated: cols 1–500, rows 1–200. Calls `tmux resize-pane`. |
+| S→C | `output` | binary | raw bytes | Streaming terminal output. |
+| S→C | `reconnected` | binary | raw bytes | Full buffer after PaneStream crash recovery. Client should clear and re-render. |
 | S→C | `pane_dead` | `%{}` | Pane/session ended |
 | S→C | `pane_superseded` | `%{"new_target" => string}` | Session/window renamed. Client can rejoin under new topic. |
 | S→C | `resized` | `%{"cols" => int, "rows" => int}` | Pane was resized by another viewer |
@@ -1151,7 +1159,7 @@ quick_actions:
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `id` | string | no | auto-generated | Stable identifier. Auto-generated (URL-safe random token) when omitted (e.g., hand-edited YAML). Used by the API for update/delete. |
+| `id` | string | no | auto-generated | Stable identifier. Auto-generated (URL-safe random token) when omitted (e.g., hand-edited YAML). If any actions are missing IDs on load, the file is rewritten with generated IDs to ensure stability across reloads and API clients. Used by the API and Android app for update/delete. |
 | `label` | string | yes | — | Button text (keep short — 1-2 words) |
 | `command` | string | yes | — | Full command string sent to the terminal |
 | `confirm` | boolean | no | `false` | Show confirmation dialog before executing. Renders as a LiveView modal (not `window.confirm()`) with the command text, "Execute" and "Cancel" buttons. On mobile, the modal uses full-width buttons for easy tap targets. The `"confirm_action"` / `"cancel_action"` LiveView events handle the response. |
@@ -1164,7 +1172,7 @@ quick_actions:
 
 - **Location resolution**: Check `$RCA_CONFIG_PATH` env var first, then `~/.config/remote_code_agents/config.yaml`, then fall back to defaults (no quick actions).
 - **Parsing**: Use `yaml_elixir` hex package to parse YAML.
-- **Startup**: Reads and validates the config file in `init/1`. Stores the parsed config and the file's mtime in GenServer state. Starts a periodic mtime check via `Process.send_after/3`.
+- **Startup**: Reads and validates the config file in `init/1`. Stores the parsed config and the file's mtime in GenServer state. If any quick actions were missing `id` fields, the file is rewritten immediately with the generated IDs — this ensures IDs are stable across reloads and cached by API clients (e.g., the Android app). Starts a periodic mtime check via `Process.send_after/3`.
 - **File change detection**: Every 2 seconds (`config_poll_interval`, configurable), the GenServer checks the config file's mtime via `File.stat/1`. If the mtime has changed, it re-reads and re-parses the file, updates state, and broadcasts `{:config_changed, config}` on PubSub topic `"config"`. This catches manual YAML edits without needing a filesystem watcher dependency.
 - **Reads**: `Config.get/0` makes a `GenServer.call` returning the in-memory config. Fast — no file I/O.
 - **Writes**: `Config.update/1` takes a function `(config -> config)`, applies it to the current state, writes to disk atomically (tmp + rename), updates mtime in state, and broadcasts `{:config_changed, config}` via PubSub. The mtime is updated from the freshly-written file's stat, so the next poll cycle won't trigger a redundant reload.
@@ -1213,7 +1221,16 @@ defmodule RemoteCodeAgents.Config do
     poll_interval = Application.get_env(:remote_code_agents, :config_poll_interval, 2_000)
     {config, mtime} =
       case load_from_disk(path) do
-        {:ok, config, mtime} -> {config, mtime}
+        {:ok, config, ids_generated?, mtime} ->
+          if ids_generated? do
+            Logger.info("Generated missing IDs for quick actions — writing back to #{path}")
+            case write_to_disk(path, config) do
+              :ok -> {config, file_mtime(path)}
+              {:error, _} -> {config, mtime}
+            end
+          else
+            {config, mtime}
+          end
         {:error, :malformed, mtime} ->
           Logger.warning("Config file at #{path} is malformed on startup — using defaults")
           {defaults(), mtime}
@@ -1252,7 +1269,17 @@ defmodule RemoteCodeAgents.Config do
     state =
       if new_mtime != state.mtime and new_mtime != nil do
         case load_from_disk(state.path) do
-          {:ok, config, mtime} ->
+          {:ok, config, ids_generated?, mtime} ->
+            {config, mtime} =
+              if ids_generated? do
+                Logger.info("Generated missing IDs for quick actions — writing back")
+                case write_to_disk(state.path, config) do
+                  :ok -> {config, file_mtime(state.path)}
+                  {:error, _} -> {config, mtime}
+                end
+              else
+                {config, mtime}
+              end
             broadcast_change(config)
             %{state | config: config, mtime: mtime}
 
@@ -1280,7 +1307,9 @@ defmodule RemoteCodeAgents.Config do
 
   defp load_from_disk(path) do
     case YamlElixir.read_from_file(path) do
-      {:ok, yaml} -> {:ok, parse(yaml), file_mtime(path)}
+      {:ok, yaml} ->
+        {config, ids_generated?} = parse(yaml)
+        {:ok, config, ids_generated?, file_mtime(path)}
       {:error, %YamlElixir.ParsingError{}} -> {:error, :malformed, file_mtime(path)}
       {:error, _} -> {:error, :not_found}
     end
@@ -1349,12 +1378,14 @@ defmodule RemoteCodeAgents.Config do
   end
 
   defp parse(yaml) do
-    actions =
+    valid_entries =
       yaml
       |> Map.get("quick_actions", [])
       |> Enum.filter(&valid_action?/1)
-      |> Enum.map(&normalize_action/1)
-    %{quick_actions: actions}
+
+    ids_generated? = Enum.any?(valid_entries, fn entry -> is_nil(entry["id"]) end)
+    actions = Enum.map(valid_entries, &normalize_action/1)
+    {%{quick_actions: actions}, ids_generated?}
   end
 
   defp valid_action?(%{"label" => l, "command" => c}) when is_binary(l) and is_binary(c), do: true
@@ -2035,7 +2066,8 @@ class TerminalSession(
     // TerminalOutput interface — called by emulator when it needs to
     // send data back (e.g., terminal query responses like cursor position)
     override fun write(data: ByteArray, offset: Int, count: Int) {
-        channel.push("input", mapOf("data" to data.sliceArray(offset until offset + count)))
+        // Sends as a binary WebSocket frame (V2 format) — not JSON
+        channel.pushBinary("input", data.sliceArray(offset until offset + count))
     }
 }
 ```
@@ -2096,18 +2128,20 @@ class PhoenixChannel(
 
     suspend fun join(payload: Map<String, Any> = emptyMap()): JoinResult
     suspend fun leave()
-    suspend fun push(event: String, payload: Map<String, Any>): PushResult
+    suspend fun push(event: String, payload: Map<String, Any>): PushResult     // JSON text frame
+    suspend fun pushBinary(event: String, payload: ByteArray): PushResult       // V2 binary frame
 }
 ```
 
 **Protocol details**:
-- Message format: `[join_ref, ref, topic, event, payload]` JSON array (standard Phoenix Channel wire format)
+- **Text frames** (JSON): `[join_ref, ref, topic, event, payload]` JSON array — used for control messages, join/leave, heartbeat, and replies
+- **Binary frames** (V2 format): `<<join_ref_size::8, topic_size::8, event_size::8, join_ref::bytes, topic::bytes, event::bytes, payload::bytes>>` — used for terminal data (`output`, `reconnected`, `input`)
 - Heartbeat: send `"heartbeat"` every 30 seconds to keep the WebSocket alive
-- Join: send `"phx_join"` event, wait for `"phx_reply"` with `"ok"` or `"error"` status
+- Join: send `"phx_join"` event (text frame), wait for `"phx_reply"` with `"ok"` or `"error"` status
 - Push: send event with auto-incrementing `ref`, match reply by `ref`
 - Server push: events with `null` ref — dispatched to channel event Flow
 
-**Binary payload handling**: The Channel protocol sends binary data as raw bytes in the JSON payload. On the Kotlin side, binary payloads arrive as byte arrays within the deserialized JSON message. This matches the server's raw binary approach (no base64 encoding on the Channel transport).
+**Binary frame handling**: OkHttp distinguishes frame types via separate callbacks: `onMessage(webSocket, text: String)` for JSON text frames and `onMessage(webSocket, bytes: ByteString)` for binary frames. The Kotlin client parses the binary header (three 1-byte length prefixes for join_ref, topic, and event, followed by the strings and then the raw payload) to extract the event name and payload bytes. This is ~20 lines of parsing code. Client-to-server binary frames use the same header format.
 
 #### Reconnection Strategy
 
