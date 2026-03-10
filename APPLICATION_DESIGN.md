@@ -113,10 +113,10 @@ Android app (future):
       3. Makes a `GenServer.call` to the (now-running) PaneStream to register the viewer: monitors the caller PID and returns `{:ok, history, pane_stream_pid}` where `history` is the current ring buffer contents (a single contiguous binary from `RingBuffer.read/1`) and `pane_stream_pid` is the PaneStream's PID (so the caller can monitor it for crash recovery).
     The PubSub subscription (step 1) happens before history is returned (step 3), guaranteeing no messages are lost between receiving history and streaming — any messages arriving during step 2-3 queue in the caller's mailbox and are processed after mount completes. Note: subscribing to PubSub before the PaneStream exists (step 1 before step 2) is safe because no process is publishing to the topic yet — the PaneStream won't publish until its `init/1` completes and output arrives. Returns `{:error, :pane_not_found}` if the tmux pane does not exist (detected during startup when `pipe-pane` fails), or `{:error, :max_pane_streams}` if the DynamicSupervisor's child limit has been reached. On error, the function unsubscribes from the PubSub topic before returning to avoid a leaked subscription.
   - `unsubscribe/1` — called by a viewer process. Uses `self()` to identify the caller. Removes the caller from the viewer set and demonitors the PID. Idempotent — safe to call multiple times or after the monitor has already fired (e.g., `terminate/2` calls `unsubscribe` but the DOWN message may also arrive). If no viewers remain after removal, starts the grace period timer.
-  - `send_keys/2` — sends input (as a binary) to the pane via `tmux send-keys -H -t {pane_id}` (using the stable `pane_id`, not the human-readable `target`). Each byte of the binary is converted to its two-character hex representation. If status is `:dead`, skips the call and returns `{:error, :pane_dead}`. If the `send-keys` command fails (e.g., pane died between checks), logs a warning and returns `:ok` — pane death notification will follow shortly via the Port EOF flow.
+  - `send_keys/2` — **module function** that looks up the PaneStream for `target` via Registry and makes a `GenServer.call` to send input. The GenServer handler sends the binary to the pane via `tmux send-keys -H -t {pane_id}` (using the stored stable `pane_id`, not the human-readable `target`). Each byte of the binary is converted to its two-character hex representation. If status is `:dead` or `:starting`, returns `{:error, :pane_dead}` or `{:error, :not_ready}` respectively. If the `send-keys` command fails (e.g., pane died between checks), logs a warning and returns `:ok` — pane death notification will follow shortly via the Port EOF flow. Returns `{:error, :not_found}` if no PaneStream is registered for the target.
 - **Lifecycle**:
   - Monitors all viewer PIDs — auto-unsubscribes on viewer crash/disconnect
-  - On last viewer unsubscribe: starts a configurable grace period timer (default 30s) via `Process.send_after(self(), :grace_period_expired, ...)`. If a new viewer subscribes within the grace period, cancel the timer via `Process.cancel_timer/1`. When the `:grace_period_expired` message arrives in `handle_info`, re-check `MapSet.size(viewers) == 0` before proceeding with shutdown — this eliminates the race between a late subscribe and the timer firing. **Why this is safe**: Even if `Process.cancel_timer/1` returns `false` (the `:grace_period_expired` message is already in the mailbox), the GenServer processes messages sequentially. The subscribe call (which adds the viewer to the MapSet) is a `GenServer.call` that will be processed before or after the timer message. If the subscribe is processed first, the viewer is in the MapSet and the re-check prevents shutdown. If the timer fires first, the re-check sees zero viewers and shuts down — but the subscribe call will then start a fresh PaneStream via the get-or-start logic. Note: in this case, the new PaneStream runs the full startup sequence (including scrollback re-capture), which is correct — the ring buffer from the old PaneStream is gone, so fresh history must be loaded. This is a brief reconnect, not data loss.
+  - On last viewer unsubscribe: starts a configurable grace period timer (default 30s) via `Process.send_after(self(), :grace_period_expired, ...)`. If a new viewer subscribes within the grace period, cancel the timer via `Process.cancel_timer/1`. When the `:grace_period_expired` message arrives in `handle_info`, re-check `MapSet.size(viewers) == 0` before proceeding with shutdown — this eliminates the race between a late subscribe and the timer firing. **Why this is safe**: Even if `Process.cancel_timer/1` returns `false` (the `:grace_period_expired` message is already in the mailbox), the GenServer processes messages sequentially. The subscribe call (which adds the viewer to the MapSet) is a `GenServer.call` that will be processed before or after the timer message. If the subscribe is processed first, the viewer is in the MapSet and the re-check prevents shutdown. If the timer fires first, the re-check sees zero viewers and shuts down — but the subscribe call will then start a fresh PaneStream via the get-or-start logic. Note: in this case, the new PaneStream runs the full startup sequence (including scrollback re-capture), which is correct — the ring buffer from the old PaneStream is gone, so fresh history must be loaded. This is a brief reconnect, not data loss. **Supervisor restart note**: If the GenServer crashes and the supervisor restarts it, the old process's mailbox (including any pending `:grace_period_expired` timer) is discarded with the old process. The restarted GenServer has fresh state — no stale timers to worry about.
   - On `{:superseded, new_target}` cast (another PaneStream claimed this `pane_id` under a new target after a rename): detach `pipe-pane`, clean up FIFO, broadcast `{:pane_superseded, target, new_target}` to viewers via PubSub (viewers can use `new_target` to redirect), then terminate normally. Viewers that don't handle `:pane_superseded` will still recover via the `:DOWN` monitor on the PaneStream PID. Log at `info` level: "PaneStream #{target} superseded by #{new_target} (pane #{pane_id} was renamed)".
   - On Port exit with status 0 (normal EOF — pane died, pipe-pane closed the FIFO): cancel any active grace period timer, set status to `:dead`, broadcast `{:pane_dead, target}` to all viewers via PubSub, clean up FIFO, then terminate. Log at `info` level.
   - On Port exit with non-zero status (`cat` crashed — e.g., OOM-killed, signal): the tmux pane may still be alive. The PaneStream attempts pipeline recovery:
@@ -239,7 +239,7 @@ The `:shutting_down` status prevents the Port exit (triggered by step 2 closing 
 
 **Application startup cleanup (defense-in-depth)**: In `Application.start/2`, before the supervision tree starts: (1) detach all stale pipe-pane attachments by iterating `tmux list-panes -a -F '#{pane_id}'` and running `tmux pipe-pane -t {pane_id}` on each (this is a no-op for panes that don't have pipe-pane attached); (2) clear the FIFO directory (`File.rm_rf(fifo_dir)` then `File.mkdir_p(fifo_dir)`). This catches both orphaned pipe-pane attachments and stale FIFOs left by a hard kill (SIGKILL) of the entire application, where no cleanup callbacks run. It only takes effect on the *next* application boot.
 
-**FIFO naming and shell safety**: Target strings like `mysession:0.1` are sanitized for filesystem use using percent-encoding: `:` becomes `%3A` and `.` becomes `%2E`, giving FIFO names like `pane-mysession%3A0%2E1.fifo`. This is collision-free because `%` cannot appear in tmux session names (which match `^[a-zA-Z0-9_-]+$`) or in the window/pane numeric indices. **Shell injection safety**: The resulting FIFO paths contain only `[a-zA-Z0-9_%.-/]` characters, making them safe for interpolation into the `open_port({:spawn, "cat {fifo_path}"})` shell string (step 4) and the `pipe-pane` command's single-quoted argument (step 5). This safety is guaranteed by the composition of: (1) session name validation (`^[a-zA-Z0-9_-]+$`), (2) window/pane indices being numeric, and (3) percent-encoding replacing `:` and `.` with `%XX` sequences. No shell metacharacters can appear in the path.
+**FIFO naming and shell safety**: Target strings like `mysession:0.1` are sanitized for filesystem use using percent-encoding: `:` becomes `%3A` and `.` becomes `%2E`, giving FIFO names like `pane-mysession%3A0%2E1.fifo`. This is collision-free because `%` cannot appear in tmux session names (which match `^[a-zA-Z0-9_-]+$`) or in the window/pane numeric indices. **Shell injection safety**: The resulting FIFO paths contain only `[a-zA-Z0-9_%.-/]` characters, making them safe for interpolation into the `open_port({:spawn, "cat {fifo_path}"})` shell string (step 5) and the `pipe-pane` command's single-quoted argument (step 6). This safety is guaranteed by the composition of: (1) session name validation (`^[a-zA-Z0-9_-]+$`), (2) window/pane indices being numeric, and (3) percent-encoding replacing `:` and `.` with `%XX` sequences. No shell metacharacters can appear in the path.
 
 ### Buffer Sizing
 
@@ -268,7 +268,7 @@ This ensures the buffer automatically scales to match what tmux is retaining, wi
 **Solution**: Use `tmux send-keys -H` (hex mode) for all input. The full encoding pipeline:
 
 1. **Client (JS)**: xterm.js `onData` emits a JavaScript string (UTF-16). Encode to UTF-8 bytes via `new TextEncoder().encode(data)`, then base64-encode the result. Send via `pushEvent("key_input", {data: base64String})`.
-2. **Server (Elixir)**: `Base.decode64!/1` recovers the raw UTF-8 bytes. Convert each byte to its two-character hex representation. Pass to `tmux send-keys -H`.
+2. **Server (Elixir)**: `Base.decode64/1` recovers the raw UTF-8 bytes (invalid base64 is logged and ignored — see `handle_event` in TerminalLive). Convert each byte to its two-character hex representation. Pass to `tmux send-keys -H`.
 
 This mirrors the output path (server base64-encodes, client decodes) for symmetry.
 
@@ -279,16 +279,16 @@ Example: User types "hi" then Ctrl+C
   Base64 encoded: "aGkD"
   Sent to server as: %{"data" => "aGkD"}
   Server decodes base64: <<0x68, 0x69, 0x03>>
-  PaneStream calls: tmux send-keys -H -t {target} 68 69 03
+  PaneStream calls: tmux send-keys -H -t {pane_id} 68 69 03
 ```
 
 **Why base64 for transport**: LiveView events are JSON-serialized. While raw control characters (`\x03`) are valid in JSON strings, base64 is more explicit, avoids edge cases with binary-unsafe intermediaries, and is symmetric with the output path.
 
 **Why hex mode for tmux**: Simpler than branching between `-l` for printable chars and raw mode for control chars. No escaping edge cases. Works uniformly for all input including Unicode (UTF-8 bytes as hex). Multi-byte UTF-8 sequences (e.g., emoji like 😀 = 4 bytes `F0 9F 98 80`) are sent as individual hex bytes and tmux reassembles them correctly. This should have an explicit integration test.
 
-**Performance**: For typical interactive use, `send-keys -H` with a handful of hex bytes per keystroke is negligible overhead. For bulk paste operations, bytes are chunked into groups of up to 65,536 bytes (well under Linux's default `ARG_MAX` of ~2MB, accounting for hex encoding doubling the size and argument overhead) and sent as sequential `send-keys -H` calls. Note: chunked sends execute synchronously within the GenServer, briefly blocking output processing during large pastes. This is acceptable for a single-user tool — large pastes are rare, each `System.cmd` call completes in milliseconds, and output resumes immediately after. If needed, chunked sends could be offloaded to a Task without changing the public interface.
+**Performance**: For typical interactive use, `send-keys -H` with a handful of hex bytes per keystroke is negligible overhead. For bulk paste operations, `PaneStream.send_keys/2` chunks the input bytes into groups of up to 65,536 bytes (well under Linux's default `ARG_MAX` of ~2MB, accounting for hex encoding doubling the size and argument overhead) and sends them as sequential `send-keys -H` calls within the GenServer. This briefly blocks output processing during large pastes, which is acceptable for a single-user tool — large pastes are rare, each `System.cmd` call completes in milliseconds, and output resumes immediately after. If needed, chunked sends could be offloaded to a Task without changing the public interface.
 
-**Input size limit**: `TerminalLive.handle_event("key_input", ...)` validates that the decoded payload does not exceed 128KB. Payloads exceeding this limit are logged and dropped. This prevents a buggy or malicious client from sending arbitrarily large input in a single event. The 128KB limit is above the chunking threshold for paste (64KB — see above) with headroom for base64 overhead (~33%), while keeping the bound tight enough to be meaningful.
+**Input size limit**: `TerminalLive.handle_event("key_input", ...)` validates that the decoded payload does not exceed 128KB. Payloads exceeding this limit are logged and dropped. This prevents a buggy or malicious client from sending arbitrarily large input in a single event. A single `handle_event` can deliver up to 128KB decoded, which `PaneStream.send_keys/2` splits into at most two 64KB chunks for the tmux CLI.
 
 **Input rate limiting**: The client-side input batching (every 16ms, described in Bandwidth Optimization) provides natural throttling. On the server side, `PaneStream.send_keys/2` does not rate-limit — each call executes a `tmux send-keys` command immediately. If a misbehaving client floods `send_keys` calls, the tmux process is the bottleneck (each `send-keys` is a short-lived fork). This is acceptable for a single-user tool; if needed, a per-viewer token bucket could be added in `PaneStream`.
 
@@ -418,7 +418,7 @@ For native Android client only. Not used by the web UI. The design below is docu
 
 1. tmux writes output → `pipe-pane` writes to FIFO
 2. `cat` Port reads from FIFO → Elixir receives `{port, {:data, bytes}}`
-3. PaneStream appends to ring buffer, broadcasts `{:pane_output, bytes}` via PubSub topic `"pane:#{target}"`. Each Port message triggers a separate broadcast — no server-side coalescing. This is acceptable because LiveView batches pending `push_event` calls within the same process turn, and xterm.js internally batches `term.write()` calls for rendering. For extreme throughput (e.g., `cat large_file`), the browser is the bottleneck, not the push rate. Coalescing could be added inside PaneStream later without changing any public interfaces if profiling shows PubSub overhead is significant. All messages on this topic are tagged tuples — subscribers must pattern-match on the first element: `:pane_output` for streaming data, `:pane_dead` for pane death, `:pane_resized` for dimension changes (future)
+3. PaneStream appends to ring buffer, broadcasts `{:pane_output, bytes}` via PubSub topic `"pane:#{target}"`. Rapid Port messages are coalesced via a short timer (default 3ms) before broadcasting — see Server-Side Output Coalescing in Bandwidth Optimization. All messages on this topic are tagged tuples — subscribers must pattern-match on the first element: `:pane_output` for streaming data, `:pane_dead` for pane death, `:pane_resized` for dimension changes (future)
 4. `TerminalLive` receives via `handle_info`, calls `push_event(socket, "output", %{data: Base.encode64(bytes)})`
 5. `TerminalHook` decodes base64, calls `term.write(bytes)` on xterm.js instance
 
@@ -430,7 +430,7 @@ Note: Both input and output are base64-encoded for LiveView transport since Live
 2. If PaneStream not running, starts it under DynamicSupervisor:
    a. Port starts `cat` on FIFO (blocks at OS level, not in GenServer)
    b. `pipe-pane` attached (unblocks `cat`)
-   c. `capture-pane` captures scrollback, deduplicates against pipe stream, writes into ring buffer
+   c. `capture-pane` captures scrollback, writes into ring buffer (brief overlap with pipe stream is accepted — see Scrollback Overlap)
 3. PaneStream returns `{:ok, history, pane_stream_pid}` — ring buffer contents + PID for monitoring
 4. TerminalLive monitors `pane_stream_pid` and pushes history to client as `"history"` event
 5. Client writes history to xterm.js, then streaming output follows
@@ -442,8 +442,8 @@ All viewers — first or late — follow the same path. The ring buffer always c
 1. xterm.js `onData` callback fires with a JavaScript string
 2. Hook encodes to UTF-8 via `TextEncoder`, then base64-encodes the bytes
 3. Hook calls `this.pushEvent("key_input", {data: base64String})`
-4. `TerminalLive.handle_event("key_input", %{"data" => b64})` decodes base64 via `Base.decode64!/1`, calls `PaneStream.send_keys(target, bytes)`
-5. PaneStream converts bytes to hex, executes `tmux send-keys -H -t {target} {hex_bytes}`
+4. `TerminalLive.handle_event("key_input", %{"data" => b64})` decodes base64 via `Base.decode64/1` (invalid base64 is logged and ignored), calls `PaneStream.send_keys(target, bytes)`
+5. PaneStream converts bytes to hex, executes `tmux send-keys -H -t {pane_id} {hex_bytes}`
 
 ### Pane Resize
 
@@ -496,17 +496,15 @@ The strategies below are chosen to help on slow/high-latency connections without
 
 Terminal output (text + ANSI escape codes) compresses very well — typical compression ratios of 3–5× for text-heavy output, 2× for ANSI-colored output.
 
-**Implementation**: Enable in the Phoenix Endpoint config:
+**Implementation**: Enable on the LiveView socket declaration in the Endpoint module:
 
 ```elixir
-# config/config.exs
-config :remote_code_agents, RemoteCodeAgentsWeb.Endpoint,
-  http: [
-    websocket_options: [
-      compress: true  # enables permessage-deflate
-    ]
-  ]
+# lib/remote_code_agents_web/endpoint.ex
+socket "/live", Phoenix.LiveView.Socket,
+  websocket: [compress: true]  # enables permessage-deflate
 ```
+
+This is configured on the socket, not on the HTTP listener — `permessage-deflate` is a WebSocket extension negotiated during the HTTP→WebSocket upgrade handshake.
 
 **Why this is safe on fast connections**: `permessage-deflate` is negotiated per-connection at the WebSocket handshake. The compression library (zlib) adds negligible CPU overhead per message. For very small messages (< ~20 bytes), the compressed output may be larger — cowboy handles this gracefully by sending uncompressed when compression doesn't help. No configuration needed per-connection; the transport handles it.
 
@@ -751,9 +749,9 @@ config :remote_code_agents,
 
 # config/dev.exs
 config :remote_code_agents, RemoteCodeAgentsWeb.Endpoint,
-  http: [ip: {127, 0, 0, 1}, port: 4000],
-  # Enable WebSocket compression
-  websocket: [compress: true]
+  http: [ip: {127, 0, 0, 1}, port: 4000]
+  # WebSocket compression is configured on the socket declaration in endpoint.ex,
+  # not here — see Bandwidth Optimization section.
 
 # config/test.exs
 config :remote_code_agents,
@@ -1164,7 +1162,6 @@ defmodule RemoteCodeAgents.Config do
   use GenServer
 
   @default_path "~/.config/remote_code_agents/config.yaml"
-  @poll_interval Application.compile_env(:remote_code_agents, :config_poll_interval, 2_000)
 
   # --- Public API ---
 
@@ -1195,9 +1192,15 @@ defmodule RemoteCodeAgents.Config do
   @impl true
   def init(_opts) do
     path = config_path() |> Path.expand()
-    {config, mtime} = load_from_disk(path)
-    schedule_poll()
-    {:ok, %{config: config, mtime: mtime, path: path}}
+    poll_interval = Application.get_env(:remote_code_agents, :config_poll_interval, 2_000)
+    {config, mtime} =
+      case load_from_disk(path) do
+        {:ok, config, mtime} -> {config, mtime}
+        {:error, :malformed, mtime} -> {defaults(), mtime}
+        {:error, :not_found} -> {defaults(), nil}
+      end
+    schedule_poll(poll_interval)
+    {:ok, %{config: config, mtime: mtime, path: path, poll_interval: poll_interval}}
   end
 
   @impl true
@@ -1207,10 +1210,17 @@ defmodule RemoteCodeAgents.Config do
 
   def handle_call({:update, fun}, _from, state) do
     updated = fun.(state.config)
-    write_to_disk!(state.path, updated)
-    mtime = file_mtime(state.path)
-    broadcast_change(updated)
-    {:reply, {:ok, updated}, %{state | config: updated, mtime: mtime}}
+    case write_to_disk(state.path, updated) do
+      :ok ->
+        mtime = file_mtime(state.path)
+        broadcast_change(updated)
+        {:reply, {:ok, updated}, %{state | config: updated, mtime: mtime}}
+
+      {:error, reason} ->
+        require Logger
+        Logger.error("Failed to write config to #{state.path}: #{inspect(reason)}")
+        {:reply, {:error, reason}, state}
+    end
   end
 
   @impl true
@@ -1219,27 +1229,38 @@ defmodule RemoteCodeAgents.Config do
     state =
       if new_mtime != state.mtime and new_mtime != nil do
         case load_from_disk(state.path) do
-          {config, mtime} ->
+          {:ok, config, mtime} ->
             broadcast_change(config)
             %{state | config: config, mtime: mtime}
+
+          {:error, :malformed, mtime} ->
+            # Keep last good config in memory, update mtime to avoid re-reading
+            # the same malformed file every poll cycle
+            require Logger
+            Logger.warning("Config file is malformed — keeping last good config")
+            %{state | mtime: mtime}
+
+          {:error, :not_found} ->
+            state
         end
       else
         state
       end
-    schedule_poll()
+    schedule_poll(state.poll_interval)
     {:noreply, state}
   end
 
   # --- Private ---
 
-  defp schedule_poll, do: Process.send_after(self(), :poll_config, @poll_interval)
+  defp schedule_poll(interval), do: Process.send_after(self(), :poll_config, interval)
 
   defp config_path, do: System.get_env("RCA_CONFIG_PATH") || @default_path
 
   defp load_from_disk(path) do
     case YamlElixir.read_from_file(path) do
-      {:ok, yaml} -> {parse(yaml), file_mtime(path)}
-      {:error, _} -> {defaults(), file_mtime(path)}
+      {:ok, yaml} -> {:ok, parse(yaml), file_mtime(path)}
+      {:error, %YamlElixir.ParsingError{}} -> {:error, :malformed, file_mtime(path)}
+      {:error, _} -> {:error, :not_found}
     end
   end
 
@@ -1250,12 +1271,18 @@ defmodule RemoteCodeAgents.Config do
     end
   end
 
-  defp write_to_disk!(path, config) do
+  defp write_to_disk(path, config) do
     yaml = to_yaml(config)
     tmp = path <> ".tmp"
-    File.mkdir_p!(Path.dirname(path))
-    File.write!(tmp, yaml)
-    File.rename!(tmp, path)
+    with :ok <- File.mkdir_p(Path.dirname(path)),
+         :ok <- File.write(tmp, yaml),
+         :ok <- File.rename(tmp, path) do
+      :ok
+    else
+      {:error, reason} ->
+        File.rm(tmp)  # clean up temp file on failure
+        {:error, reason}
+    end
   end
 
   defp broadcast_change(config) do
@@ -1298,7 +1325,15 @@ defmodule RemoteCodeAgents.Config do
   defp validate_color(_), do: "default"
 
   # CRUD helpers (pure functions on config map)
-  defp do_upsert_action(config, params), do: # ... validate and insert/update
+  defp do_upsert_action(config, params) do
+    action = normalize_action(params)
+    actions = config.quick_actions
+    case Enum.find_index(actions, &(&1.id == action.id)) do
+      nil -> %{config | quick_actions: actions ++ [action]}
+      idx -> %{config | quick_actions: List.replace_at(actions, idx, action)}
+    end
+  end
+
   defp do_delete_action(config, id) do
     %{config | quick_actions: Enum.reject(config.quick_actions, &(&1.id == id))}
   end
@@ -1657,6 +1692,8 @@ end
 
 scope "/", RemoteCodeAgentsWeb do
   pipe_through [:browser, :require_auth]
+  # :require_auth is a no-op in localhost mode (no auth configured).
+  # When auth is enabled (remote access), this protects the settings page.
 
   live "/settings", SettingsLive
 end
