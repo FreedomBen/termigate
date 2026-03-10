@@ -1161,7 +1161,7 @@ quick_actions:
 - **Reads**: `Config.get/0` makes a `GenServer.call` returning the in-memory config. Fast — no file I/O.
 - **Writes**: `Config.update/1` takes a function `(config -> config)`, applies it to the current state, writes to disk atomically (tmp + rename), updates mtime in state, and broadcasts `{:config_changed, config}` via PubSub. The mtime is updated from the freshly-written file's stat, so the next poll cycle won't trigger a redundant reload.
 - **Validation**: On load, validate each quick action entry. Log warnings for invalid entries (missing `label`/`command`, unknown `color`) and skip them rather than crashing.
-- **Missing file**: If no config file exists, the GenServer runs with defaults — no quick actions shown, no error. The mtime is stored as `nil`; file creation is detected by the next poll cycle.
+- **Missing file**: If no config file exists at startup, the GenServer writes the default config to disk (creating the parent directory via `File.mkdir_p!/1` if needed), then loads it into memory. This ensures a human-editable config file always exists for users to discover and customize.
 - **Malformed file**: If the YAML is malformed on reload, `get/0` returns the last good config (still in GenServer state) and logs a warning. This is safer than the "fall back to defaults" approach — the user doesn't lose their action bar while fixing a typo.
 - **Auto-creation on save**: `update/1` calls `File.mkdir_p!/1` on the parent directory before writing. If a user creates their first quick action via the Settings UI and no config file exists yet, it will be created automatically.
 - **PubSub topic**: `"config"` — LiveViews subscribe on mount and update assigns on `{:config_changed, config}`.
@@ -1207,7 +1207,11 @@ defmodule RemoteCodeAgents.Config do
       case load_from_disk(path) do
         {:ok, config, mtime} -> {config, mtime}
         {:error, :malformed, mtime} -> {defaults(), mtime}
-        {:error, :not_found} -> {defaults(), nil}
+        {:error, :not_found} ->
+          config = defaults()
+          write_default_config(path, config)
+          mtime = file_mtime(path)
+          {config, mtime}
       end
     schedule_poll(poll_interval)
     {:ok, %{config: config, mtime: mtime, path: path, poll_interval: poll_interval}}
@@ -1290,6 +1294,13 @@ defmodule RemoteCodeAgents.Config do
       {:error, reason} ->
         File.rm(tmp)  # clean up temp file on failure
         {:error, reason}
+    end
+  end
+
+  defp write_default_config(path, config) do
+    case write_to_disk(path, config) do
+      :ok -> Logger.info("Created default config at #{path}")
+      {:error, reason} -> Logger.warning("Could not create default config at #{path}: #{inspect(reason)}")
     end
   end
 
