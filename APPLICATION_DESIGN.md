@@ -1,4 +1,4 @@
-# Remote Code Agents - Application Design
+# tmux-rm — Application Design
 
 ## Overview
 
@@ -1328,7 +1328,7 @@ defmodule RemoteCodeAgents.Config do
     }
 
     header = """
-    # Remote Code Agents configuration
+    # tmux-rm configuration
     # Edit this file directly or use the web UI at /settings
     #
     # Quick actions appear as buttons above the terminal.
@@ -1670,7 +1670,7 @@ end
 Write capabilities (`update/1`, `upsert_action/1`, `delete_action/1`, `reorder_actions/1`) and the `to_yaml/1` serializer are included in the GenServer definition above. The `to_yaml/1` function produces:
 
 ```yaml
-# Remote Code Agents configuration
+# tmux-rm configuration
 # Edit this file directly or use the web UI at /settings
 #
 # Quick actions appear as buttons above the terminal.
@@ -1836,7 +1836,7 @@ RCA_AUTH_TOKEN="my-secret-token" _build/prod/rel/remote_code_agents/bin/remote_c
 
 ```ini
 [Unit]
-Description=Remote Code Agents
+Description=tmux-rm
 After=network.target
 
 [Service]
@@ -1876,7 +1876,9 @@ CMD ["/app/bin/remote_code_agents", "start"]
 
 ### Overview
 
-A native Android app that connects to the Remote Code Agents server, providing a first-class terminal experience on Android devices. The app communicates via Phoenix Channels (WebSocket) for real-time terminal I/O and REST API for session management and configuration. It does **not** bundle or run tmux locally — the server is the source of truth for all terminal state.
+A native Android app (also named "tmux-rm") that connects to the tmux-rm server, providing a first-class terminal experience on Android devices. The app communicates via Phoenix Channels (WebSocket) for real-time terminal I/O and REST API for session management and configuration. It does **not** bundle or run tmux locally — the server is the source of truth for all terminal state.
+
+**Domain**: `tmuxrm.tamx.org` (temporary — will change in the future)
 
 ### Tech Stack
 
@@ -1927,7 +1929,7 @@ A native Android app that connects to the Remote Code Agents server, providing a
 └──────────────────────┼───────────────────────┘
                        │ WebSocket + HTTP
                        ▼
-              Remote Code Agents Server
+              tmux-rm Server
 ```
 
 #### Layer Responsibilities
@@ -2146,7 +2148,7 @@ The app is online-only by nature (it's a remote terminal client). Offline handli
 android/
   app/
     src/main/
-      java/com/remoteCodeAgents/
+      java/org/tamx/tmuxrm/
         di/                          # Hilt modules
           NetworkModule.kt           # OkHttpClient, API service providers
           AppModule.kt               # Repository bindings
@@ -2221,7 +2223,7 @@ android {
 #### Distribution Channels
 
 1. **Google Play**: Standard release via Android App Bundle (AAB). Signed with upload key, Google manages distribution key.
-2. **F-Droid**: Reproducible builds required. All dependencies are open source (Termux terminal-emulator is Apache 2.0, OkHttp is Apache 2.0, Jetpack libraries are Apache 2.0). No proprietary dependencies (no Google Play Services, no Firebase, no proprietary analytics). F-Droid metadata in `metadata/android/en-US/` directory (fastlane format). Build recipe in `fdroid/com.remoteCodeAgents.yml`.
+2. **F-Droid**: Reproducible builds required. All dependencies are open source (Termux terminal-emulator is Apache 2.0, OkHttp is Apache 2.0, Jetpack libraries are Apache 2.0). No proprietary dependencies (no Google Play Services, no Firebase, no proprietary analytics). F-Droid metadata in `metadata/android/en-US/` directory (fastlane format). Build recipe in `fdroid/org.tamx.tmuxrm.yml`.
 3. **Direct APK**: Signed APK published as a GitHub Release artifact. CI builds and attaches the APK on each tagged release. Users can download and sideload.
 
 #### CI/CD (GitHub Actions)
@@ -2236,67 +2238,42 @@ android {
 - Upload AAB to Google Play internal track (on tag, optional)
 ```
 
-### To Decide
+### Resolved Decisions
 
-The following Android-specific decisions are still open:
+#### Termux Library Integration
 
-#### 1. Termux Library Integration Strategy
+**Decision**: Fork the `terminal-emulator` and `terminal-view` modules into a standalone library repo. Publish to GitHub Packages alongside the main repo. The code is stable and changes infrequently — maintaining the fork is low effort, and it gives clean Maven dependency management without coupling to the full Termux app build.
 
-The Termux `terminal-emulator` and `terminal-view` libraries are published as part of the Termux app, not as standalone Maven artifacts. Options:
+#### Phoenix Channel Client
 
-- **a) Git submodule**: Add the Termux repo as a submodule, reference the `terminal-emulator` and `terminal-view` modules directly in the Gradle build. Most control, but couples us to their repo structure.
-- **b) Fork + publish to Maven Local / GitHub Packages**: Fork the relevant modules, publish as a standalone artifact. Cleaner dependency management, but requires maintaining the fork.
-- **c) JitPack**: Point JitPack at the Termux repo to build the library modules on demand. Zero maintenance, but depends on JitPack availability and may have build issues.
+**Decision**: Write our own minimal Kotlin implementation (~200 lines) on top of OkHttp WebSocket. The Phoenix Channel protocol is simple JSON framing — well-documented, easy to test, and avoids dependency on unmaintained third-party libraries.
 
-Recommendation: **(b)** — fork the two modules (`terminal-emulator` and `terminal-view`) into a minimal standalone library. The code is stable and changes infrequently. This gives us clean Maven dependency management without coupling to the full Termux app build. Publish to GitHub Packages alongside the main repo.
+#### Feature Scope
 
-#### 2. Phoenix Channel Client Library
-
-Options:
-
-- **a) JavaPhoenixClient**: Existing open-source library. May not be actively maintained. Adds a third-party dependency.
-- **b) Write our own (~200 lines)**: The Phoenix Channel protocol is simple JSON framing. A minimal Kotlin implementation on top of OkHttp gives us full control, zero external dependencies, and is easy to test.
-- **c) dsander/JavaPhoenixChannels**: Another existing library. Kotlin-friendly but may be outdated.
-
-Recommendation: **(b)** — write a minimal implementation. The protocol is well-documented, the implementation is small, and we avoid dependency on unmaintained libraries.
-
-#### 3. Minimum Terminal Features for v1
-
-What terminal features are required for the initial Android release vs. deferred?
-
-**Proposed v1 (must have)**:
+**All features ship in v1** — no phased rollout. The full feature set:
 - Connect to server, authenticate
 - List sessions and panes
+- Create/kill sessions
 - Open a terminal session (stream output, send input)
-- Special key toolbar (Esc, Tab, Ctrl, Alt, arrows)
-- Quick action buttons
+- Special key toolbar (Esc, Tab, Ctrl, Alt, arrows, F1-F12, PgUp/PgDn, Home/End)
+- Quick action buttons (read and CRUD management)
+- Settings management (quick actions, display preferences)
 - Reconnection on network drop
 - Copy/paste
-
-**Proposed v2 (deferred)**:
-- Create/kill sessions from the app
-- Settings/quick actions management (CRUD) — v1 just reads them
-- Multi-pane split view
-- Notification on pane death (background)
+- Foreground service + notifications (pane death, connection lost)
 - Font size / theme customization
 - Haptic feedback preferences
 
-Does this split seem right, or should anything move between v1 and v2?
+#### Hardware Keyboard Support
 
-#### 4. Hardware Keyboard Support
+**Decision**: Use Termux's built-in hardware keyboard handling. It correctly maps Ctrl+key, function keys, Alt combos, and other special key combinations. Battle-tested by millions of Termux users. Custom key mappings can be layered on later if users request them.
 
-When a physical keyboard is connected (Bluetooth or USB-C), should the app:
-- **a)** Use Termux's built-in hardware keyboard handling (which maps Ctrl+key, function keys, etc. correctly)
-- **b)** Add custom key mappings / configurability
+#### App Name and Package ID
 
-Recommendation: **(a)** — Termux's handling is excellent and battle-tested. Custom mappings can be added later if users request them.
-
-#### 5. App Name and Package ID
-
-Need to decide:
-- Package ID (e.g., `com.remoteCodeAgents`, `dev.rca`, etc.)
-- Display name (e.g., "Remote Code Agents", "RCA Terminal", etc.)
-- Icon design
+- **App name**: tmux-rm
+- **Package ID**: `org.tamx.tmuxrm`
+- **Domain**: `tmuxrm.tamx.org` (temporary — will change)
+- **Icon design**: TBD
 
 ## Implementation Order
 
@@ -2311,7 +2288,6 @@ Suggested build order based on dependencies and incremental progress:
 | 5 | Quick actions (command buttons) | Small | High-value for mobile; introduces Config GenServer |
 | 6 | User preferences (font, theme) | Small | Client-side only, no server changes |
 | 7 | Phoenix Channel (server-side) | Medium | TerminalChannel + UserSocket — prerequisite for Android |
-| 8 | Android app v1 (terminal core) | Large | Connect, auth, session list, terminal streaming, quick actions, special keys |
+| 8 | Android app | Large | Full app: auth, sessions, terminal, quick actions, settings, notifications |
 | 9 | Multi-pane split view (web) | Medium | Complex layout logic |
-| 10 | Android app v2 (management + polish) | Medium | Session CRUD, settings management, notifications, themes |
 

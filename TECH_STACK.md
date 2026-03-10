@@ -1,4 +1,4 @@
-# Tech Stack
+# tmux-rm — Tech Stack
 
 ## Server / Web App
 
@@ -40,11 +40,11 @@
 | Distribution | Google Play, F-Droid, Direct APK | All three channels from the start |
 | CI/CD | GitHub Actions | Shared repo workflow — build APK, run tests, sign release |
 
-### Architecture Notes
+### Key Decisions
 
-- **Terminal rendering**: The Termux `terminal-emulator` library does all the heavy lifting — ANSI/xterm escape sequence parsing, cursor management, color rendering, scrollback buffer. The app feeds it raw bytes from the Phoenix Channel and renders the resulting screen state. No need to write a terminal emulator from scratch.
-- **UI shell**: Jetpack Compose handles everything outside the terminal view — session list, quick action buttons, settings, connection status. The terminal view itself is a custom `AndroidView` wrapping Termux's `TerminalView`.
-- **Channel protocol**: The Android app connects to the same `TerminalChannel` as the web app. Messages: `key_input` (client→server), `output` (server→client), `resize` (bidirectional). Auth token is passed in channel join params.
-- **Offline behavior**: App shows last-known session list from local cache. Reconnects automatically when network is restored. No local terminal state — the server + tmux are the source of truth.
-- **Quick actions**: Fetched via REST API (`GET /api/quick_actions`), cached locally. Synced on app foreground. CRUD operations via the same REST endpoints the web settings UI uses.
-- **Distribution**: APKs are signed with a single key. Google Play uses Android App Bundle (AAB). F-Droid requires reproducible builds (no proprietary dependencies — Termux's library and all deps are open source, so this is clean). Direct APK hosted on GitHub Releases.
+- **Termux library**: Fork `terminal-emulator` and `terminal-view` modules into a standalone library. Publish to GitHub Packages.
+- **Phoenix Channel client**: Custom minimal Kotlin implementation (~200 lines) on top of OkHttp WebSocket.
+- **Hardware keyboard**: Use Termux's built-in handling (Ctrl+key, function keys, Alt combos). Custom mappings deferred.
+- **App name**: tmux-rm
+- **Package ID**: `org.tamx.tmuxrm`
+- **Domain**: `tmuxrm.tamx.org` (temporary)
