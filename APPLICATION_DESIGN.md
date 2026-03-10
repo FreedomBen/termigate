@@ -2019,7 +2019,7 @@ A native Android app (also named "tmux-rm") that connects to the tmux-rm server,
 | Terminal view | Termux `TerminalView` (Android View) | Wrapped in Compose via `AndroidView` composable |
 | WebSocket | OkHttp | Reliable, widely used, built-in reconnect support |
 | Channel protocol | Thin Kotlin Phoenix Channel client | Implements Phoenix Channel JSON framing on top of OkHttp WebSocket. Libraries exist (e.g., `JavaPhoenixClient`) or can be written in ~200 lines — the protocol is simple |
-| HTTP client | Retrofit + OkHttp + kotlinx.serialization | REST API calls (sessions, quick actions, auth). Retrofit provides declarative API interface definitions; kotlinx.serialization converter handles JSON. |
+| HTTP client | Ktor Client + kotlinx.serialization | REST API calls (sessions, quick actions, auth). Pure Kotlin, first-class kotlinx.serialization support via `ContentNegotiation` plugin, coroutine-native. Uses the OkHttp engine (`ktor-client-okhttp`) to share the OkHttp instance with the WebSocket layer. |
 | DI | Hilt | Standard Android DI, integrates with ViewModel and Compose |
 | Navigation | Compose Navigation | Type-safe routes between screens |
 | Build | Gradle (Kotlin DSL) | Standard Android tooling |
@@ -2051,7 +2051,7 @@ A native Android app (also named "tmux-rm") that connects to the tmux-rm server,
 │  ┌────┴─────┐  ┌────┴──────┐  ┌─────┴─────┐ │
 │  │ REST API │  │ Phoenix   │  │ REST API  │ │
 │  │ Client   │  │ Channel   │  │ Client    │ │
-│  │ (OkHttp) │  │ Client    │  │ (OkHttp)  │ │
+│  │ (Ktor)   │  │ Client    │  │ (Ktor)    │ │
 │  └──────────┘  └───────────┘  └───────────┘ │
 │                      │                       │
 └──────────────────────┼───────────────────────┘
@@ -2298,14 +2298,14 @@ android/
     src/main/
       java/org/tamx/tmuxrm/
         di/                          # Hilt modules
-          NetworkModule.kt           # OkHttpClient, API service providers
+          NetworkModule.kt           # OkHttpClient, Ktor HttpClient providers
           AppModule.kt               # Repository bindings
         data/
           network/
             PhoenixSocket.kt         # WebSocket + Channel protocol
             PhoenixChannel.kt        # Single channel abstraction
-            ApiService.kt            # Retrofit/OkHttp REST API interface
-            AuthInterceptor.kt       # Adds bearer token to API requests
+            ApiClient.kt             # Ktor HttpClient wrapper for REST API calls
+            AuthPlugin.kt            # Ktor plugin: adds bearer token to API requests
           repository/
             SessionRepository.kt     # Session list via SessionChannel + CRUD via REST API
             TerminalRepository.kt    # Channel join/leave, input/output

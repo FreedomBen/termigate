@@ -12,11 +12,9 @@ Resolved: Per-IP rate limiting added to Security Considerations section. Three e
 
 Resolved: Option (b) — standard TLS only, no pinning or TOFU. TOFU is complex (cert rotation false alarms), pinning is brittle, and the recommended deployment is Tailscale/VPN anyway. Added TLS rationale section under Android Token Management.
 
-## #17 — Retrofit vs Ktor
+## ~~#17 — Retrofit vs Ktor~~ RESOLVED
 
-The doc specifies Retrofit + kotlinx.serialization, which works but uses a community-maintained converter (`com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter`). Alternative: Ktor client (pure Kotlin, first-class kotlinx.serialization support, no Retrofit needed).
-
-Both are fine — preference question.
+Resolved: Switched to Ktor Client + kotlinx.serialization. Pure Kotlin, first-class serialization support, coroutine-native. Uses `ktor-client-okhttp` engine to share the OkHttp instance with the WebSocket layer. Updated tech stack table, architecture diagram, project structure (`ApiService.kt` → `ApiClient.kt`, `AuthInterceptor.kt` → `AuthPlugin.kt`), and DI module description.
 
 ## #7/#8 — Android Quick Action Validation & Termux Dependency
 
