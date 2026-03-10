@@ -362,6 +362,27 @@ For native Android client only. Not used by the web UI.
   - `"resized"` — `%{"cols" => int, "rows" => int}` — pane was resized by another viewer. Client should resize its terminal view.
 - **Leave/disconnect**: `terminate/2` calls `PaneStream.unsubscribe/1`. Same as LiveView, this is best-effort — the real safety net is PaneStream's monitor on the Channel PID, which triggers auto-unsubscribe on crash or network drop. Phoenix Channels reconnect automatically; on reconnect, the client re-joins the topic and receives fresh history.
 
+### Phoenix Channel: `SessionChannel`
+
+For native Android client only. Provides real-time session list updates, mirroring the polling + PubSub approach used by `SessionListLive` on the web.
+
+- **Topic**: `"sessions"` — this is the client-facing Channel join topic. Not to be confused with the PubSub topic of the same name (the Channel process subscribes to the PubSub topic internally).
+- **Auth**: Inherited from `UserSocket.connect/3` — same as `TerminalChannel`. A valid socket implies a valid user.
+- **Join handler**:
+  1. Subscribe to PubSub topic `"sessions"` — receives `{:sessions_changed}` broadcasts from `TmuxManager.create_session/1` and `kill_session/1`.
+  2. Fetch the current session list via `TmuxManager.list_sessions/0` (with panes via `list_panes/1` for each session).
+  3. Start a poll timer via `Process.send_after(self(), :poll_sessions, session_poll_interval)` — catches external changes (sessions created/killed from the terminal), same interval as `SessionListLive` (default 3s, configurable via `config :remote_code_agents, session_poll_interval`).
+  4. Store the last-sent session list in Channel assigns for diffing (only push when the list actually changed).
+  5. Reply `{:ok, %{"sessions" => sessions_json}}` — the current session list, so the client has data immediately without a separate REST call.
+- **Server → Client events**:
+  - `"sessions_updated"` — `%{"sessions" => [%{"name" => string, "windows" => int, "created" => int, "attached" => bool, "panes" => [%{"index" => string, "width" => int, "height" => int, "command" => string}]}]}` — full session list with panes. Pushed whenever the list changes (detected via PubSub broadcast or polling).
+- **`handle_info` callbacks**:
+  - `{:sessions_changed}` (PubSub) — immediately re-fetch the session list from `TmuxManager`, compare to last-sent list, push `"sessions_updated"` if changed, update assigns.
+  - `:poll_sessions` — same as `{:sessions_changed}`: re-fetch, compare, conditionally push. Reschedule the next poll via `Process.send_after/3`. This catches external changes not routed through `TmuxManager` (e.g., `tmux new-session` from the command line).
+- **Diffing**: The Channel stores the last-pushed session list (as a serialized term or checksum) in assigns. On each poll or PubSub event, it compares the fresh list to the stored one. If identical, no push is sent — this avoids unnecessary WebSocket traffic. The comparison uses the sorted session data (name, window count, pane list) rather than structural equality, since `TmuxManager` may return lists in different orders.
+- **No client → server events**: Session mutations (create, delete) go through the REST API (`/api/sessions`), which calls `TmuxManager` and triggers PubSub broadcasts. The Channel is read-only — it only pushes updates.
+- **Leave/disconnect**: `terminate/2` is a no-op — PubSub auto-unsubscribes when the process dies, and the poll timer is discarded with the process mailbox. On reconnect, the client re-joins and receives the current session list in the join reply.
+
 ## Data Flow
 
 ### Event Reference
@@ -417,6 +438,14 @@ For native Android client only. Not used by the web UI.
 | Server → Client | `"resized"` | `%{"cols" => int, "rows" => int}` | Pane resized by another viewer. |
 
 **Join reply**: `{:ok, %{"history" => base64_string, "cols" => int, "rows" => int}}` or `{:error, %{"reason" => string}}`. Join replies are JSON text frames, so history is base64-encoded here — the only exception to the raw binary convention. All subsequent data events (`output`, `reconnected`, `input`) use raw binary frames — see "Binary Frames on Phoenix Channel" in Bandwidth Optimization.
+
+#### Phoenix Channel Events (SessionChannel)
+
+| Direction | Event | Payload | Description |
+|-----------|-------|---------|-------------|
+| Server → Client | `"sessions_updated"` | `%{"sessions" => [...]}` | Full session list with panes. Pushed on change detection (PubSub or poll). |
+
+**Join reply**: `{:ok, %{"sessions" => [...]}}` — current session list, same format as `"sessions_updated"` payload. No client → server events — mutations use the REST API.
 
 ### Terminal Output (tmux → browser)
 
