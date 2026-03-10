@@ -1872,6 +1872,432 @@ CMD ["/app/bin/remote_code_agents", "start"]
 
 ---
 
+## Android App
+
+### Overview
+
+A native Android app that connects to the Remote Code Agents server, providing a first-class terminal experience on Android devices. The app communicates via Phoenix Channels (WebSocket) for real-time terminal I/O and REST API for session management and configuration. It does **not** bundle or run tmux locally — the server is the source of truth for all terminal state.
+
+### Tech Stack
+
+| Component | Choice | Notes |
+|-----------|--------|-------|
+| Language | Kotlin | Coroutines for async I/O, modern Android standard |
+| Min API | 26 (Android 8.0) | ~95% device coverage |
+| UI toolkit | Jetpack Compose | Declarative UI for all non-terminal screens |
+| Terminal renderer | Termux `terminal-emulator` library | Battle-tested VT100/xterm parser. Handles escape sequences, 256-color, scrollback, selection |
+| Terminal view | Termux `TerminalView` (Android View) | Wrapped in Compose via `AndroidView` composable |
+| WebSocket | OkHttp | Reliable, widely used, built-in reconnect support |
+| Channel protocol | Thin Kotlin Phoenix Channel client | Implements Phoenix Channel JSON framing on top of OkHttp WebSocket. Libraries exist (e.g., `JavaPhoenixClient`) or can be written in ~200 lines — the protocol is simple |
+| HTTP client | OkHttp + kotlinx.serialization | REST API calls (sessions, quick actions, auth) |
+| DI | Hilt | Standard Android DI, integrates with ViewModel and Compose |
+| Navigation | Compose Navigation | Type-safe routes between screens |
+| Build | Gradle (Kotlin DSL) | Standard Android tooling |
+| Testing | JUnit 5 + Espresso + Compose UI tests | Unit, integration, UI |
+| Distribution | Google Play + F-Droid + Direct APK | All three from the start |
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│ Android App                                  │
+│                                              │
+│  ┌──────────┐  ┌──────────┐  ┌───────────┐ │
+│  │ Session  │  │ Terminal  │  │ Settings  │ │
+│  │ List     │  │ Screen    │  │ Screen    │ │
+│  │ (Compose)│  │ (Compose) │  │ (Compose) │ │
+│  └────┬─────┘  └────┬──────┘  └─────┬─────┘ │
+│       │              │               │       │
+│  ┌────┴─────┐  ┌────┴──────┐  ┌─────┴─────┐ │
+│  │ Session  │  │ Terminal  │  │ Settings  │ │
+│  │ ViewModel│  │ ViewModel │  │ ViewModel │ │
+│  └────┬─────┘  └────┬──────┘  └─────┬─────┘ │
+│       │              │               │       │
+│  ┌────┴──────────────┴───────────────┴─────┐ │
+│  │           Repository Layer               │ │
+│  │  SessionRepo  TerminalRepo  ConfigRepo   │ │
+│  └────┬──────────────┬───────────────┬─────┘ │
+│       │              │               │       │
+│  ┌────┴─────┐  ┌────┴──────┐  ┌─────┴─────┐ │
+│  │ REST API │  │ Phoenix   │  │ REST API  │ │
+│  │ Client   │  │ Channel   │  │ Client    │ │
+│  │ (OkHttp) │  │ Client    │  │ (OkHttp)  │ │
+│  └──────────┘  └───────────┘  └───────────┘ │
+│                      │                       │
+└──────────────────────┼───────────────────────┘
+                       │ WebSocket + HTTP
+                       ▼
+              Remote Code Agents Server
+```
+
+#### Layer Responsibilities
+
+- **Screens (Compose)**: Pure UI. Observe ViewModel state, emit user actions. No business logic.
+- **ViewModels**: Hold UI state as `StateFlow`. Call repository methods. Handle navigation events.
+- **Repositories**: Abstract server communication. Expose suspend functions and Flows. Handle caching, retry, error mapping.
+- **Network clients**: Raw HTTP and WebSocket communication. Serialization/deserialization. No business logic.
+
+### Screens
+
+#### Login Screen
+
+- Username and password fields (pre-filled username from last login, stored in preferences)
+- "Connect" button → POST `/api/login` with credentials
+- On success: store bearer token in EncryptedSharedPreferences, navigate to session list
+- On failure: show error message, stay on login screen
+- Server URL field (stored in preferences): `https://host:port` — the user configures this once
+- "Remember me" toggle (default: on) — controls whether the token is persisted across app restarts
+
+#### Session List Screen
+
+- Fetches sessions via `GET /api/sessions` on screen entry and pull-to-refresh
+- Each session is a card showing: session name, window count, created time, attached status
+- Expanding a session card shows its panes (pane index, dimensions, running command)
+- Tap a pane → navigate to Terminal Screen with `session:window.pane` target
+- "New Session" FAB → bottom sheet with name input and optional command
+- Swipe-to-delete on sessions (with confirmation dialog) → `DELETE /api/sessions/:name`
+- **Auto-refresh**: Poll `GET /api/sessions` every 5 seconds while the screen is visible. This is slightly less aggressive than the web UI's 3-second PubSub-driven refresh, since polling over HTTP is heavier than PubSub. The interval is configurable.
+
+#### Terminal Screen
+
+The primary screen. Full-screen terminal with an action bar overlay.
+
+```
+┌──────────────────────────────┐
+│ ← session:0.0         [⚙]   │  ← top bar (auto-hides after 3s)
+├──────────────────────────────┤
+│ [Status] [Push ⚠] [Tests] ► │  ← quick action bar (scrollable)
+├──────────────────────────────┤
+│                              │
+│  $ echo "hello"             │
+│  hello                       │
+│  $                           │
+│                              │
+│                              │
+├──────────────────────────────┤
+│ [Esc][Tab][Ctrl][Alt][↑↓←→]  │  ← special key toolbar
+└──────────────────────────────┘
+```
+
+**Layout**:
+- Top bar: back arrow, session/pane target label, settings gear icon. Auto-hides after 3 seconds of inactivity. Tap top edge to reveal.
+- Quick action bar: horizontally scrollable buttons, same styling as web (color-coded pills, `⚠` for confirm actions). Only shown if quick actions are configured. Collapsible via chevron.
+- Terminal view: fills remaining space. Termux `TerminalView` wrapped in Compose `AndroidView`.
+- Special key toolbar: fixed at bottom. Same key set as web mobile toolbar: `Esc`, `Tab`, `Ctrl` (sticky), `Alt` (sticky), arrow keys, `Paste`. Swipe up for extended keys (F1-F12, PgUp/PgDn, Home/End).
+
+**Lifecycle**:
+1. On screen entry: join Phoenix Channel topic `"terminal:{session}:{window}:{pane}"` with auth token
+2. Channel join reply provides `history` (raw bytes), `cols`, `rows`
+3. Feed history bytes into Termux terminal emulator → renders on `TerminalView`
+4. Channel `"output"` events → feed raw bytes into terminal emulator (streaming)
+5. Keyboard input → convert to terminal byte sequences → send via Channel `"input"` event
+6. Special key toolbar taps → emit corresponding escape sequences/control codes via Channel `"input"`
+7. Quick action tap → send command + `\n` as bytes via Channel `"input"` (with confirmation dialog if `confirm: true`)
+8. On screen exit: leave the Channel topic (server auto-unsubscribes via monitor)
+
+**Terminal rendering integration**:
+
+```kotlin
+// Simplified — actual implementation wraps Termux library types
+class TerminalSession(
+    private val channel: PhoenixChannel,
+    cols: Int,
+    rows: Int
+) : TerminalOutput {
+
+    val emulator = TerminalEmulator(this, cols, rows, /* scrollback */ 10000)
+
+    // Called by Channel "output" handler
+    fun onServerOutput(bytes: ByteArray) {
+        emulator.append(bytes, bytes.size)
+        // TerminalView observes emulator state and re-renders
+    }
+
+    // TerminalOutput interface — called by emulator when it needs to
+    // send data back (e.g., terminal query responses like cursor position)
+    override fun write(data: ByteArray, offset: Int, count: Int) {
+        channel.push("input", mapOf("data" to data.sliceArray(offset until offset + count)))
+    }
+}
+```
+
+**Keyboard input handling**:
+
+The Android soft keyboard produces `KeyEvent`s and `InputConnection` text. The Termux `TerminalView` handles the translation from Android input methods to terminal byte sequences (including IME composition for non-Latin scripts, hardware keyboard support, and modifier key combos). The resulting bytes are sent to the server via the Channel `"input"` event.
+
+For the special key toolbar, each button directly emits the appropriate byte sequence:
+- `Esc` → `\x1b`
+- `Tab` → `\x09`
+- `Ctrl` + key → bitwise AND with `0x1f` (e.g., Ctrl+C → `\x03`)
+- Arrow keys → ANSI escape sequences (`\x1b[A`, `\x1b[B`, etc.)
+- F1-F12 → corresponding escape sequences
+
+#### Settings Screen
+
+- Server URL configuration
+- Quick actions management (mirrors web Settings UI):
+  - List of configured quick actions with edit/delete
+  - Add new quick action (label, command, confirm toggle, color picker)
+  - Drag-to-reorder
+  - Synced via REST API (`/api/quick-actions` endpoints)
+- Display preferences (stored locally in SharedPreferences):
+  - Font size (pinch-to-zoom also works in terminal)
+  - Color scheme / theme
+  - Keep screen on (toggle — prevents screen timeout during terminal use)
+  - Vibrate on special keys (haptic feedback toggle)
+- Connection preferences:
+  - Session list auto-refresh interval
+  - Auto-reconnect behavior
+
+### Connection Management
+
+#### Phoenix Channel Client
+
+A thin Kotlin implementation of the Phoenix Channel protocol on top of OkHttp WebSocket:
+
+```kotlin
+class PhoenixSocket(
+    private val url: String,
+    private val params: Map<String, String>,  // {"token": "..."}
+    private val client: OkHttpClient
+) {
+    // Connection state as StateFlow for Compose observation
+    val connectionState: StateFlow<ConnectionState>
+
+    fun connect()
+    fun disconnect()
+    fun channel(topic: String): PhoenixChannel
+}
+
+class PhoenixChannel(
+    private val socket: PhoenixSocket,
+    val topic: String
+) {
+    val events: Flow<ChannelEvent>  // Collect to receive server pushes
+
+    suspend fun join(payload: Map<String, Any> = emptyMap()): JoinResult
+    suspend fun leave()
+    suspend fun push(event: String, payload: Map<String, Any>): PushResult
+}
+```
+
+**Protocol details**:
+- Message format: `[join_ref, ref, topic, event, payload]` JSON array (standard Phoenix Channel wire format)
+- Heartbeat: send `"heartbeat"` every 30 seconds to keep the WebSocket alive
+- Join: send `"phx_join"` event, wait for `"phx_reply"` with `"ok"` or `"error"` status
+- Push: send event with auto-incrementing `ref`, match reply by `ref`
+- Server push: events with `null` ref — dispatched to channel event Flow
+
+**Binary payload handling**: The Channel protocol sends binary data as raw bytes in the JSON payload. On the Kotlin side, binary payloads arrive as byte arrays within the deserialized JSON message. This matches the server's raw binary approach (no base64 encoding on the Channel transport).
+
+#### Reconnection Strategy
+
+Network drops are common on mobile. The app must handle them gracefully:
+
+1. **WebSocket disconnect detected**: OkHttp `onFailure`/`onClosed` callback fires
+2. **Exponential backoff reconnect**: 1s → 2s → 4s → 8s → 16s → 30s (cap). Reset on successful connect.
+3. **On reconnect**: Re-authenticate (token may have expired). If token is valid, re-join all active Channel topics.
+4. **Channel rejoin**: Server sends fresh history in the join reply. App clears the terminal emulator and re-renders from the new history. This matches the web app's reconnection behavior.
+5. **UI feedback**: Show a subtle "Reconnecting..." indicator in the terminal top bar. Transition to "Connected" on success. If reconnection fails after 5 minutes of attempts, show a "Connection lost" screen with a manual "Retry" button.
+
+**Foreground service**: While a terminal session is active, run a foreground service with a persistent notification ("Connected to session-name:0.0"). This prevents Android from killing the app during background use and gives the user a quick way to return to the terminal. The service is stopped when the user navigates away from all terminal sessions.
+
+#### Token Management
+
+- Token stored in `EncryptedSharedPreferences` (Android Keystore-backed)
+- Token TTL matches server config (`auth_session_ttl_days`, default 30 days)
+- On 401/token rejection: clear stored token, navigate to Login Screen
+- Token refresh: no explicit refresh mechanism — the user re-authenticates when the token expires (same as web session expiry). For a 30-day TTL, this is infrequent.
+
+### Resize Behavior
+
+The Android app follows the **passive resizer** pattern described in the web mobile UI section:
+
+- On Channel join, read pane dimensions from the join reply (`cols`, `rows`)
+- Configure the terminal emulator with those dimensions
+- Do **not** send resize events when the Android viewport changes (soft keyboard open/close, rotation)
+- Instead, scale the terminal view to fit the available space via font size adjustment or scrolling
+- Optional "Fit to screen" button: calculates the cols/rows that would fill the current viewport, sends a `"resize"` Channel event (with confirmation since it affects other viewers)
+- When receiving `"resized"` events from the server (another viewer resized): reconfigure the terminal emulator with the new dimensions and re-render
+
+### Clipboard Integration
+
+- **Copy**: Long-press on the terminal triggers text selection (Termux `TerminalView` handles this natively). Selected text is copied to the Android clipboard via `ClipboardManager`.
+- **Paste**: "Paste" button in the special key toolbar reads from `ClipboardManager` and sends the text as bytes via Channel `"input"` event. Also supports the standard Android paste gesture (long-press → paste from context menu) if Termux's `TerminalView` supports it.
+- **No HTTPS requirement**: Unlike the web app's Clipboard API, Android's `ClipboardManager` works without HTTPS.
+
+### Notification Support
+
+- **Foreground service notification**: Persistent while connected (see Connection Management)
+- **Pane death notification**: When a `"pane_dead"` event is received while the app is in the background, show a system notification: "Session ended: session-name:0.0". Tap navigates to the session list.
+- **Connection lost notification**: If the WebSocket disconnects and cannot reconnect after 60 seconds while in the background, notify the user.
+
+### Offline Behavior
+
+The app is online-only by nature (it's a remote terminal client). Offline handling:
+
+- **Session list**: Cache the last-fetched session list in memory. Display it immediately on screen entry, then refresh from the server. If the server is unreachable, show the cached list with a "Server unreachable" banner.
+- **Quick actions**: Cache in SharedPreferences after each fetch. Available immediately on app start, synced when the server is reachable.
+- **Terminal**: No offline mode. If the WebSocket is disconnected, show "Reconnecting..." with the reconnection strategy described above.
+
+### Project Structure
+
+```
+android/
+  app/
+    src/main/
+      java/com/remoteCodeAgents/
+        di/                          # Hilt modules
+          NetworkModule.kt           # OkHttpClient, API service providers
+          AppModule.kt               # Repository bindings
+        data/
+          network/
+            PhoenixSocket.kt         # WebSocket + Channel protocol
+            PhoenixChannel.kt        # Single channel abstraction
+            ApiService.kt            # Retrofit/OkHttp REST API interface
+            AuthInterceptor.kt       # Adds bearer token to API requests
+          repository/
+            SessionRepository.kt     # Session CRUD via REST API
+            TerminalRepository.kt    # Channel join/leave, input/output
+            ConfigRepository.kt      # Quick actions CRUD via REST API
+            AuthRepository.kt        # Login, token storage
+          model/
+            Session.kt               # Session/Pane data classes
+            QuickAction.kt           # Quick action data class
+        ui/
+          login/
+            LoginScreen.kt           # Compose UI
+            LoginViewModel.kt
+          sessions/
+            SessionListScreen.kt     # Compose UI
+            SessionListViewModel.kt
+          terminal/
+            TerminalScreen.kt        # Compose UI with AndroidView for TerminalView
+            TerminalViewModel.kt
+            TerminalSession.kt       # Bridges Channel ↔ Termux emulator
+            SpecialKeyToolbar.kt     # Compose toolbar component
+            QuickActionBar.kt        # Compose quick action bar
+          settings/
+            SettingsScreen.kt        # Compose UI
+            SettingsViewModel.kt
+          navigation/
+            AppNavigation.kt         # Compose Navigation graph
+          theme/
+            Theme.kt                 # Material 3 theme
+            Color.kt
+        service/
+          TerminalForegroundService.kt  # Foreground service for background connection
+        App.kt                       # Application class (Hilt entry point)
+      res/
+        values/
+          strings.xml
+          themes.xml
+    src/test/                        # Unit tests (JUnit 5)
+    src/androidTest/                 # Instrumented tests (Espresso + Compose)
+  build.gradle.kts
+  gradle/
+    libs.versions.toml               # Version catalog
+```
+
+### Build & Distribution
+
+#### Build Variants
+
+```kotlin
+// build.gradle.kts
+android {
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+        debug {
+            applicationIdSuffix = ".debug"
+        }
+    }
+}
+```
+
+#### Distribution Channels
+
+1. **Google Play**: Standard release via Android App Bundle (AAB). Signed with upload key, Google manages distribution key.
+2. **F-Droid**: Reproducible builds required. All dependencies are open source (Termux terminal-emulator is Apache 2.0, OkHttp is Apache 2.0, Jetpack libraries are Apache 2.0). No proprietary dependencies (no Google Play Services, no Firebase, no proprietary analytics). F-Droid metadata in `metadata/android/en-US/` directory (fastlane format). Build recipe in `fdroid/com.remoteCodeAgents.yml`.
+3. **Direct APK**: Signed APK published as a GitHub Release artifact. CI builds and attaches the APK on each tagged release. Users can download and sideload.
+
+#### CI/CD (GitHub Actions)
+
+```yaml
+# Triggered on push to main and tags
+- Build debug APK (every push)
+- Run unit tests + instrumented tests (every push)
+- Build release APK + AAB (on tag)
+- Sign release artifacts (on tag)
+- Create GitHub Release with APK attached (on tag)
+- Upload AAB to Google Play internal track (on tag, optional)
+```
+
+### To Decide
+
+The following Android-specific decisions are still open:
+
+#### 1. Termux Library Integration Strategy
+
+The Termux `terminal-emulator` and `terminal-view` libraries are published as part of the Termux app, not as standalone Maven artifacts. Options:
+
+- **a) Git submodule**: Add the Termux repo as a submodule, reference the `terminal-emulator` and `terminal-view` modules directly in the Gradle build. Most control, but couples us to their repo structure.
+- **b) Fork + publish to Maven Local / GitHub Packages**: Fork the relevant modules, publish as a standalone artifact. Cleaner dependency management, but requires maintaining the fork.
+- **c) JitPack**: Point JitPack at the Termux repo to build the library modules on demand. Zero maintenance, but depends on JitPack availability and may have build issues.
+
+Recommendation: **(b)** — fork the two modules (`terminal-emulator` and `terminal-view`) into a minimal standalone library. The code is stable and changes infrequently. This gives us clean Maven dependency management without coupling to the full Termux app build. Publish to GitHub Packages alongside the main repo.
+
+#### 2. Phoenix Channel Client Library
+
+Options:
+
+- **a) JavaPhoenixClient**: Existing open-source library. May not be actively maintained. Adds a third-party dependency.
+- **b) Write our own (~200 lines)**: The Phoenix Channel protocol is simple JSON framing. A minimal Kotlin implementation on top of OkHttp gives us full control, zero external dependencies, and is easy to test.
+- **c) dsander/JavaPhoenixChannels**: Another existing library. Kotlin-friendly but may be outdated.
+
+Recommendation: **(b)** — write a minimal implementation. The protocol is well-documented, the implementation is small, and we avoid dependency on unmaintained libraries.
+
+#### 3. Minimum Terminal Features for v1
+
+What terminal features are required for the initial Android release vs. deferred?
+
+**Proposed v1 (must have)**:
+- Connect to server, authenticate
+- List sessions and panes
+- Open a terminal session (stream output, send input)
+- Special key toolbar (Esc, Tab, Ctrl, Alt, arrows)
+- Quick action buttons
+- Reconnection on network drop
+- Copy/paste
+
+**Proposed v2 (deferred)**:
+- Create/kill sessions from the app
+- Settings/quick actions management (CRUD) — v1 just reads them
+- Multi-pane split view
+- Notification on pane death (background)
+- Font size / theme customization
+- Haptic feedback preferences
+
+Does this split seem right, or should anything move between v1 and v2?
+
+#### 4. Hardware Keyboard Support
+
+When a physical keyboard is connected (Bluetooth or USB-C), should the app:
+- **a)** Use Termux's built-in hardware keyboard handling (which maps Ctrl+key, function keys, etc. correctly)
+- **b)** Add custom key mappings / configurability
+
+Recommendation: **(a)** — Termux's handling is excellent and battle-tested. Custom mappings can be added later if users request them.
+
+#### 5. App Name and Package ID
+
+Need to decide:
+- Package ID (e.g., `com.remoteCodeAgents`, `dev.rca`, etc.)
+- Display name (e.g., "Remote Code Agents", "RCA Terminal", etc.)
+- Icon design
+
 ## Implementation Order
 
 Suggested build order based on dependencies and incremental progress:
@@ -1884,6 +2310,8 @@ Suggested build order based on dependencies and incremental progress:
 | 4 | Session management (kill, rename) | Small | Basic lifecycle control |
 | 5 | Quick actions (command buttons) | Small | High-value for mobile; introduces Config GenServer |
 | 6 | User preferences (font, theme) | Small | Client-side only, no server changes |
-| 7 | Phoenix Channel + Android client | Large | New client platform |
-| 8 | Multi-pane split view | Medium | Complex layout logic |
+| 7 | Phoenix Channel (server-side) | Medium | TerminalChannel + UserSocket — prerequisite for Android |
+| 8 | Android app v1 (terminal core) | Large | Connect, auth, session list, terminal streaming, quick actions, special keys |
+| 9 | Multi-pane split view (web) | Medium | Complex layout logic |
+| 10 | Android app v2 (management + polish) | Medium | Session CRUD, settings management, notifications, themes |
 
