@@ -1,6 +1,6 @@
 # Not Run Yet
 
-- Let's write up a comprehensive implementation plan.  Break into phases if necessary.  Write each phase to a seprate file in implementation-docs directory with names like PHASE_01_DO_SOMETHING.md.  Don't plan implementation for the android app quite yet.
+- Let's write up a comprehensive implementation plan.  Break into phases if necessary.  Write each phase to a separate file in implementation-docs directory with names like PHASE_01_DO_SOMETHING.md.  Don't plan implementation for the android app quite yet, but do the entire server.  Make sure all features from APPLICATION_DESIGN.md are planned, and make sure we implement the tech stack from TECH_STACK.md.  
 
 - What are our distribution options for the web app?  can we compile to a static binary for linux?
 
