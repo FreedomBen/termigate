@@ -68,7 +68,8 @@ config :remote_code_agents,
   tmux_socket: nil,
   output_coalesce_ms: 3,
   output_coalesce_max_bytes: 32_768,
-  auth_session_ttl_days: 30
+  auth_session_ttl_days: 30,
+  auth_token_max_age: 604_800
 ```
 
 **config/dev.exs** — bind to localhost:4000
@@ -196,7 +197,16 @@ defp elixirc_paths(:test), do: ["lib", "test/support"]
 defp elixirc_paths(_), do: ["lib"]
 ```
 
-### 1.12 Verify Boot
+### 1.12 Logging
+
+Add `require Logger` to all modules. Key log events for this phase:
+- `:info` — Application startup: bind address, tmux version, auth mode
+- `:info` — tmux version check result
+- `:warning` — tmux version < 2.6
+- `:warning` — tmux binary not found
+- `:debug` — Individual tmux commands executed by CommandRunner (args + exit code)
+
+### 1.13 Verify Boot
 
 - `mix deps.get && mix compile`
 - `mix phx.server` starts without errors

@@ -83,8 +83,10 @@ Implement username+password authentication with bcrypt, optional static token fa
 - `POST /api/login` — accepts `{"username": "...", "password": "..."}`:
   - Rate limited (via RateLimit plug, key: `:login`)
   - Verify credentials via `Auth.verify_credentials/2`
-  - On success: generate `Phoenix.Token.sign/4` bearer token, return `{"token": "..."}`
+  - On success: generate `Phoenix.Token.sign/4` bearer token with `max_age: 7 * 86_400` (7 days), return `{"token": "...", "expires_in": 604800}`
   - On failure: 401 `{"error": "invalid_credentials"}`
+
+**Token lifecycle for native clients**: Tokens expire after 7 days (configurable via `auth_token_max_age` config). Native clients should store credentials securely and handle 401 responses by transparently re-authenticating via `POST /api/login`. No refresh token endpoint is needed — this is a single-user system where automatic re-auth is simpler and equally secure.
 
 - `DELETE /logout` — clears session cookie, redirects to `/login`
 
@@ -151,12 +153,22 @@ end
 get "/healthz", HealthController, :show
 ```
 
-### 6.11 Startup Warning
+### 6.11 Logging
+
+Key log events for auth:
+- `:info` — Login success (username, IP — never log passwords)
+- `:info` — Login failure (username, IP)
+- `:info` — Auth mode on startup (bcrypt credentials / token / disabled)
+- `:warning` — Rate limit exceeded (IP, endpoint key)
+- `:warning` — Rate limit table flushed (exceeded 100K entries)
+- `:warning` — Listening on 0.0.0.0 with no auth configured
+
+### 6.12 Startup Warning
 
 In `application.ex`: if the endpoint is bound to `0.0.0.0` and `Auth.auth_enabled?/0` is false, log a warning:
 "WARNING: Listening on 0.0.0.0 with no authentication configured. Set up auth via `mix rca.setup` or set RCA_AUTH_TOKEN."
 
-### 6.12 Tests
+### 6.13 Tests
 
 - Auth module: test credential verification (bcrypt, token fallback, timing-safe comparison)
 - Auth plug: test redirect on missing session

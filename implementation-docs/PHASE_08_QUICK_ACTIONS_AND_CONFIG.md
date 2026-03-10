@@ -133,7 +133,17 @@ put "/quick-actions/order", QuickActionController, :reorder
 resources "/quick-actions", QuickActionController, only: [:index, :create, :update, :delete]
 ```
 
-### 8.10 Tests
+### 8.10 Logging
+
+Key log events for Config:
+- `:info` — Config file loaded (path, action count)
+- `:info` — Config file reloaded (mtime change detected)
+- `:info` — Config file created with defaults (path)
+- `:warning` — Malformed config file, keeping last good config (path, error)
+- `:warning` — Config file deleted, keeping last good config
+- `:debug` — Config update (action: upsert/delete/reorder)
+
+### 8.11 Tests
 
 - Config GenServer: startup (file exists, file missing, malformed file), get/update, mtime polling, PubSub broadcast
 - Quick action CRUD: create, update, delete, reorder (including ID mismatch error)

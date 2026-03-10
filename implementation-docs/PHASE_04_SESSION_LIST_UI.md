@@ -73,14 +73,21 @@ Use Tailwind Plus application-ui components for:
 - **tmux not running (no sessions)**: Empty state with "Create Session" CTA (not an error — tmux starts on demand)
 - **Session creation failure**: Flash error with reason
 
-### 4.6 Health Check Endpoint
+### 4.6 Logging
+
+Key log events for SessionPoller:
+- `:info` — SessionPoller started, initial poll result (session count)
+- `:debug` — Poll cycle: session count, changed or unchanged
+- `:warning` — tmux not reachable during poll
+
+### 4.7 Health Check Endpoint
 
 **`lib/remote_code_agents_web/controllers/health_controller.ex`**:
 - `GET /healthz` — unauthenticated
 - Calls `CommandRunner.run(["list-sessions"])` to verify tmux reachable
 - Returns `200 {"status": "ok", "tmux": "ok"}` or `{"tmux": "no_server"}` or `503 {"status": "error", "tmux": "not_found"}`
 
-### 4.7 Tests
+### 4.8 Tests
 
 **`test/remote_code_agents_web/live/session_list_live_test.exs`**:
 - Mount page, verify sessions render

@@ -79,6 +79,8 @@ Uses the resolved `pane_id` (not the target string) for stability across session
   4. Chunk large inputs into sequential `send-keys` calls, each with at most 65,536 bytes (separate `CommandRunner.run/1` invocations, sent sequentially — not atomic)
   5. Return `:ok`, `{:error, :pane_dead}`, `{:error, :not_ready}`, or `{:error, :not_found}`
 
+**Input sanitization**: Only the size limit (128KB) is enforced. No escape sequence filtering is applied. Rationale: the user already has full shell access via the terminal — they can run arbitrary commands. Filtering tmux escape sequences would be security theater and could break legitimate terminal input (e.g., vim, emacs, ncurses apps that rely on control sequences).
+
 ### 3.3 Output Handling (Coalescing)
 
 **Algorithm**: Both timer-based and size-based coalescing. Defaults from config: `output_coalesce_ms: 3` (3ms timer), `output_coalesce_max_bytes: 32_768` (32KB size cap).
@@ -128,14 +130,25 @@ In `terminate/2`:
   2. Broadcast `{:pane_superseded, target, new_target}` to viewers
   3. Terminate normally
 
-### 3.8 PaneStreamSupervisor
+### 3.8 Logging
+
+Key log events for PaneStream:
+- `:info` — PaneStream started (target, pane_id)
+- `:info` — PaneStream shutdown (target, reason: grace period expired / pane dead / superseded)
+- `:info` — Viewer count changed (target, old_count → new_count)
+- `:warning` — Port crash, attempting recovery (target, attempt number)
+- `:warning` — Recovery failed, pane marked dead (target)
+- `:warning` — Max recovery attempts reached (target)
+- `:debug` — Output coalesce flush (target, bytes flushed)
+
+### 3.9 PaneStreamSupervisor
 
 **`lib/remote_code_agents/pane_stream_supervisor.ex`**:
 - DynamicSupervisor with `max_children` from config
 - `start_child/1` convenience function
 - PaneStream children use `restart: :transient`
 
-### 3.9 Integration Tests
+### 3.10 Integration Tests
 
 **`test/remote_code_agents/pane_stream_test.exs`**:
 - Start a real tmux session, subscribe to a pane, verify output arrives
