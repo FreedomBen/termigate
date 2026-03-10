@@ -20,11 +20,6 @@
 
 **Decision**: Option (b) — `SessionChannel` for real-time push. Added `session_channel.ex` to server project structure. Android joins `"sessions"` topic for live updates, REST API retained for mutations and pull-to-refresh fallback. Removed 5-second HTTP polling.
 
-## Q6: Foreground service lifecycle precision
+## ~~Q6: Foreground service lifecycle precision~~ — RESOLVED
 
-Line 2105 says the service "is stopped when the user navigates away from all terminal sessions." What exactly triggers this?
-
-Options:
-- **(a)** Service stops when the last `PhoenixChannel` topic is left (i.e., user leaves the last Terminal Screen)
-- **(b)** Service stops when the app's Activity is destroyed (process death / explicit close)
-- **(c)** Service persists as long as the WebSocket is connected, stops on explicit disconnect or token expiry
+**Decision**: Option (a) — service starts on first `TerminalChannel` join, stops on last `TerminalChannel` leave. `SessionChannel` does not count. Multi-session notification shows count.

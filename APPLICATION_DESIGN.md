@@ -2162,7 +2162,7 @@ Network drops are common on mobile. The app must handle them gracefully:
 4. **Channel rejoin**: Server sends fresh history in the join reply. App clears the terminal emulator and re-renders from the new history. This matches the web app's reconnection behavior.
 5. **UI feedback**: Show a subtle "Reconnecting..." indicator in the terminal top bar. Transition to "Connected" on success. If reconnection fails after 5 minutes of attempts, show a "Connection lost" screen with a manual "Retry" button.
 
-**Foreground service**: While a terminal session is active, run a foreground service with a persistent notification ("Connected to session-name:0.0"). This prevents Android from killing the app during background use and gives the user a quick way to return to the terminal. The service is stopped when the user navigates away from all terminal sessions.
+**Foreground service**: While a terminal session is active, run a foreground service with a persistent notification ("Connected to session-name:0.0"). This prevents Android from killing the app during background use and gives the user a quick way to return to the terminal. The service is started when the first `TerminalChannel` topic is joined and stopped when the last `TerminalChannel` topic is left (i.e., the user navigates away from all Terminal Screens). The `SessionChannel` does not count — browsing the session list does not require a foreground service. If multiple terminal sessions are open, the notification shows the count (e.g., "Connected to 3 sessions").
 
 #### Token Management
 
