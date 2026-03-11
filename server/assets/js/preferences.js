@@ -11,7 +11,6 @@ const DEFAULTS = {
   customTheme: {},
   cursorStyle: "block",
   cursorBlink: true,
-  scrollback: 10000,
   showToolbar: true,
 };
 
@@ -99,15 +98,6 @@ const FONT_FAMILIES = [
   { label: "Courier New", value: "'Courier New', monospace" },
 ];
 
-const SCROLLBACK_OPTIONS = [
-  { label: "1,000", value: 1000 },
-  { label: "5,000", value: 5000 },
-  { label: "10,000", value: 10000 },
-  { label: "25,000", value: 25000 },
-  { label: "50,000", value: 50000 },
-  { label: "100,000", value: 100000 },
-];
-
 function loadPrefs() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
@@ -139,7 +129,6 @@ export {
   DEFAULTS,
   THEMES,
   FONT_FAMILIES,
-  SCROLLBACK_OPTIONS,
   loadPrefs,
   savePrefs,
   savePref,

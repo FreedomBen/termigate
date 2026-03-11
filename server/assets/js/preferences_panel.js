@@ -5,7 +5,6 @@
 import {
   THEMES,
   FONT_FAMILIES,
-  SCROLLBACK_OPTIONS,
   loadPrefs,
   savePrefs,
   resolveTheme,
@@ -75,11 +74,6 @@ function buildHTML(prefs) {
     .join("") +
     `<option value="custom" ${prefs.theme === "custom" ? "selected" : ""}>Custom</option>`;
 
-  const scrollOptions = SCROLLBACK_OPTIONS.map(
-    (s) =>
-      `<option value="${s.value}" ${prefs.scrollback === s.value ? "selected" : ""}>${s.label}</option>`
-  ).join("");
-
   return `
     <div class="prefs-header">
       <h3>Terminal Preferences</h3>
@@ -142,12 +136,6 @@ function buildHTML(prefs) {
           <input type="checkbox" id="pref-cursor-blink" ${prefs.cursorBlink ? "checked" : ""} />
           <span class="prefs-toggle-slider"></span>
         </label>
-      </div>
-
-      <div class="prefs-group">
-        <label>Scrollback Lines</label>
-        <select id="pref-scrollback">${scrollOptions}</select>
-        <span class="prefs-hint">Applied on next terminal open</span>
       </div>
 
       <div class="prefs-group">
@@ -220,13 +208,6 @@ function bindEvents(prefs) {
   blinkCb.addEventListener("change", () => {
     current.cursorBlink = blinkCb.checked;
     applyAndSave(current, "cursorBlink");
-  });
-
-  // Scrollback
-  const scrollSelect = panelEl.querySelector("#pref-scrollback");
-  scrollSelect.addEventListener("change", () => {
-    current.scrollback = parseInt(scrollSelect.value, 10);
-    savePrefs(current);
   });
 
   // Virtual toolbar toggle

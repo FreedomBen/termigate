@@ -53,7 +53,7 @@ const TerminalHook = {
       fontFamily: prefs.fontFamily,
       cursorStyle: prefs.cursorStyle,
       cursorBlink: prefs.cursorBlink,
-      scrollback: prefs.scrollback,
+      scrollback: 0,
       theme: resolveTheme(prefs),
     });
 
