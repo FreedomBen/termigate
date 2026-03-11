@@ -148,11 +148,11 @@ server/test/tmux_rm_web/live/session_list_live_test.exs
 - `/healthz` returns correct status
 
 ## Checklist
-- [ ] 4.1 SessionPoller GenServer
-- [ ] 4.2 SessionListLive
-- [ ] 4.3 Responsive Layout
-- [ ] 4.4 Tailwind Plus Components
-- [ ] 4.5 Error States & tmux Degradation
-- [ ] 4.6 Logging
-- [ ] 4.7 Health Check Endpoint
-- [ ] 4.8 Tests
+- [x] 4.1 SessionPoller GenServer
+- [x] 4.2 SessionListLive
+- [x] 4.3 Responsive Layout
+- [x] 4.4 Tailwind Plus Components
+- [x] 4.5 Error States & tmux Degradation
+- [x] 4.6 Logging
+- [x] 4.7 Health Check Endpoint
+- [x] 4.8 Tests

@@ -1,0 +1,155 @@
+<%!-- tmux status banners --%>
+<div :if={@tmux_status == :not_found} role="alert" class="alert alert-error mb-6">
+  <.icon name="hero-exclamation-triangle" class="size-5" />
+  <div>
+    <p class="font-semibold">tmux is not installed or not in PATH</p>
+    <p class="text-sm mt-1">
+      Install tmux via your package manager
+      (e.g., <code class="bg-base-300 px-1 rounded">apt install tmux</code>,
+      <code class="bg-base-300 px-1 rounded">brew install tmux</code>)
+      and restart the application.
+    </p>
+  </div>
+</div>
+
+<div :if={match?({:error, _}, @tmux_status)} role="alert" class="alert alert-warning mb-6">
+  <.icon name="hero-exclamation-triangle" class="size-5" />
+  <div>
+    <p class="font-semibold">tmux server is no longer reachable</p>
+    <p class="text-sm mt-1">Sessions may have been lost. Error: {elem(@tmux_status, 1)}</p>
+  </div>
+  <button class="btn btn-sm btn-ghost" phx-click="retry_tmux">Retry</button>
+</div>
+
+<%!-- Header --%>
+<.header>
+  Sessions
+  <:subtitle>
+    {length(@sessions)} active tmux session{if length(@sessions) != 1, do: "s", else: ""}
+  </:subtitle>
+  <:actions>
+    <button
+      :if={@tmux_status not in [:not_found]}
+      class="btn btn-primary btn-sm"
+      phx-click="toggle_new_session_form"
+    >
+      <.icon name="hero-plus-micro" class="size-4" />
+      New Session
+    </button>
+  </:actions>
+</.header>
+
+<%!-- New session form --%>
+<div :if={@show_new_session_form} class="card bg-base-200 p-4 mb-6">
+  <form phx-submit="create_session" phx-change="validate_session_name" class="flex gap-3 items-end">
+    <div class="flex-1">
+      <label class="label mb-1" for="new-session-name">Session name</label>
+      <input
+        type="text"
+        id="new-session-name"
+        name="name"
+        value={@new_session_name}
+        placeholder="my-session"
+        class={[
+          "input input-bordered w-full",
+          @new_session_error && "input-error"
+        ]}
+        autocomplete="off"
+        autofocus
+        phx-debounce="300"
+      />
+      <p :if={@new_session_error} class="text-error text-sm mt-1">{@new_session_error}</p>
+    </div>
+    <button type="submit" class="btn btn-primary btn-sm" disabled={@new_session_error != nil}>
+      Create
+    </button>
+    <button type="button" class="btn btn-ghost btn-sm" phx-click="toggle_new_session_form">
+      Cancel
+    </button>
+  </form>
+</div>
+
+<%!-- Empty state --%>
+<div :if={@sessions == [] and @tmux_status not in [:not_found]} class="flex flex-col items-center justify-center py-16 text-base-content/60">
+  <.icon name="hero-command-line" class="size-12 mb-4" />
+  <p class="text-lg font-medium mb-2">No tmux sessions</p>
+  <p class="text-sm mb-6">Create a session to get started.</p>
+  <button
+    :if={not @show_new_session_form}
+    class="btn btn-primary"
+    phx-click="toggle_new_session_form"
+  >
+    <.icon name="hero-plus-micro" class="size-4" />
+    Create Session
+  </button>
+</div>
+
+<%!-- Session list --%>
+<div :if={@sessions != []} class="space-y-3">
+  <div
+    :for={session <- @sessions}
+    class="card bg-base-200 shadow-sm"
+  >
+    <%!-- Session card header --%>
+    <div
+      class="flex items-center gap-3 p-4 cursor-pointer hover:bg-base-300/50 rounded-t-2xl transition-colors"
+      phx-click="toggle_session"
+      phx-value-name={session.name}
+    >
+      <.icon
+        name={if session_expanded?(@expanded, session.name), do: "hero-chevron-down-micro", else: "hero-chevron-right-micro"}
+        class="size-4 text-base-content/50"
+      />
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="font-semibold truncate">{session.name}</span>
+          <span :if={session.attached?} class="badge badge-success badge-xs">attached</span>
+        </div>
+        <div class="text-xs text-base-content/50 mt-0.5">
+          {session.windows} window{if session.windows != 1, do: "s", else: ""}
+          &middot; {total_panes(session)} pane{if total_panes(session) != 1, do: "s", else: ""}
+          <span :if={session.created}>&middot; {format_created(session.created)}</span>
+        </div>
+      </div>
+      <button
+        class="btn btn-ghost btn-xs text-error"
+        phx-click="kill_session"
+        phx-value-name={session.name}
+        data-confirm={"Kill session \"#{session.name}\"? This will terminate all processes in the session."}
+        onclick="event.stopPropagation()"
+      >
+        <.icon name="hero-trash-micro" class="size-4" />
+      </button>
+    </div>
+
+    <%!-- Expanded pane list --%>
+    <div :if={session_expanded?(@expanded, session.name)} class="border-t border-base-300">
+      <div :if={sorted_panes(session) == []} class="p-4 text-sm text-base-content/50">
+        No panes found.
+      </div>
+      <div
+        :for={pane <- sorted_panes(session)}
+        class="flex items-center gap-3 px-4 py-2.5 hover:bg-base-300/30 transition-colors border-b border-base-300/50 last:border-b-0"
+      >
+        <.icon name="hero-command-line-micro" class="size-4 text-base-content/40" />
+        <div class="flex-1 min-w-0">
+          <div class="text-sm">
+            <span class="font-mono text-xs text-base-content/60">
+              {session.name}:{pane.window_index}.{pane.index}
+            </span>
+            <span class="ml-2 text-base-content/70">{pane.command}</span>
+          </div>
+          <div class="text-xs text-base-content/40">
+            {pane.width}x{pane.height}
+          </div>
+        </div>
+        <.link
+          navigate={"/terminal/#{session.name}:#{pane.window_index}.#{pane.index}"}
+          class="btn btn-ghost btn-xs btn-primary"
+        >
+          Open
+        </.link>
+      </div>
+    </div>
+  </div>
+</div>

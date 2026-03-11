@@ -1,10 +1,18 @@
 defmodule TmuxRm.TmuxManagerTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   import Mox
 
   alias TmuxRm.TmuxManager
   alias TmuxRm.Tmux.{Session, Pane}
+
+  setup do
+    # Swap in MockCommandRunner for these tests
+    original = Application.get_env(:tmux_rm, :command_runner)
+    Application.put_env(:tmux_rm, :command_runner, TmuxRm.MockCommandRunner)
+    on_exit(fn -> Application.put_env(:tmux_rm, :command_runner, original) end)
+    :ok
+  end
 
   setup :verify_on_exit!
 

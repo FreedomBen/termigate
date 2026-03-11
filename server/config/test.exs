@@ -8,7 +8,7 @@ config :tmux_rm, TmuxRmWeb.Endpoint,
   server: false
 
 config :tmux_rm,
-  command_runner: TmuxRm.MockCommandRunner,
+  command_runner: TmuxRm.StubCommandRunner,
   pane_stream_grace_period: 1_000,
   fifo_dir: "/tmp/tmux-rm-test"
 

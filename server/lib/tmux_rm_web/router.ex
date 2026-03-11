@@ -21,10 +21,17 @@ defmodule TmuxRmWeb.Router do
   pipeline :require_auth_token do
   end
 
+  # Health check — unauthenticated
+  scope "/", TmuxRmWeb do
+    pipe_through :api
+
+    get "/healthz", HealthController, :healthz
+  end
+
   scope "/", TmuxRmWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", SessionListLive, :index
     get "/login", PageController, :home
     get "/settings", PageController, :home
     get "/terminal/:target", PageController, :home
