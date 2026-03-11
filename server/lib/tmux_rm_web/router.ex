@@ -63,6 +63,7 @@ defmodule TmuxRmWeb.Router do
 
     live_session :unauthenticated do
       live "/login", AuthLive, :index
+      live "/setup", SetupLive, :index
     end
 
     post "/login", AuthController, :web_login

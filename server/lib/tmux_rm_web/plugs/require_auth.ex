@@ -15,7 +15,7 @@ defmodule TmuxRmWeb.Plugs.RequireAuth do
           conn
       end
     else
-      conn
+      conn |> redirect(to: "/setup") |> halt()
     end
   end
 end
