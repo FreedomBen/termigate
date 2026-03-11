@@ -4,11 +4,7 @@
 
 - In the UI, clicking on a pane should cause the tmux focus to be shifted to that pane.
 
-- /init for each thing
-
 - When in initial setup, populate the username with the host OS user name
-
-- How can we make our test suite run faster?  Right now it's pretty slow
 
 - Let's ensure we have full support for auth tokens, such that if the user wants to setup an auth token and disallow username/password auth, they can.  When auth token is enabled, the server should respond with a 401 or 403 to all requests that don't have the auth token included, even the home page.
 
@@ -23,6 +19,10 @@
 - Would adding support to this server for MCP provide any value?  Can you think of any situations where an AI agent may want to use it?
 
 # Already Run
+
+- How can we make our test suite run faster?  Right now it's pretty slow
+
+- /init for each thing
 
 - Let's write up a comprehensive implementation plan.  Break into phases if necessary.  Write each phase to a separate file in implementation-docs directory with names like PHASE_01_DO_SOMETHING.md.  Don't plan implementation for the android app quite yet, but do the entire server.  Make sure all features from APPLICATION_DESIGN.md are planned, and make sure we implement the tech stack from TECH_STACK.md.  
 
