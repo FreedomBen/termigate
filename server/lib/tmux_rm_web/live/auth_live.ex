@@ -32,7 +32,8 @@ defmodule TmuxRmWeb.AuthLive do
         <div class="card-body">
           <h2 class="card-title text-center mb-4">Log in to tmux-rm</h2>
 
-          <form phx-submit="login" class="space-y-4">
+          <form action="/login" method="post" class="space-y-4">
+            <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
             <div>
               <label class="label" for="username">Username</label>
               <input
@@ -55,7 +56,6 @@ defmodule TmuxRmWeb.AuthLive do
                 autocomplete="current-password"
               />
             </div>
-            <p :if={@error} class="text-error text-sm">{@error}</p>
             <button type="submit" class="btn btn-primary w-full">Log in</button>
           </form>
         </div>
@@ -64,17 +64,4 @@ defmodule TmuxRmWeb.AuthLive do
     """
   end
 
-  @impl true
-  def handle_event("login", %{"username" => username, "password" => password}, socket) do
-    case Auth.verify_credentials(username, password) do
-      :ok ->
-        {:noreply,
-         socket
-         |> push_event("set_session", %{authenticated_at: System.system_time(:second)})
-         |> redirect(to: "/")}
-
-      :error ->
-        {:noreply, assign(socket, :error, "Invalid username or password.")}
-    end
-  end
 end
