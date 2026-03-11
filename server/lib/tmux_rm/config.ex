@@ -5,7 +5,45 @@ defmodule TmuxRm.Config do
   require Logger
 
   @config_topic "config"
-  @default_config %{"quick_actions" => []}
+  @default_config %{
+    "quick_actions" => [
+      %{
+        "label" => "Clear",
+        "command" => "clear",
+        "color" => "default",
+        "icon" => "terminal",
+        "confirm" => false
+      },
+      %{
+        "label" => "Disk Usage",
+        "command" => "df -h",
+        "color" => "blue",
+        "icon" => "terminal",
+        "confirm" => false
+      },
+      %{
+        "label" => "System Info",
+        "command" => "uname -a",
+        "color" => "blue",
+        "icon" => "terminal",
+        "confirm" => false
+      },
+      %{
+        "label" => "Top",
+        "command" => "top",
+        "color" => "green",
+        "icon" => "play",
+        "confirm" => false
+      },
+      %{
+        "label" => "Git Status",
+        "command" => "git status",
+        "color" => "default",
+        "icon" => "terminal",
+        "confirm" => false
+      }
+    ]
+  }
   @header_comment """
   # tmux-rm configuration
   # Edit this file directly or use the web UI at /settings
