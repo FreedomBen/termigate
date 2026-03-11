@@ -50,6 +50,10 @@ defmodule TmuxRmWeb.Router do
 
     post "/panes/:target/split", PaneController, :split
     delete "/panes/:target", PaneController, :delete
+
+    get "/config", ConfigController, :show
+    put "/quick-actions/order", QuickActionController, :reorder
+    resources "/quick-actions", QuickActionController, only: [:index, :create, :update, :delete]
   end
 
   # Unauthenticated web routes
@@ -71,7 +75,7 @@ defmodule TmuxRmWeb.Router do
     live_session :authenticated, on_mount: [{TmuxRmWeb.AuthHook, :default}] do
       live "/", SessionListLive, :index
       live "/terminal/:target", TerminalLive, :show
-      get "/settings", PageController, :home
+      live "/settings", SettingsLive, :index
     end
   end
 end

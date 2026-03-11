@@ -179,14 +179,14 @@ server/test/tmux_rm_web/controllers/quick_action_controller_test.exs
 - Malformed YAML keeps last good config, logs warning
 
 ## Checklist
-- [ ] 8.1 Config GenServer
-- [ ] 8.2 Quick Action Schema
-- [ ] 8.3 YAML Serialization
-- [ ] 8.4 Quick Action Bar in Terminal View
-- [ ] 8.5 Quick Action Execution
-- [ ] 8.6 Confirmation Modal
-- [ ] 8.7 Settings LiveView
-- [ ] 8.8 REST API for Quick Actions
-- [ ] 8.9 Router Updates
-- [ ] 8.10 Logging
-- [ ] 8.11 Tests
+- [x] 8.1 Config GenServer
+- [x] 8.2 Quick Action Schema
+- [x] 8.3 YAML Serialization
+- [x] 8.4 Quick Action Bar in Terminal View
+- [x] 8.5 Quick Action Execution
+- [x] 8.6 Confirmation Modal
+- [x] 8.7 Settings LiveView
+- [x] 8.8 REST API for Quick Actions
+- [x] 8.9 Router Updates
+- [x] 8.10 Logging
+- [x] 8.11 Tests
