@@ -8,7 +8,16 @@
       "mcp__plugin_context-mode_context-mode__ctx_search",
       "mcp__plugin_context-mode_context-mode__ctx_execute",
       "Bash(elixir --version && node --version && tmux -V)",
-      "Bash(find . -name \"*.md\" -not -path \"./.git/*\" -exec sed -i \\\\\n  -e 's/RemoteCodeAgents/TmuxRm/g' \\\\\n  -e 's/RemoteCodeAgent/TmuxRm/g' \\\\\n  -e 's/remote_code_agents_web/tmux_rm_web/g' \\\\\n  -e 's/remote_code_agents/tmux_rm/g' \\\\\n  -e 's/remote_code_agent/tmux_rm/g' \\\\\n  -e 's/remote-code-agents/tmux-rm/g' \\\\\n  -e 's/remote-code-agent/tmux-rm/g' \\\\\n  {} + && echo \"Done\")"
+      "Bash(find . -name \"*.md\" -not -path \"./.git/*\" -exec sed -i \\\\\n  -e 's/RemoteCodeAgents/TmuxRm/g' \\\\\n  -e 's/RemoteCodeAgent/TmuxRm/g' \\\\\n  -e 's/remote_code_agents_web/tmux_rm_web/g' \\\\\n  -e 's/remote_code_agents/tmux_rm/g' \\\\\n  -e 's/remote_code_agent/tmux_rm/g' \\\\\n  -e 's/remote-code-agents/tmux-rm/g' \\\\\n  -e 's/remote-code-agent/tmux-rm/g' \\\\\n  {} + && echo \"Done\")",
+      "Bash(which elixir:*)",
+      "Bash(mix phx.new tmux_rm --no-ecto --no-mailer --no-dashboard --install 2>&1 | tail -20)",
+      "Bash(cp -r tmux_rm/* tmux_rm/.formatter.exs tmux_rm/.gitignore . && rm -rf tmux_rm/)",
+      "Bash(mix deps.get 2>&1 | tail -15)",
+      "Bash(cd /home/ben/gitclone/tmux-ru/assets && npm install 2>&1 | tail -5)",
+      "Bash(cd /home/ben/gitclone/tmux-ru && mix compile 2>&1 | tail -20)",
+      "Bash(mix compile:*)",
+      "Bash(mix test:*)",
+      "Bash(timeout 8 mix phx.server 2>&1 || true)"
     ]
   }
 }

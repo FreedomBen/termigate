@@ -1,0 +1,32 @@
+defmodule TmuxRmWeb.Router do
+  use TmuxRmWeb, :router
+
+  pipeline :browser do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :fetch_live_flash
+    plug :put_root_layout, html: {TmuxRmWeb.Layouts, :root}
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+  end
+
+  pipeline :api do
+    plug :accepts, ["json"]
+  end
+
+  # Stub auth pipelines — pass-through for now
+  pipeline :require_auth do
+  end
+
+  pipeline :require_auth_token do
+  end
+
+  scope "/", TmuxRmWeb do
+    pipe_through :browser
+
+    get "/", PageController, :home
+    get "/login", PageController, :home
+    get "/settings", PageController, :home
+    get "/terminal/:target", PageController, :home
+  end
+end
