@@ -1,0 +1,10 @@
+server/_build/
+server/deps/
+server/assets/node_modules/
+server/priv/static/assets/
+server/priv/static/cache_manifest.json
+.git/
+.github/
+implementation-docs/
+archived-docs/
+*.md

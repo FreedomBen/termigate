@@ -38,6 +38,7 @@ defmodule TmuxRmWeb.Endpoint do
     plug Phoenix.CodeReloader
   end
 
+  plug TmuxRmWeb.Plugs.Cors
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 

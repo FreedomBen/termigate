@@ -1,0 +1,42 @@
+# Build stage
+FROM elixir:1.17-slim AS build
+
+RUN apt-get update && apt-get install -y git nodejs npm && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+ENV MIX_ENV=prod
+
+# Install hex and rebar
+RUN mix local.hex --force && mix local.rebar --force
+
+COPY server/mix.exs server/mix.lock ./server/
+RUN cd server && mix deps.get --only prod && mix deps.compile
+
+COPY server/assets/package.json server/assets/package-lock.json ./server/assets/
+RUN cd server/assets && npm ci
+
+COPY server/ ./server/
+RUN cd server && mix assets.deploy && mix release
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends tmux locales curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
+
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
+ENV PHX_SERVER=true
+
+COPY --from=build /app/server/_build/prod/rel/tmux_rm /app
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:4000/healthz || exit 1
+
+EXPOSE 4000
+
+CMD ["/app/bin/tmux_rm", "start"]

@@ -333,16 +333,16 @@ docker-compose.yml (optional)
 - App starts cleanly, logs meaningful startup info
 
 ## Checklist
-- [ ] 14.1 Mix Release Configuration
-- [ ] 14.2 Runtime Configuration
-- [ ] 14.3 Asset Build
-- [ ] 14.4 Build Script
-- [ ] 14.5 Systemd Service
-- [ ] 14.6 Docker Support
-- [ ] 14.7 Configuration Precedence
-- [ ] 14.8 CORS Configuration
-- [ ] 14.9 BEAM Distribution Safety
-- [ ] 14.10 Secret Key Generation
-- [ ] 14.11 HTTPS Configuration Options
-- [ ] 14.12 Health Check Integration
-- [ ] 14.13 Logging
+- [x] 14.1 Mix Release Configuration
+- [x] 14.2 Runtime Configuration
+- [x] 14.3 Asset Build
+- [x] 14.4 Build Script
+- [x] 14.5 Systemd Service
+- [x] 14.6 Docker Support
+- [x] 14.7 Configuration Precedence
+- [x] 14.8 CORS Configuration
+- [x] 14.9 BEAM Distribution Safety
+- [x] 14.10 Secret Key Generation
+- [x] 14.11 HTTPS Configuration Options
+- [x] 14.12 Health Check Integration
+- [x] 14.13 Logging

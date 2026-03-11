@@ -33,7 +33,9 @@
       "Bash(kill 2074005 2083792 2>/dev/null; sleep 1; mix test --exclude tmux 2>&1 | tail -10)",
       "Bash(mix assets.build 2>&1 | tail -10)",
       "Bash(mix assets.build 2>&1 | tail -5)",
-      "Bash(mix format:*)"
+      "Bash(mix format:*)",
+      "Bash(chmod +x /home/ben/gitclone/tmux-rm/bin/build-release.sh)",
+      "Bash(MIX_ENV=prod mix release --overwrite 2>&1 | tail -10)"
     ]
   }
 }
