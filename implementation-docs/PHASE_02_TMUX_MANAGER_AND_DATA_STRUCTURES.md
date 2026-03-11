@@ -10,14 +10,14 @@ Implement the stateless `TmuxManager` module that discovers, lists, and creates 
 
 ### 2.1 Data Structures
 
-**`lib/tmux_rm/tmux/session.ex`** — Session struct:
+**`server/lib/tmux_rm/tmux/session.ex`** — Session struct:
 ```elixir
 defmodule TmuxRm.Tmux.Session do
   defstruct [:name, :windows, :created, :attached?]
 end
 ```
 
-**`lib/tmux_rm/tmux/pane.ex`** — Pane struct:
+**`server/lib/tmux_rm/tmux/pane.ex`** — Pane struct:
 ```elixir
 defmodule TmuxRm.Tmux.Pane do
   defstruct [:session_name, :window_index, :index, :width, :height, :command, :pane_id]
@@ -26,7 +26,7 @@ end
 
 ### 2.2 TmuxManager Module
 
-**`lib/tmux_rm/tmux_manager.ex`** — stateless module (not a GenServer):
+**`server/lib/tmux_rm/tmux_manager.ex`** — stateless module (not a GenServer):
 
 - `list_sessions/0` — shells out to `tmux list-sessions -F '#{session_name}\t#{session_windows}\t#{session_created}\t#{session_attached}'`, parses into `[%Session{}]`. Returns `{:ok, []}` if tmux returns "no server running" (exit code 1). Returns `{:error, :tmux_not_found}` if tmux binary missing.
 
@@ -56,7 +56,7 @@ All tmux commands go through the `CommandRunnerBehaviour` implementation (resolv
 
 ### 2.4 RingBuffer Module
 
-**`lib/tmux_rm/ring_buffer.ex`** — circular byte buffer:
+**`server/lib/tmux_rm/ring_buffer.ex`** — circular byte buffer:
 
 - `new(capacity)` — creates a ring buffer with the given byte capacity. Default capacity is `ring_buffer_default_size` (2MB from Phase 1 config). Min/max bounds: `ring_buffer_min_size` (512KB) / `ring_buffer_max_size` (8MB).
 - `append(buffer, binary)` — appends bytes, overwrites oldest data when full
@@ -69,7 +69,7 @@ Suggested approach: store data as a list of binaries with a total byte count. On
 
 ### 2.5 Unit Tests
 
-**`test/tmux_rm/tmux_manager_test.exs`**:
+**`server/test/tmux_rm/tmux_manager_test.exs`**:
 - Use `Mox` with `MockCommandRunner` (set up in Phase 1) to return canned tmux output
 - Test `list_sessions/0` parsing with various format strings
 - Test `list_panes/1` parsing
@@ -77,7 +77,7 @@ Suggested approach: store data as a list of binaries with a total byte count. On
 - Test error cases (tmux not running, session doesn't exist)
 - Test `create_session/1` PubSub broadcast
 
-**`test/tmux_rm/ring_buffer_test.exs`**:
+**`server/test/tmux_rm/ring_buffer_test.exs`**:
 - Test `new/1` creates empty buffer
 - Test `append/2` + `read/1` round-trip
 - Test overflow (append more than capacity, verify oldest data dropped)
@@ -86,12 +86,12 @@ Suggested approach: store data as a list of binaries with a total byte count. On
 
 ## Files Created/Modified
 ```
-lib/tmux_rm/tmux/session.ex
-lib/tmux_rm/tmux/pane.ex
-lib/tmux_rm/tmux_manager.ex
-lib/tmux_rm/ring_buffer.ex
-test/tmux_rm/tmux_manager_test.exs
-test/tmux_rm/ring_buffer_test.exs
+server/lib/tmux_rm/tmux/session.ex
+server/lib/tmux_rm/tmux/pane.ex
+server/lib/tmux_rm/tmux_manager.ex
+server/lib/tmux_rm/ring_buffer.ex
+server/test/tmux_rm/tmux_manager_test.exs
+server/test/tmux_rm/ring_buffer_test.exs
 ```
 
 ## Exit Criteria

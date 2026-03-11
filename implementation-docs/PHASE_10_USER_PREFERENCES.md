@@ -25,7 +25,7 @@ Note: scrollback here is the xterm.js client-side buffer (how many lines the bro
 
 ### 10.2 Preference Loading in TerminalHook
 
-Update `terminal_hook.js` — load preferences before creating Terminal:
+Update `server/assets/js/hooks/terminal_hook.js` — load preferences before creating Terminal:
 
 ```javascript
 const DEFAULTS = {
@@ -143,18 +143,18 @@ savePrefs({ ...loadPrefs(), fontSize: currentFontSize });
 
 ### 10.8 Implementation Approach
 
-Implement as a **pure client-side slide-out panel** (no LiveView involvement) triggered by the gear icon in the terminal header. This is purely a client feature — no server interaction needed. The panel is rendered by a JS module (`preferences_panel.js`) and communicates with `TerminalHook` to apply changes live.
+Implement as a **pure client-side slide-out panel** (no LiveView involvement) triggered by the gear icon in the terminal header. This is purely a client feature — no server interaction needed. The panel is rendered by a JS module (`server/assets/js/preferences_panel.js`) and communicates with `TerminalHook` to apply changes live.
 
 ## Files Created/Modified
 ```
-assets/js/hooks/terminal_hook.js (update — preference loading/saving)
-assets/js/preferences.js (new — preference management, theme definitions)
-assets/js/preferences_panel.js (new — settings panel UI)
-assets/css/app.css (update — preferences panel styles)
-lib/tmux_rm_web/live/terminal_live.html.heex (update — gear icon triggers JS panel, NOT navigate to /settings)
+server/assets/js/hooks/terminal_hook.js (update — preference loading/saving)
+server/assets/js/preferences.js (new — preference management, theme definitions)
+server/assets/js/preferences_panel.js (new — settings panel UI)
+server/assets/css/app.css (update — preferences panel styles)
+server/lib/tmux_rm_web/live/terminal_live.html.heex (update — gear icon triggers JS panel, NOT navigate to /settings)
 ```
 
-Note: Phase 8's `settings_live.ex` is NOT modified by this phase. The gear icon in the terminal header opens the client-side preferences panel, not the `/settings` page. A separate link to `/settings` (for quick action management) remains in the app navigation.
+Note: Phase 8's `server/lib/tmux_rm_web/live/settings_live.ex` is NOT modified by this phase. The gear icon in the terminal header opens the client-side preferences panel, not the `/settings` page. A separate link to `/settings` (for quick action management) remains in the app navigation.
 
 ## Exit Criteria
 - Terminal loads with user's saved preferences (font, theme, cursor)

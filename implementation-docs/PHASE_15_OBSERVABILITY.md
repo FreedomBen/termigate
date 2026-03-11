@@ -33,7 +33,7 @@ Define custom Telemetry events emitted throughout the application:
 
 ### 15.2 Telemetry Module
 
-**`lib/tmux_rm/telemetry.ex`**:
+**`server/lib/tmux_rm/telemetry.ex`**:
 
 ```elixir
 defmodule TmuxRm.Telemetry do
@@ -100,7 +100,7 @@ end
 
 ### 15.3 Metrics Endpoint
 
-**`lib/tmux_rm_web/controllers/metrics_controller.ex`**:
+**`server/lib/tmux_rm_web/controllers/metrics_controller.ex`**:
 
 - `GET /metrics` — returns metrics in JSON format
 - Unauthenticated (like `/healthz`) — operators need metrics without app credentials
@@ -124,7 +124,7 @@ Logger.info("PaneStream started for #{target}")
 Logger.info("PaneStream started", target: target, pane_id: pane_id)
 ```
 
-Configure production log format in `config/runtime.exs`:
+Configure production log format in `server/config/runtime.exs`:
 ```elixir
 config :logger, :default_handler,
   config: [
@@ -139,10 +139,10 @@ config :logger, :default_handler,
 
 Add `:telemetry.execute/3` calls to the modules built in prior phases. This is a thin instrumentation layer — one line per event, no structural changes:
 
-- **PaneStream** (`pane_stream.ex`): emit on start, stop, output flush, input, viewer change, recovery
-- **Auth** (`auth.ex`): emit on login success/failure
-- **RateLimitStore** (`rate_limit_store.ex`): emit on rate limit exceeded
-- **SessionPoller** (`session_poller.ex`): emit on poll with duration and session count
+- **PaneStream** (`server/lib/tmux_rm/pane_stream.ex`): emit on start, stop, output flush, input, viewer change, recovery
+- **Auth** (`server/lib/tmux_rm/auth.ex`): emit on login success/failure
+- **RateLimitStore** (`server/lib/tmux_rm_web/rate_limit_store.ex`): emit on rate limit exceeded
+- **SessionPoller** (`server/lib/tmux_rm/session_poller.ex`): emit on poll with duration and session count
 
 ### 15.6 Health Check Enhancement
 
@@ -163,7 +163,7 @@ Update `/healthz` (from Phase 4) to include richer diagnostics:
 
 ### 15.7 Supervision Tree
 
-Add `TmuxRm.Telemetry` to the supervision tree in `application.ex` (early, before other children so metrics are available from boot):
+Add `TmuxRm.Telemetry` to the supervision tree in `server/lib/tmux_rm/application.ex` (early, before other children so metrics are available from boot):
 
 ```elixir
 children = [
@@ -180,18 +180,18 @@ children = [
 
 ## Files Created/Modified
 ```
-lib/tmux_rm/telemetry.ex
-lib/tmux_rm_web/controllers/metrics_controller.ex
-lib/tmux_rm/application.ex (add Telemetry supervisor)
-lib/tmux_rm/pane_stream.ex (add telemetry calls)
-lib/tmux_rm/auth.ex (add telemetry calls)
-lib/tmux_rm/session_poller.ex (add telemetry calls)
-lib/tmux_rm_web/rate_limit_store.ex (add telemetry calls)
-lib/tmux_rm_web/controllers/health_controller.ex (enrich response)
-lib/tmux_rm_web/router.ex (add /metrics route)
-config/runtime.exs (structured logging config)
-test/tmux_rm/telemetry_test.exs
-test/tmux_rm_web/controllers/metrics_controller_test.exs
+server/lib/tmux_rm/telemetry.ex
+server/lib/tmux_rm_web/controllers/metrics_controller.ex
+server/lib/tmux_rm/application.ex (add Telemetry supervisor)
+server/lib/tmux_rm/pane_stream.ex (add telemetry calls)
+server/lib/tmux_rm/auth.ex (add telemetry calls)
+server/lib/tmux_rm/session_poller.ex (add telemetry calls)
+server/lib/tmux_rm_web/rate_limit_store.ex (add telemetry calls)
+server/lib/tmux_rm_web/controllers/health_controller.ex (enrich response)
+server/lib/tmux_rm_web/router.ex (add /metrics route)
+server/config/runtime.exs (structured logging config)
+server/test/tmux_rm/telemetry_test.exs
+server/test/tmux_rm_web/controllers/metrics_controller_test.exs
 ```
 
 ## Exit Criteria

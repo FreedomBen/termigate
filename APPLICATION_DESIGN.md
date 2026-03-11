@@ -543,7 +543,7 @@ Terminal output (text + ANSI escape codes) compresses very well — typical comp
 **Implementation**: Enable on the LiveView socket declaration in the Endpoint module:
 
 ```elixir
-# lib/tmux_rm_web/endpoint.ex
+# server/lib/tmux_rm_web/endpoint.ex
 socket "/live", Phoenix.LiveView.Socket,
   websocket: [compress: true]  # enables permessage-deflate
 
@@ -570,7 +570,7 @@ During high-throughput output (e.g., `cat large_file`, build logs), the `cat` Po
 **Configuration**:
 
 ```elixir
-# config/config.exs
+# server/config/config.exs
 config :tmux_rm,
   # Coalescing window (ms) for PaneStream output. 0 = disabled (every Port
   # message triggers an immediate broadcast). Low values (2-5ms) help on
@@ -687,76 +687,77 @@ A fixed bottom toolbar providing keys that don't exist on mobile keyboards:
 
 ```
 tmux_rm/
-  lib/
-    tmux_rm/
-      application.ex               # Supervision tree
-      tmux/
-        command_runner.ex           # Thin wrapper around System.cmd for tmux CLI
-        session.ex                  # Session struct
-        pane.ex                     # Pane struct
-      tmux_manager.ex               # Session/pane discovery + creation (stateless module)
-      ring_buffer.ex                # Circular byte buffer with fixed capacity (new/1, append/2, read/1, size/1)
-      pane_stream.ex                # Per-pane streaming GenServer (pipe-pane + FIFO)
-      pane_stream_supervisor.ex     # DynamicSupervisor for PaneStreams
-      session_poller.ex             # GenServer: polls tmux session/pane list, broadcasts changes via PubSub
-      config.ex                     # GenServer: YAML config loader/writer with mtime polling + PubSub (used by Quick Actions + Settings)
-    tmux_rm_web/
-      channels/
-        terminal_channel.ex         # Raw terminal I/O channel (for native clients)
-        session_channel.ex          # Real-time session list updates (for native clients)
-        user_socket.ex              # Socket configuration
-      plugs/
-        require_auth.ex             # Plug: checks session cookie, redirects to /login
-        require_auth_token.ex       # Plug: checks bearer token in Authorization header (REST API)
-        rate_limit.ex               # Plug: per-IP rate limiting via ETS (login, websocket, session create)
-      rate_limit_store.ex           # GenServer: owns rate limit ETS table, periodic cleanup
-      controllers/                  # REST API (for native clients)
-        auth_controller.ex          # POST /api/login, DELETE /logout — auth endpoints
-        health_controller.ex        # GET /healthz endpoint
-        session_controller.ex       # Session CRUD API (list, create, delete, rename, create window)
-        pane_controller.ex          # Pane API (split, delete)
-        config_controller.ex        # GET /api/config — full config as JSON
-        quick_action_controller.ex  # CRUD API for quick actions
-      live/
-        auth_hook.ex                # on_mount hook for LiveView auth checks
-        auth_live.ex                # Login page (username + password form)
-        auth_live.html.heex         # Login template
-        session_list_live.ex        # Session listing + creation page
-        session_list_live.html.heex # Template
-        terminal_live.ex            # Terminal view page
-        terminal_live.html.heex     # Template
-        multi_pane_live.ex          # Multi-pane split view (session view)
-        multi_pane_live.html.heex   # Template
-        settings_live.ex            # Settings panel (quick actions CRUD)
-        settings_live.html.heex     # Settings template
-      components/
-        layouts.ex                  # App shell layout
-        core_components.ex          # Shared UI components
-  assets/
-    js/
-      hooks/
-        terminal_hook.js            # xterm.js integration hook
-      app.js
-    css/
-      app.css                       # Responsive styles, mobile layout, virtual toolbar
-    package.json                    # xterm.js, @xterm/addon-fit dependencies
-  config/
-    config.exs
-    dev.exs
-    prod.exs
-    runtime.exs
-  test/
-    tmux_rm/
-      tmux_manager_test.exs         # Unit tests with mocked CommandRunner
-      pane_stream_test.exs          # Integration tests with real tmux
-    tmux_rm_web/
-      live/
-        session_list_live_test.exs
-        terminal_live_test.exs
-    support/
-      tmux_helpers.ex               # Test helpers: create/destroy tmux sessions
-    test_helper.exs
-  mix.exs
+  server/
+    lib/
+      tmux_rm/
+        application.ex               # Supervision tree
+        tmux/
+          command_runner.ex           # Thin wrapper around System.cmd for tmux CLI
+          session.ex                  # Session struct
+          pane.ex                     # Pane struct
+        tmux_manager.ex               # Session/pane discovery + creation (stateless module)
+        ring_buffer.ex                # Circular byte buffer with fixed capacity (new/1, append/2, read/1, size/1)
+        pane_stream.ex                # Per-pane streaming GenServer (pipe-pane + FIFO)
+        pane_stream_supervisor.ex     # DynamicSupervisor for PaneStreams
+        session_poller.ex             # GenServer: polls tmux session/pane list, broadcasts changes via PubSub
+        config.ex                     # GenServer: YAML config loader/writer with mtime polling + PubSub (used by Quick Actions + Settings)
+      tmux_rm_web/
+        channels/
+          terminal_channel.ex         # Raw terminal I/O channel (for native clients)
+          session_channel.ex          # Real-time session list updates (for native clients)
+          user_socket.ex              # Socket configuration
+        plugs/
+          require_auth.ex             # Plug: checks session cookie, redirects to /login
+          require_auth_token.ex       # Plug: checks bearer token in Authorization header (REST API)
+          rate_limit.ex               # Plug: per-IP rate limiting via ETS (login, websocket, session create)
+        rate_limit_store.ex           # GenServer: owns rate limit ETS table, periodic cleanup
+        controllers/                  # REST API (for native clients)
+          auth_controller.ex          # POST /api/login, DELETE /logout — auth endpoints
+          health_controller.ex        # GET /healthz endpoint
+          session_controller.ex       # Session CRUD API (list, create, delete, rename, create window)
+          pane_controller.ex          # Pane API (split, delete)
+          config_controller.ex        # GET /api/config — full config as JSON
+          quick_action_controller.ex  # CRUD API for quick actions
+        live/
+          auth_hook.ex                # on_mount hook for LiveView auth checks
+          auth_live.ex                # Login page (username + password form)
+          auth_live.html.heex         # Login template
+          session_list_live.ex        # Session listing + creation page
+          session_list_live.html.heex # Template
+          terminal_live.ex            # Terminal view page
+          terminal_live.html.heex     # Template
+          multi_pane_live.ex          # Multi-pane split view (session view)
+          multi_pane_live.html.heex   # Template
+          settings_live.ex            # Settings panel (quick actions CRUD)
+          settings_live.html.heex     # Settings template
+        components/
+          layouts.ex                  # App shell layout
+          core_components.ex          # Shared UI components
+    assets/
+      js/
+        hooks/
+          terminal_hook.js            # xterm.js integration hook
+        app.js
+      css/
+        app.css                       # Responsive styles, mobile layout, virtual toolbar
+      package.json                    # xterm.js, @xterm/addon-fit dependencies
+    config/
+      config.exs
+      dev.exs
+      prod.exs
+      runtime.exs
+    test/
+      tmux_rm/
+        tmux_manager_test.exs         # Unit tests with mocked CommandRunner
+        pane_stream_test.exs          # Integration tests with real tmux
+      tmux_rm_web/
+        live/
+          session_list_live_test.exs
+          terminal_live_test.exs
+      support/
+        tmux_helpers.ex               # Test helpers: create/destroy tmux sessions
+      test_helper.exs
+    mix.exs
 ```
 
 ## Supervision Tree
@@ -782,7 +783,7 @@ Application
 ## Configuration
 
 ```elixir
-# config/config.exs
+# server/config/config.exs
 config :tmux_rm,
   # Polling interval (ms) for SessionPoller to check tmux for session/pane changes
   session_poll_interval: 3_000,
@@ -822,13 +823,13 @@ config :tmux_rm,
   # Auth session/token TTL (days). nil = never expire (re-auth only on explicit logout).
   auth_session_ttl_days: 30
 
-# config/dev.exs
+# server/config/dev.exs
 config :tmux_rm, TmuxRmWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4000]
   # WebSocket compression is configured on the socket declaration in endpoint.ex,
   # not here — see Bandwidth Optimization section.
 
-# config/test.exs
+# server/config/test.exs
 config :tmux_rm,
   # Use shorter grace period in tests
   pane_stream_grace_period: 100,
@@ -872,7 +873,7 @@ config :tmux_rm,
 
   **Configuration**:
   ```elixir
-  # config/config.exs
+  # server/config/config.exs
   config :tmux_rm,
     rate_limits: %{
       login: {5, 60},           # {max_requests, window_seconds}
@@ -904,7 +905,7 @@ config :tmux_rm,
 - **LiveView**: Use `Phoenix.LiveViewTest` — mount `TerminalLive`, simulate events, verify `push_event` calls. Mock PaneStream for isolation.
 - **SessionListLive**: Mount, verify session listing renders. Test "New Session" form submission.
 
-### Test Helpers (`test/support/tmux_helpers.ex`)
+### Test Helpers (`server/test/support/tmux_helpers.ex`)
 - `create_test_session/1` — creates a tmux session with a unique name, returns name
 - `destroy_test_session/1` — kills the session
 - `setup_tmux/1` — ExUnit setup callback that creates a session and registers cleanup via `on_exit`
@@ -1090,7 +1091,7 @@ For remote access, HTTPS is required (both for security and Clipboard API).
 **Recommendation for personal use**: Tailscale. Zero configuration TLS (MagicDNS provides HTTPS via `tailscale cert`), no port forwarding, no public exposure. The app binds to the Tailscale interface IP instead of `127.0.0.1`.
 
 ```elixir
-# config/runtime.exs — remote access example
+# server/config/runtime.exs — remote access example
 config :tmux_rm,
   auth_token: System.get_env("RCA_AUTH_TOKEN")  # optional fallback for headless setups
 
@@ -1248,7 +1249,7 @@ In multi-pane view, all panes are **passive resizers** — they read the current
 
 #### New Module
 
-This feature introduces `TmuxRm.Config` (`lib/tmux_rm/config.ex`) — a GenServer that holds parsed config in memory, serializes all reads and writes to `~/.config/tmux_rm/config.yaml`, detects external file changes via mtime polling, and broadcasts updates via PubSub so LiveViews stay in sync.
+This feature introduces `TmuxRm.Config` (`server/lib/tmux_rm/config.ex`) — a GenServer that holds parsed config in memory, serializes all reads and writes to `~/.config/tmux_rm/config.yaml`, detects external file changes via mtime polling, and broadcasts updates via PubSub so LiveViews stay in sync.
 
 #### Configuration File
 
@@ -1741,7 +1742,7 @@ This means:
 
 #### Dependencies
 
-Add `yaml_elixir` (parser) and `ymlr` (encoder) to `mix.exs`:
+Add `yaml_elixir` (parser) and `ymlr` (encoder) to `server/mix.exs`:
 
 ```elixir
 defp deps do
@@ -2086,7 +2087,7 @@ FROM elixir:1.17-slim AS build  # Pin to match minimum Elixir version; bump as n
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y tmux && rm -rf /var/lib/apt/lists/*
-COPY --from=build /app/_build/prod/rel/tmux_rm /app
+COPY --from=build /app/server/_build/prod/rel/tmux_rm /app
 CMD ["/app/bin/tmux_rm", "start"]
 ```
 

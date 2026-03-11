@@ -13,7 +13,7 @@
 | CSS framework | Tailwind CSS 4 | CSS-first config, `@theme` directive. Tailwind Plus license at `~/gitclone/tailwind-ui-tailwind-plus/tailwindplus/` |
 | UI components | Tailwind Plus (application-ui) | Shells, navigation, forms, overlays, feedback, data-display, lists, headings, layout, page-examples |
 | JS bundler | esbuild | Phoenix default, fast, zero-config. Sufficient for xterm.js |
-| JS package manager | npm | Standard `assets/package.json` for xterm.js and addons |
+| JS package manager | npm | Standard `server/assets/package.json` for xterm.js and addons |
 | Auth | bcrypt_elixir 3.x | Password hashing (+ optional `RCA_AUTH_TOKEN` env var) |
 | Config format | YAML | Human-editable. `yaml_elixir` (read) + `ymlr` (write) |
 | Process management | DynamicSupervisor + Registry | Built-in Elixir — one PaneStream per active pane |

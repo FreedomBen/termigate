@@ -13,7 +13,7 @@ Implement username+password authentication with bcrypt, optional static token fa
 
 ### 6.1 Auth Module
 
-**`lib/tmux_rm/auth.ex`**:
+**`server/lib/tmux_rm/auth.ex`**:
 
 - Credentials file: `~/.config/tmux_rm/credentials` (format: `username:pbkdf2_hash`, single line — this is a single-user system by design)
 - `verify_credentials(username, password)` → `:ok` or `:error`
@@ -26,35 +26,35 @@ Implement username+password authentication with bcrypt, optional static token fa
 
 ### 6.2 Mix Tasks
 
-**`lib/mix/tasks/rca.setup.ex`** — `mix rca.setup`:
+**`server/lib/mix/tasks/rca.setup.ex`** — `mix rca.setup` (run from `server/`):
 1. Prompt for username (pre-filled with `whoami`)
 2. Prompt for password (with confirmation)
 3. Hash via `Plug.Crypto.hash_pwd_salt/1`
 4. Write to credentials file
 5. Create parent directory if needed
 
-**`lib/mix/tasks/rca.change_password.ex`** — `mix rca.change_password`:
+**`server/lib/mix/tasks/rca.change_password.ex`** — `mix rca.change_password` (run from `server/`):
 1. Prompt for current password (verify against stored hash)
 2. Prompt for new password (with confirmation)
 3. Write updated credentials
 
 ### 6.3 Login Page (Web)
 
-**`lib/tmux_rm_web/live/auth_live.ex`**:
+**`server/lib/tmux_rm_web/live/auth_live.ex`**:
 - Username + password form
 - On submit: call `Auth.verify_credentials/2`
 - On success: set signed session cookie with `authenticated_at` timestamp, redirect to `/`
 - On failure: flash error "Invalid username or password"
 - If already authenticated: redirect to `/`
 
-**`lib/tmux_rm_web/live/auth_live.html.heex`**:
+**`server/lib/tmux_rm_web/live/auth_live.html.heex`**:
 - Clean login form using Tailwind Plus form components
 - Dark theme consistent with app
 - Mobile-friendly
 
 ### 6.4 Auth Hook (LiveView)
 
-**`lib/tmux_rm_web/live/auth_hook.ex`**:
+**`server/lib/tmux_rm_web/live/auth_hook.ex`**:
 - `on_mount` hook checked on every LiveView mount (including reconnects)
 - Read `authenticated_at` from session
 - Compare against `auth_session_ttl_days` (default 30 days, `nil` = never expire)
@@ -63,7 +63,7 @@ Implement username+password authentication with bcrypt, optional static token fa
 
 ### 6.5 RequireAuth Plug (HTTP)
 
-**`lib/tmux_rm_web/plugs/require_auth.ex`**:
+**`server/lib/tmux_rm_web/plugs/require_auth.ex`**:
 - Checks session cookie exists
 - Redirects to `/login` if missing
 - No-op if auth not enabled (localhost mode)
@@ -71,7 +71,7 @@ Implement username+password authentication with bcrypt, optional static token fa
 
 ### 6.6 RequireAuthToken Plug (REST API)
 
-**`lib/tmux_rm_web/plugs/require_auth_token.ex`**:
+**`server/lib/tmux_rm_web/plugs/require_auth_token.ex`**:
 - Reads bearer token from `Authorization: Bearer <token>` header
 - Verifies via `Phoenix.Token.verify/4` with configurable max_age
 - Returns 401 `{"error": "unauthorized"}` on failure
@@ -79,7 +79,7 @@ Implement username+password authentication with bcrypt, optional static token fa
 
 ### 6.7 Auth Controller (REST API)
 
-**`lib/tmux_rm_web/controllers/auth_controller.ex`**:
+**`server/lib/tmux_rm_web/controllers/auth_controller.ex`**:
 
 - `POST /api/login` — accepts `{"username": "...", "password": "..."}`:
   - Rate limited (via RateLimit plug, key: `:login`)
@@ -93,7 +93,7 @@ Implement username+password authentication with bcrypt, optional static token fa
 
 ### 6.8 Rate Limiting
 
-**`lib/tmux_rm_web/rate_limit_store.ex`** — GenServer:
+**`server/lib/tmux_rm_web/rate_limit_store.ex`** — GenServer:
 - Owns ETS table (`:set`, `:public`, `read_concurrency: true`)
 - Key: `{ip, endpoint_key, window_start}` → count
 - `check/2` — increment counter, return `:ok` or `{:error, :rate_limited, retry_after}`
@@ -101,7 +101,7 @@ Implement username+password authentication with bcrypt, optional static token fa
 - Periodic cleanup: every 5 minutes, sweep entries older than 2 minutes
 - **Max table size**: If ETS table exceeds 100,000 entries (indicating a distributed attack), flush the entire table and log a warning. This prevents unbounded memory growth.
 
-**`lib/tmux_rm_web/plugs/rate_limit.ex`** — Plug:
+**`server/lib/tmux_rm_web/plugs/rate_limit.ex`** — Plug:
 - Configured per-route: `plug RateLimit, key: :login` or `key: :session_create`
 - Reads limits from config: `rate_limits: %{login: {5, 60}, websocket: {10, 60}, session_create: {10, 60}}`
 - On exceed: 429 with `{"error": "rate_limited", "retry_after": seconds}` and `Retry-After` header
@@ -109,7 +109,7 @@ Implement username+password authentication with bcrypt, optional static token fa
 
 ### 6.9 UserSocket (Update Existing)
 
-**`lib/tmux_rm_web/channels/user_socket.ex`** — update the stub created in Phase 5:
+**`server/lib/tmux_rm_web/channels/user_socket.ex`** — update the stub created in Phase 5:
 - Replace pass-through `connect/3` with: check per-IP WebSocket rate limit, verify bearer token via `Phoenix.Token.verify/4`
 - IP extracted from `connect_info: [:peer_data, :x_headers]`
 - Return `{:ok, socket}` or `:error`
@@ -166,8 +166,8 @@ Key log events for auth:
 
 ### 6.12 Startup Warning
 
-In `application.ex`: if the endpoint is bound to `0.0.0.0` and `Auth.auth_enabled?/0` is false, log a warning:
-"WARNING: Listening on 0.0.0.0 with no authentication configured. Set up auth via `mix rca.setup` or set RCA_AUTH_TOKEN."
+In `server/lib/tmux_rm/application.ex`: if the endpoint is bound to `0.0.0.0` and `Auth.auth_enabled?/0` is false, log a warning:
+"WARNING: Listening on 0.0.0.0 with no authentication configured. Set up auth via `cd server && mix rca.setup` or set RCA_AUTH_TOKEN."
 
 ### 6.13 Tests
 
@@ -179,27 +179,27 @@ In `application.ex`: if the endpoint is bound to `0.0.0.0` and `Auth.auth_enable
 
 ## Files Created/Modified
 ```
-lib/tmux_rm/auth.ex
-lib/mix/tasks/rca.setup.ex
-lib/mix/tasks/rca.change_password.ex
-lib/tmux_rm_web/live/auth_live.ex
-lib/tmux_rm_web/live/auth_live.html.heex
-lib/tmux_rm_web/live/auth_hook.ex
-lib/tmux_rm_web/plugs/require_auth.ex
-lib/tmux_rm_web/plugs/require_auth_token.ex
-lib/tmux_rm_web/plugs/rate_limit.ex
-lib/tmux_rm_web/rate_limit_store.ex
-lib/tmux_rm_web/controllers/auth_controller.ex
-lib/tmux_rm_web/channels/user_socket.ex
-lib/tmux_rm_web/router.ex (update)
-lib/tmux_rm/application.ex (startup warning)
-test/tmux_rm/auth_test.exs
-test/tmux_rm_web/plugs/rate_limit_test.exs
-test/tmux_rm_web/live/auth_live_test.exs
+server/lib/tmux_rm/auth.ex
+server/lib/mix/tasks/rca.setup.ex
+server/lib/mix/tasks/rca.change_password.ex
+server/lib/tmux_rm_web/live/auth_live.ex
+server/lib/tmux_rm_web/live/auth_live.html.heex
+server/lib/tmux_rm_web/live/auth_hook.ex
+server/lib/tmux_rm_web/plugs/require_auth.ex
+server/lib/tmux_rm_web/plugs/require_auth_token.ex
+server/lib/tmux_rm_web/plugs/rate_limit.ex
+server/lib/tmux_rm_web/rate_limit_store.ex
+server/lib/tmux_rm_web/controllers/auth_controller.ex
+server/lib/tmux_rm_web/channels/user_socket.ex
+server/lib/tmux_rm_web/router.ex (update)
+server/lib/tmux_rm/application.ex (startup warning)
+server/test/tmux_rm/auth_test.exs
+server/test/tmux_rm_web/plugs/rate_limit_test.exs
+server/test/tmux_rm_web/live/auth_live_test.exs
 ```
 
 ## Exit Criteria
-- `mix rca.setup` creates credentials file with bcrypt-hashed password
+- `cd server && mix rca.setup` creates credentials file with bcrypt-hashed password
 - `/login` page renders, validates credentials, sets session cookie
 - Authenticated users access `/` and `/terminal/:target`
 - Unauthenticated users redirected to `/login`

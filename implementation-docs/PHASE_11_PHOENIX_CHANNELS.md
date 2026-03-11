@@ -14,7 +14,7 @@ Implement `TerminalChannel` and `SessionChannel` — the server-side Channel inf
 
 ### 11.1 TerminalChannel
 
-**`lib/tmux_rm_web/channels/terminal_channel.ex`**:
+**`server/lib/tmux_rm_web/channels/terminal_channel.ex`**:
 
 **Topic**: `"terminal:{session}:{window}:{pane}"` — client-facing join topic. Uses colons as separators because Phoenix Channel topics use `:` for namespacing.
 
@@ -44,7 +44,7 @@ Implement `TerminalChannel` and `SessionChannel` — the server-side Channel inf
 
 ### 11.2 SessionChannel
 
-**`lib/tmux_rm_web/channels/session_channel.ex`**:
+**`server/lib/tmux_rm_web/channels/session_channel.ex`**:
 
 **Topic**: `"sessions"`
 
@@ -61,7 +61,7 @@ Implement `TerminalChannel` and `SessionChannel` — the server-side Channel inf
 
 ### 11.3 UserSocket Channel Registration
 
-Update `user_socket.ex`:
+Update `server/lib/tmux_rm_web/channels/user_socket.ex`:
 ```elixir
 channel "terminal:*", TmuxRmWeb.TerminalChannel
 channel "sessions", TmuxRmWeb.SessionChannel
@@ -126,7 +126,7 @@ def id(_socket), do: nil
 
 ### 11.6 Tests
 
-**`test/tmux_rm_web/channels/terminal_channel_test.exs`**:
+**`server/test/tmux_rm_web/channels/terminal_channel_test.exs`**:
 - Join with valid target → receive history in reply
 - Join with invalid target → error reply
 - Send input → verify reaches tmux pane
@@ -134,18 +134,18 @@ def id(_socket), do: nil
 - Pane death → receive `pane_dead` event
 - PaneStream crash → receive `reconnected` event with fresh history
 
-**`test/tmux_rm_web/channels/session_channel_test.exs`**:
+**`server/test/tmux_rm_web/channels/session_channel_test.exs`**:
 - Join → receive current session list
 - Create session externally → receive `sessions_updated` push
 - Verify diffing (no push when list unchanged)
 
 ## Files Created/Modified
 ```
-lib/tmux_rm_web/channels/terminal_channel.ex
-lib/tmux_rm_web/channels/session_channel.ex
-lib/tmux_rm_web/channels/user_socket.ex (update — register channels)
-test/tmux_rm_web/channels/terminal_channel_test.exs
-test/tmux_rm_web/channels/session_channel_test.exs
+server/lib/tmux_rm_web/channels/terminal_channel.ex
+server/lib/tmux_rm_web/channels/session_channel.ex
+server/lib/tmux_rm_web/channels/user_socket.ex (update — register channels)
+server/test/tmux_rm_web/channels/terminal_channel_test.exs
+server/test/tmux_rm_web/channels/session_channel_test.exs
 ```
 
 ## Exit Criteria

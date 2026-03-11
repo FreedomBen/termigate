@@ -17,7 +17,7 @@ Fixed bottom toolbar providing keys that don't exist on mobile keyboards:
 [ Esc ] [ Tab ] [ Ctrl ] [ Alt ] [ ↑ ] [ ↓ ] [ ← ] [ → ] [ Paste ]
 ```
 
-**Implementation** (in `terminal_hook.js` or a separate component):
+**Implementation** (in `server/assets/js/hooks/terminal_hook.js` or a separate component):
 - Render as HTML buttons below the terminal container
 - Each button emits the corresponding escape sequence / control code:
   - `Esc` → `\x1b`
@@ -62,7 +62,7 @@ Fixed bottom toolbar providing keys that don't exist on mobile keyboards:
 Phase 9 introduces a minimal `savePref`/`loadPref` helper that Phase 10 later replaces with the full preference system. This avoids a circular dependency:
 
 ```javascript
-// In terminal_hook.js (Phase 9 addition):
+// In server/assets/js/hooks/terminal_hook.js (Phase 9 addition):
 function savePref(key, value) {
   const prefs = JSON.parse(localStorage.getItem('rca-preferences') || '{}');
   prefs[key] = value;
@@ -74,7 +74,7 @@ function loadPref(key, defaultValue) {
 }
 ```
 
-Phase 10 replaces these with `loadPrefs()`/`savePrefs()` from `preferences.js`. The localStorage key (`rca-preferences`) is the same, so Phase 9 preferences carry over seamlessly.
+Phase 10 replaces these with `loadPrefs()`/`savePrefs()` from `server/assets/js/preferences.js`. The localStorage key (`rca-preferences`) is the same, so Phase 9 preferences carry over seamlessly.
 
 ### 9.4 Auto-Hiding Header
 
@@ -165,11 +165,11 @@ The "Paste" button in the virtual toolbar:
 
 ## Files Created/Modified
 ```
-assets/js/hooks/terminal_hook.js (update — keyboard handling, toolbar, gestures)
-assets/css/app.css (update — mobile styles, breakpoints, toolbar, auto-hide)
-lib/tmux_rm_web/live/terminal_live.html.heex (update — toolbar markup)
-lib/tmux_rm_web/live/session_list_live.html.heex (update — mobile card layout)
-lib/tmux_rm_web/components/core_components.ex (update — mobile-friendly components)
+server/assets/js/hooks/terminal_hook.js (update — keyboard handling, toolbar, gestures)
+server/assets/css/app.css (update — mobile styles, breakpoints, toolbar, auto-hide)
+server/lib/tmux_rm_web/live/terminal_live.html.heex (update — toolbar markup)
+server/lib/tmux_rm_web/live/session_list_live.html.heex (update — mobile card layout)
+server/lib/tmux_rm_web/components/core_components.ex (update — mobile-friendly components)
 ```
 
 ## Exit Criteria

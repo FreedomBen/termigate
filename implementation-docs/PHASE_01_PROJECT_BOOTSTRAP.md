@@ -13,9 +13,9 @@ Set up the Elixir/Phoenix project with all dependencies, configuration, and the 
 ### 1.1 Generate Phoenix Project
 - `mix phx.new tmux_rm --no-ecto --no-mailer --no-dashboard`
 - No Ecto (no database), no mailer, no LiveDashboard
-- Verify `mix.exs` has `tmux_rm` as the project name
+- Verify `server/mix.exs` has `tmux_rm` as the project name
 
-### 1.2 Add Dependencies to `mix.exs`
+### 1.2 Add Dependencies to `server/mix.exs`
 ```elixir
 defp deps do
   [
@@ -40,16 +40,16 @@ end
 ### 1.3 Configure Tailwind CSS 4
 - Set up Tailwind CSS 4 with `@theme` directive (CSS-first config)
 - Reference Tailwind Plus license files at `~/gitclone/tailwind-ui-tailwind-plus/tailwindplus/` for application-ui components
-- Configure `assets/css/app.css` with Tailwind imports
-- Set up esbuild for JS bundling in `config/config.exs`
+- Configure `server/assets/css/app.css` with Tailwind imports
+- Set up esbuild for JS bundling in `server/config/config.exs`
 
 ### 1.4 Install npm Dependencies
-- `cd assets && npm install`
-- Add to `assets/package.json`: `@xterm/xterm`, `@xterm/addon-fit`, `@xterm/addon-web-links`
+- `cd server/assets && npm install`
+- Add to `server/assets/package.json`: `@xterm/xterm`, `@xterm/addon-fit`, `@xterm/addon-web-links`
 
-### 1.5 Application Configuration (`config/`)
+### 1.5 Application Configuration (`server/config/`)
 
-**config/config.exs** — all application-level defaults:
+**server/config/config.exs** — all application-level defaults:
 ```elixir
 config :tmux_rm,
   session_poll_interval: 3_000,
@@ -71,9 +71,9 @@ config :tmux_rm,
   auth_token_max_age: 604_800
 ```
 
-**config/dev.exs** — bind to localhost:4000
-**config/test.exs** — shorter grace period, test FIFO dir
-**config/runtime.exs** — `RCA_AUTH_TOKEN` env var, endpoint config
+**server/config/dev.exs** — bind to localhost:4000
+**server/config/test.exs** — shorter grace period, test FIFO dir
+**server/config/runtime.exs** — `RCA_AUTH_TOKEN` env var, endpoint config
 
 ### 1.6 Supervision Tree (`application.ex`)
 
@@ -92,7 +92,7 @@ Set up `Application.start/2`:
 
 ### 1.7 Endpoint Configuration
 
-**`endpoint.ex`**:
+**`server/lib/tmux_rm_web/endpoint.ex`**:
 ```elixir
 socket "/live", Phoenix.LiveView.Socket,
   websocket: [compress: true]
@@ -119,7 +119,7 @@ Set up route structure with pipeline stubs:
 
 ### 1.10 CommandRunner Behaviour & Implementation
 
-**`lib/tmux_rm/tmux/command_runner_behaviour.ex`** — behaviour for testability:
+**`server/lib/tmux_rm/tmux/command_runner_behaviour.ex`** — behaviour for testability:
 ```elixir
 defmodule TmuxRm.Tmux.CommandRunnerBehaviour do
   @doc "Run a tmux command with the given arguments. Returns stdout on success."
@@ -130,7 +130,7 @@ defmodule TmuxRm.Tmux.CommandRunnerBehaviour do
 end
 ```
 
-**`lib/tmux_rm/tmux/command_runner.ex`** — real implementation:
+**`server/lib/tmux_rm/tmux/command_runner.ex`** — real implementation:
 - Implements `CommandRunnerBehaviour`
 - `run/1` — builds full command with socket args, calls `System.cmd/3`, returns `{:ok, stdout}` or `{:error, {stderr, exit_code}}`
 - `run!/1` — calls `run/1`, raises on error
@@ -140,10 +140,10 @@ end
 
 **Application config** — allow swapping the implementation for tests:
 ```elixir
-# config/config.exs
+# server/config/config.exs
 config :tmux_rm, :command_runner, TmuxRm.Tmux.CommandRunner
 
-# config/test.exs
+# server/config/test.exs
 config :tmux_rm, :command_runner, TmuxRm.MockCommandRunner
 ```
 
@@ -156,7 +156,7 @@ defp command_runner, do: Application.get_env(:tmux_rm, :command_runner)
 
 Set up test infrastructure early so all subsequent phases can write tests immediately:
 
-**`test/test_helper.exs`**:
+**`server/test/test_helper.exs`**:
 ```elixir
 ExUnit.start(exclude: [:skip])
 
@@ -166,12 +166,12 @@ unless System.find_executable("tmux") do
 end
 ```
 
-**`test/support/mocks.ex`**:
+**`server/test/support/mocks.ex`**:
 ```elixir
 Mox.defmock(TmuxRm.MockCommandRunner, for: TmuxRm.Tmux.CommandRunnerBehaviour)
 ```
 
-**`test/support/tmux_helpers.ex`**:
+**`server/test/support/tmux_helpers.ex`**:
 ```elixir
 defmodule TmuxRm.TmuxHelpers do
   def create_test_session(name \\ nil) do
@@ -192,7 +192,7 @@ defmodule TmuxRm.TmuxHelpers do
 end
 ```
 
-Ensure `test/support` is compiled in test env via `mix.exs`:
+Ensure `server/test/support` is compiled in test env via `server/mix.exs`:
 ```elixir
 defp elixirc_paths(:test), do: ["lib", "test/support"]
 defp elixirc_paths(_), do: ["lib"]
@@ -218,34 +218,34 @@ Add `require Logger` to all modules. Key log events for this phase:
 
 ### 1.14 Verify Boot
 
-- `mix deps.get && mix compile`
-- `mix phx.server` starts without errors
+- `cd server && mix deps.get && mix compile`
+- `cd server && mix phx.server` starts without errors
 - Placeholder page renders at `http://localhost:4000`
 - Supervision tree is healthy (all children started)
 
 ## Files Created/Modified
 ```
-lib/tmux_rm/application.ex
-lib/tmux_rm/tmux/command_runner_behaviour.ex
-lib/tmux_rm/tmux/command_runner.ex
-lib/tmux_rm_web/endpoint.ex
-lib/tmux_rm_web/router.ex
-lib/tmux_rm_web/components/layouts.ex
-lib/tmux_rm_web/components/core_components.ex
-config/config.exs
-config/dev.exs
-config/test.exs
-config/runtime.exs
-assets/package.json
-assets/css/app.css
-mix.exs
-test/test_helper.exs
-test/support/mocks.ex
-test/support/tmux_helpers.ex
+server/lib/tmux_rm/application.ex
+server/lib/tmux_rm/tmux/command_runner_behaviour.ex
+server/lib/tmux_rm/tmux/command_runner.ex
+server/lib/tmux_rm_web/endpoint.ex
+server/lib/tmux_rm_web/router.ex
+server/lib/tmux_rm_web/components/layouts.ex
+server/lib/tmux_rm_web/components/core_components.ex
+server/config/config.exs
+server/config/dev.exs
+server/config/test.exs
+server/config/runtime.exs
+server/assets/package.json
+server/assets/css/app.css
+server/mix.exs
+server/test/test_helper.exs
+server/test/support/mocks.ex
+server/test/support/tmux_helpers.ex
 ```
 
 ## Exit Criteria
-- App boots cleanly with `mix phx.server`
+- App boots cleanly with `cd server && mix phx.server`
 - Supervision tree starts all children
 - `CommandRunner.run(["list-sessions"])` returns `{:ok, _}` or `{:error, _}` (tmux reachable)
 - Tailwind CSS 4 + Tailwind Plus styles rendering
@@ -254,7 +254,7 @@ test/support/tmux_helpers.ex
 
 ## Checklist
 - [x] 1.1 Generate Phoenix Project
-- [x] 1.2 Add Dependencies to `mix.exs`
+- [x] 1.2 Add Dependencies to `server/mix.exs`
 - [x] 1.3 Configure Tailwind CSS 4
 - [x] 1.4 Install npm Dependencies
 - [x] 1.5 Application Configuration

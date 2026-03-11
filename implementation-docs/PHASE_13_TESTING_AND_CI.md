@@ -12,7 +12,7 @@ Set up CI/CD via GitHub Actions and consolidate test coverage across all layers.
 
 **Note**: Core test infrastructure (Mox setup, `MockCommandRunner`, `TmuxHelpers`, `test_helper.exs`) is established in **Phase 1** (step 1.11) so that all subsequent phases can write tests immediately. This phase extends and formalizes that foundation.
 
-**Test configuration** (`config/test.exs`) — extend what Phase 1 set up:
+**Test configuration** (`server/config/test.exs`) — extend what Phase 1 set up:
 ```elixir
 config :tmux_rm,
   pane_stream_grace_period: 100,    # Short for fast tests
@@ -124,8 +124,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            deps
-            _build
+            server/deps
+            server/_build
           key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
 
       - name: Install Node.js
@@ -134,24 +134,24 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: mix deps.get
+        run: cd server && mix deps.get
 
       - name: Install npm deps
-        run: cd assets && npm ci
+        run: cd server/assets && npm ci
 
       - name: Check formatting
-        run: mix format --check-formatted
+        run: cd server && mix format --check-formatted
 
       - name: Compile (warnings as errors)
-        run: mix compile --warnings-as-errors
+        run: cd server && mix compile --warnings-as-errors
 
       - name: Build assets
-        run: mix assets.deploy
+        run: cd server && mix assets.deploy
         env:
           MIX_ENV: prod
 
       - name: Run tests
-        run: mix test
+        run: cd server && mix test
         env:
           MIX_ENV: test
 
@@ -171,6 +171,7 @@ jobs:
 
       - name: Build release
         run: |
+          cd server
           mix deps.get --only prod
           MIX_ENV=prod mix assets.deploy
           MIX_ENV=prod mix release
@@ -181,7 +182,7 @@ jobs:
 ### 13.10 Test Tags and Exclusions
 
 ```elixir
-# test/test_helper.exs
+# server/test/test_helper.exs
 ExUnit.start(exclude: [:skip])
 
 # Exclude tmux tests if tmux not installed
@@ -200,31 +201,31 @@ end
 ## Files Created/Modified
 ```
 .github/workflows/ci.yml
-test/test_helper.exs
-test/support/tmux_helpers.ex
-test/support/mocks.ex
-test/tmux_rm/ring_buffer_test.exs
-test/tmux_rm/tmux_manager_test.exs
-test/tmux_rm/tmux_manager_integration_test.exs
-test/tmux_rm/pane_stream_test.exs
-test/tmux_rm/auth_test.exs
-test/tmux_rm/config_test.exs
-test/tmux_rm/session_poller_test.exs
-test/tmux_rm_web/live/session_list_live_test.exs
-test/tmux_rm_web/live/terminal_live_test.exs
-test/tmux_rm_web/live/auth_live_test.exs
-test/tmux_rm_web/live/settings_live_test.exs
-test/tmux_rm_web/live/multi_pane_live_test.exs
-test/tmux_rm_web/channels/terminal_channel_test.exs
-test/tmux_rm_web/channels/session_channel_test.exs
-test/tmux_rm_web/controllers/auth_controller_test.exs
-test/tmux_rm_web/controllers/health_controller_test.exs
-test/tmux_rm_web/controllers/session_controller_test.exs
-test/tmux_rm_web/controllers/pane_controller_test.exs
-test/tmux_rm_web/controllers/quick_action_controller_test.exs
-test/tmux_rm_web/plugs/require_auth_test.exs
-test/tmux_rm_web/plugs/require_auth_token_test.exs
-test/tmux_rm_web/plugs/rate_limit_test.exs
+server/test/test_helper.exs
+server/test/support/tmux_helpers.ex
+server/test/support/mocks.ex
+server/test/tmux_rm/ring_buffer_test.exs
+server/test/tmux_rm/tmux_manager_test.exs
+server/test/tmux_rm/tmux_manager_integration_test.exs
+server/test/tmux_rm/pane_stream_test.exs
+server/test/tmux_rm/auth_test.exs
+server/test/tmux_rm/config_test.exs
+server/test/tmux_rm/session_poller_test.exs
+server/test/tmux_rm_web/live/session_list_live_test.exs
+server/test/tmux_rm_web/live/terminal_live_test.exs
+server/test/tmux_rm_web/live/auth_live_test.exs
+server/test/tmux_rm_web/live/settings_live_test.exs
+server/test/tmux_rm_web/live/multi_pane_live_test.exs
+server/test/tmux_rm_web/channels/terminal_channel_test.exs
+server/test/tmux_rm_web/channels/session_channel_test.exs
+server/test/tmux_rm_web/controllers/auth_controller_test.exs
+server/test/tmux_rm_web/controllers/health_controller_test.exs
+server/test/tmux_rm_web/controllers/session_controller_test.exs
+server/test/tmux_rm_web/controllers/pane_controller_test.exs
+server/test/tmux_rm_web/controllers/quick_action_controller_test.exs
+server/test/tmux_rm_web/plugs/require_auth_test.exs
+server/test/tmux_rm_web/plugs/require_auth_token_test.exs
+server/test/tmux_rm_web/plugs/rate_limit_test.exs
 ```
 
 ## Exit Criteria

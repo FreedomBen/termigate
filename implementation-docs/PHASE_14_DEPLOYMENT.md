@@ -10,7 +10,7 @@ Prepare the application for production deployment: Mix release configuration, sy
 
 ### 14.1 Mix Release Configuration
 
-**`mix.exs`** release config:
+**`server/mix.exs`** release config:
 ```elixir
 def project do
   [
@@ -27,7 +27,7 @@ end
 
 ### 14.2 Runtime Configuration
 
-**`config/runtime.exs`** — all environment-dependent config:
+**`server/config/runtime.exs`** — all environment-dependent config:
 ```elixir
 import Config
 
@@ -61,7 +61,8 @@ end
 
 Production asset pipeline:
 ```bash
-# In CI or build script:
+# In CI or build script (run from server/ directory):
+cd server
 cd assets && npm ci
 cd ..
 MIX_ENV=prod mix assets.deploy  # Builds + digests JS/CSS
@@ -78,6 +79,8 @@ set -e
 
 export MIX_ENV=prod
 
+cd server
+
 echo "==> Installing dependencies"
 mix deps.get --only prod
 
@@ -91,7 +94,7 @@ mix assets.deploy
 echo "==> Building release"
 mix release
 
-echo "==> Release built at _build/prod/rel/tmux_rm/"
+echo "==> Release built at server/_build/prod/rel/tmux_rm/"
 ```
 
 ### 14.5 Systemd Service
@@ -149,14 +152,14 @@ RUN apt-get update && apt-get install -y git nodejs npm && \
 WORKDIR /app
 ENV MIX_ENV=prod
 
-COPY mix.exs mix.lock ./
-RUN mix deps.get --only prod && mix deps.compile
+COPY server/mix.exs server/mix.lock ./server/
+RUN cd server && mix deps.get --only prod && mix deps.compile
 
-COPY assets/package.json assets/package-lock.json ./assets/
-RUN cd assets && npm ci
+COPY server/assets/package.json server/assets/package-lock.json ./server/assets/
+RUN cd server/assets && npm ci
 
-COPY . .
-RUN mix assets.deploy && mix release
+COPY server/ ./server/
+RUN cd server && mix assets.deploy && mix release
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -170,7 +173,7 @@ ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 
-COPY --from=build /app/_build/prod/rel/tmux_rm /app
+COPY --from=build /app/server/_build/prod/rel/tmux_rm /app
 
 EXPOSE 4000
 
@@ -208,9 +211,9 @@ When the same setting can be specified in multiple places, the precedence order 
 
 1. **Environment variables** (highest priority) — e.g., `RCA_AUTH_TOKEN`, `PORT`, `PHX_HOST`
 2. **YAML config file** (`~/.config/tmux_rm/config.yaml`) — quick actions, app settings
-3. **`config/runtime.exs`** compile-time defaults (lowest priority)
+3. **`server/config/runtime.exs`** compile-time defaults (lowest priority)
 
-This is enforced in `config/runtime.exs` by only reading env vars with `||` fallbacks, and in the `Config` GenServer by merging YAML values over defaults. Environment variables always win because they're read in `runtime.exs` before the Config GenServer starts.
+This is enforced in `server/config/runtime.exs` by only reading env vars with `||` fallbacks, and in the `Config` GenServer by merging YAML values over defaults. Environment variables always win because they're read in `runtime.exs` before the Config GenServer starts.
 
 ### 14.8 CORS Configuration
 
@@ -226,7 +229,7 @@ For deployments where native clients or external tools access the REST API from 
   ```
 - For single-origin deployments: `RCA_CORS_ORIGIN=https://my-app.example.com`
 - For development: `RCA_CORS_ORIGIN=*`
-- Add `{:corsica, "~> 2.0"}` to deps in `mix.exs` (Phase 1)
+- Add `{:corsica, "~> 2.0"}` to deps in `server/mix.exs` (Phase 1)
 
 Note: WebSocket connections (LiveView and Channels) are not affected by CORS — they use the `check_origin` setting on the endpoint, which is already configured by Phoenix.
 
@@ -241,7 +244,7 @@ Ensure production release does NOT enable BEAM distribution:
 
 Document how to generate `SECRET_KEY_BASE`:
 ```bash
-mix phx.gen.secret
+cd server && mix phx.gen.secret
 # Or:
 openssl rand -base64 64
 ```
@@ -309,8 +312,8 @@ Note: WebSocket support (`Upgrade`/`Connection` headers) is critical — both Li
 
 ## Files Created/Modified
 ```
-mix.exs (release config)
-config/runtime.exs (production config)
+server/mix.exs (release config)
+server/config/runtime.exs (production config)
 bin/build-release.sh
 deploy/tmux-rm.service
 Dockerfile
@@ -319,7 +322,7 @@ docker-compose.yml (optional)
 ```
 
 ## Exit Criteria
-- `MIX_ENV=prod mix release` builds a self-contained release
+- `cd server && MIX_ENV=prod mix release` builds a self-contained release
 - Release starts with `bin/tmux_rm start` — serves the app
 - systemd service file installs and works
 - Docker image builds and runs (with tmux inside container)

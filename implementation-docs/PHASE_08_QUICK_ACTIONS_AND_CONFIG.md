@@ -11,7 +11,7 @@ Implement the `Config` GenServer, YAML config file management, quick action butt
 
 ### 8.1 Config GenServer
 
-**`lib/tmux_rm/config.ex`**:
+**`server/lib/tmux_rm/config.ex`**:
 
 Implement the full GenServer as specified in APPLICATION_DESIGN.md (the design doc includes complete code). Key points:
 
@@ -57,12 +57,12 @@ Uses `ymlr` for encoding. Nil fields omitted. Header comment prepended.
 
 ### 8.4 Quick Action Bar in Terminal View
 
-**Update `terminal_live.ex`**:
+**Update `server/lib/tmux_rm_web/live/terminal_live.ex`**:
 - On mount: subscribe to PubSub `"config"`, fetch config via `Config.get/0`
 - Assign `:quick_actions` from config
 - `handle_info({:config_changed, config})` → update `:quick_actions` assign
 
-**Update `terminal_live.html.heex`**:
+**Update `server/lib/tmux_rm_web/live/terminal_live.html.heex`**:
 - Render quick action bar between header and terminal (only if actions exist)
 - Horizontally scrollable on mobile (`overflow-x: auto; scroll-snap-type: x mandatory`)
 - Pill-style buttons with color-coded classes
@@ -71,7 +71,7 @@ Uses `ymlr` for encoding. Nil fields omitted. Header comment prepended.
 
 ### 8.5 Quick Action Execution
 
-**Event handlers in `terminal_live.ex`**:
+**Event handlers in `server/lib/tmux_rm_web/live/terminal_live.ex`**:
 
 - `"quick_action"` — find action by ID, check `confirm` flag:
   - If `confirm: false`: send immediately
@@ -93,7 +93,7 @@ LiveView modal for confirm-required actions:
 
 ### 8.7 Settings LiveView
 
-**`lib/tmux_rm_web/live/settings_live.ex`**:
+**`server/lib/tmux_rm_web/live/settings_live.ex`**:
 
 - Route: `/settings`
 - Mount: subscribe to PubSub `"config"`, fetch config
@@ -104,7 +104,7 @@ LiveView modal for confirm-required actions:
 - All changes go through `Config.upsert_action/1`, `Config.delete_action/1`, `Config.reorder_actions/1`
 - PubSub broadcasts keep the view in sync with external edits
 
-**`lib/tmux_rm_web/live/settings_live.html.heex`**:
+**`server/lib/tmux_rm_web/live/settings_live.html.heex`**:
 - Quick action list with edit/delete controls
 - Add/edit form with validation
 - Mobile-friendly: full-screen panel with large touch targets
@@ -112,10 +112,10 @@ LiveView modal for confirm-required actions:
 
 ### 8.8 REST API for Quick Actions
 
-**`lib/tmux_rm_web/controllers/config_controller.ex`**:
+**`server/lib/tmux_rm_web/controllers/config_controller.ex`**:
 - `GET /api/config` — returns full config as JSON
 
-**`lib/tmux_rm_web/controllers/quick_action_controller.ex`**:
+**`server/lib/tmux_rm_web/controllers/quick_action_controller.ex`**:
 - `GET /api/quick-actions` — list quick actions
 - `POST /api/quick-actions` — create (returns full list with generated ID)
 - `PUT /api/quick-actions/:id` — update by stable ID
@@ -154,17 +154,17 @@ Key log events for Config:
 
 ## Files Created/Modified
 ```
-lib/tmux_rm/config.ex
-lib/tmux_rm_web/live/terminal_live.ex (update)
-lib/tmux_rm_web/live/terminal_live.html.heex (update)
-lib/tmux_rm_web/live/settings_live.ex
-lib/tmux_rm_web/live/settings_live.html.heex
-lib/tmux_rm_web/controllers/config_controller.ex
-lib/tmux_rm_web/controllers/quick_action_controller.ex
-lib/tmux_rm_web/router.ex (update)
-test/tmux_rm/config_test.exs
-test/tmux_rm_web/live/settings_live_test.exs
-test/tmux_rm_web/controllers/quick_action_controller_test.exs
+server/lib/tmux_rm/config.ex
+server/lib/tmux_rm_web/live/terminal_live.ex (update)
+server/lib/tmux_rm_web/live/terminal_live.html.heex (update)
+server/lib/tmux_rm_web/live/settings_live.ex
+server/lib/tmux_rm_web/live/settings_live.html.heex
+server/lib/tmux_rm_web/controllers/config_controller.ex
+server/lib/tmux_rm_web/controllers/quick_action_controller.ex
+server/lib/tmux_rm_web/router.ex (update)
+server/test/tmux_rm/config_test.exs
+server/test/tmux_rm_web/live/settings_live_test.exs
+server/test/tmux_rm_web/controllers/quick_action_controller_test.exs
 ```
 
 ## Exit Criteria

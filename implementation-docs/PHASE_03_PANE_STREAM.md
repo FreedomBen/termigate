@@ -10,7 +10,7 @@ Implement the `PaneStream` GenServer — the heart of the application. This brid
 
 ### 3.1 PaneStream GenServer
 
-**`lib/tmux_rm/pane_stream.ex`**:
+**`server/lib/tmux_rm/pane_stream.ex`**:
 
 #### State
 ```elixir
@@ -149,14 +149,14 @@ Key log events for PaneStream:
 
 ### 3.9 PaneStreamSupervisor
 
-**`lib/tmux_rm/pane_stream_supervisor.ex`**:
+**`server/lib/tmux_rm/pane_stream_supervisor.ex`**:
 - DynamicSupervisor with `max_children` from config
 - `start_child/1` convenience function
 - PaneStream children use `restart: :transient`
 
 ### 3.10 Integration Tests
 
-**`test/tmux_rm/pane_stream_test.exs`**:
+**`server/test/tmux_rm/pane_stream_test.exs`**:
 - Start a real tmux session, subscribe to a pane, verify output arrives
 - Send keys via `send_keys/2`, verify they reach the pane
 - Test grace period (unsubscribe, wait, verify PaneStream terminates)
@@ -164,17 +164,17 @@ Key log events for PaneStream:
 - Test multiple viewers (subscribe two processes, verify both receive output)
 - Test re-subscribe during grace period (cancel timer, PaneStream stays alive)
 
-**`test/support/tmux_helpers.ex`**:
+**`server/test/support/tmux_helpers.ex`**:
 - `create_test_session/1` — creates a uniquely-named tmux session
 - `destroy_test_session/1` — kills the session
 - `setup_tmux/1` — ExUnit setup callback with `on_exit` cleanup
 
 ## Files Created/Modified
 ```
-lib/tmux_rm/pane_stream.ex
-lib/tmux_rm/pane_stream_supervisor.ex
-test/tmux_rm/pane_stream_test.exs
-test/support/tmux_helpers.ex
+server/lib/tmux_rm/pane_stream.ex
+server/lib/tmux_rm/pane_stream_supervisor.ex
+server/test/tmux_rm/pane_stream_test.exs
+server/test/support/tmux_helpers.ex
 ```
 
 ## Exit Criteria
