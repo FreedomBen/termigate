@@ -179,12 +179,12 @@ server/test/tmux_rm_web/controllers/pane_controller_test.exs
 - Session list updates reflect all changes within seconds
 
 ## Checklist
-- [ ] 7.1 TmuxManager Mutations (verify/complete)
-- [ ] 7.2 Session List UI Enhancements
-- [ ] 7.3 Confirmation Dialogs
-- [ ] 7.4 Inline Rename
-- [ ] 7.5 Session List Event Handlers
-- [ ] 7.6 Pane Death During Session Management
-- [ ] 7.7 Safety Guards
-- [ ] 7.8 REST API for Session Management
-- [ ] 7.9 Tests
+- [x] 7.1 TmuxManager Mutations (verify/complete)
+- [x] 7.2 Session List UI Enhancements
+- [x] 7.3 Confirmation Dialogs
+- [x] 7.4 Inline Rename
+- [x] 7.5 Session List Event Handlers
+- [x] 7.6 Pane Death During Session Management
+- [x] 7.7 Safety Guards
+- [x] 7.8 REST API for Session Management
+- [x] 7.9 Tests

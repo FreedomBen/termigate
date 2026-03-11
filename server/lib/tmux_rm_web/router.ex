@@ -41,6 +41,15 @@ defmodule TmuxRmWeb.Router do
   # API - authenticated
   scope "/api", TmuxRmWeb do
     pipe_through [:api, :require_auth_token]
+
+    get "/sessions", SessionController, :index
+    post "/sessions", SessionController, :create
+    delete "/sessions/:name", SessionController, :delete
+    put "/sessions/:name", SessionController, :update
+    post "/sessions/:name/windows", SessionController, :create_window
+
+    post "/panes/:target/split", PaneController, :split
+    delete "/panes/:target", PaneController, :delete
   end
 
   # Unauthenticated web routes

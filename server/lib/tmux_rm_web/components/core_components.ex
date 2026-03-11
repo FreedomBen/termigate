@@ -445,6 +445,74 @@ defmodule TmuxRmWeb.CoreComponents do
     """
   end
 
+  @doc """
+  Renders a modal dialog.
+
+  ## Examples
+
+      <.modal id="confirm-delete" on_confirm={JS.push("delete")}>
+        Are you sure?
+        <:title>Confirm Delete</:title>
+        <:confirm>Delete</:confirm>
+        <:cancel>Cancel</:cancel>
+      </.modal>
+  """
+  attr :id, :string, required: true
+  attr :on_confirm, :any, default: nil, doc: "JS command or event to run on confirm"
+  attr :confirm_variant, :string, default: "btn-error", doc: "CSS class for confirm button"
+  attr :show, :boolean, default: false
+
+  slot :inner_block, required: true
+  slot :title
+  slot :confirm
+  slot :cancel
+
+  def modal(assigns) do
+    ~H"""
+    <dialog
+      id={@id}
+      class="modal"
+      phx-mounted={@show && show_modal(@id)}
+    >
+      <div class="modal-box">
+        <h3 :if={@title != []} class="text-lg font-bold mb-4">
+          {render_slot(@title)}
+        </h3>
+        <div class="py-2">
+          {render_slot(@inner_block)}
+        </div>
+        <div class="modal-action">
+          <form method="dialog">
+            <button class="btn btn-ghost" phx-click={hide_modal(@id)}>
+              {if @cancel != [], do: render_slot(@cancel), else: "Cancel"}
+            </button>
+          </form>
+          <button
+            :if={@on_confirm}
+            class={"btn #{@confirm_variant}"}
+            phx-click={@on_confirm |> hide_modal(@id)}
+          >
+            {if @confirm != [], do: render_slot(@confirm), else: "Confirm"}
+          </button>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button phx-click={hide_modal(@id)}>close</button>
+      </form>
+    </dialog>
+    """
+  end
+
+  def show_modal(js \\ %JS{}, id) do
+    js
+    |> JS.dispatch("showModal", to: "##{id}")
+  end
+
+  def hide_modal(js \\ %JS{}, id) do
+    js
+    |> JS.dispatch("close", to: "##{id}")
+  end
+
   ## JS Commands
 
   def show(js \\ %JS{}, selector) do

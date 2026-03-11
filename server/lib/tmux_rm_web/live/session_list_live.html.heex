@@ -101,9 +101,41 @@
         class="size-4 text-base-content/50"
       />
       <div class="flex-1 min-w-0">
+        <%!-- Session name: inline rename or display --%>
         <div class="flex items-center gap-2">
-          <span class="font-semibold truncate">{session.name}</span>
-          <span :if={session.attached?} class="badge badge-success badge-xs">attached</span>
+          <%= if @rename_session == session.name do %>
+            <form
+              phx-submit="submit_rename"
+              phx-change="validate_rename"
+              class="flex items-center gap-2"
+              phx-click-away="cancel_rename"
+            >
+              <input
+                type="text"
+                name="name"
+                value={@rename_value}
+                class={[
+                  "input input-bordered input-sm w-48",
+                  @rename_error && "input-error"
+                ]}
+                autocomplete="off"
+                autofocus
+                phx-debounce="200"
+                phx-keydown="cancel_rename"
+                phx-key="Escape"
+              />
+              <button type="submit" class="btn btn-ghost btn-xs btn-success" disabled={@rename_error != nil}>
+                <.icon name="hero-check-micro" class="size-4" />
+              </button>
+              <button type="button" class="btn btn-ghost btn-xs" phx-click="cancel_rename">
+                <.icon name="hero-x-mark-micro" class="size-4" />
+              </button>
+            </form>
+            <p :if={@rename_error} class="text-error text-xs">{@rename_error}</p>
+          <% else %>
+            <span class="font-semibold truncate">{session.name}</span>
+            <span :if={session.attached?} class="badge badge-success badge-xs">attached</span>
+          <% end %>
         </div>
         <div class="text-xs text-base-content/50 mt-0.5">
           {session.windows} window{if session.windows != 1, do: "s", else: ""}
@@ -111,15 +143,33 @@
           <span :if={session.created}>&middot; {format_created(session.created)}</span>
         </div>
       </div>
-      <button
-        class="btn btn-ghost btn-xs text-error"
-        phx-click="kill_session"
-        phx-value-name={session.name}
-        data-confirm={"Kill session \"#{session.name}\"? This will terminate all processes in the session."}
-        onclick="event.stopPropagation()"
-      >
-        <.icon name="hero-trash-micro" class="size-4" />
-      </button>
+
+      <%!-- Session action menu (kebab) --%>
+      <div class="dropdown dropdown-end" onclick="event.stopPropagation()">
+        <div tabindex="0" role="button" class="btn btn-ghost btn-xs">
+          <.icon name="hero-ellipsis-vertical-micro" class="size-4" />
+        </div>
+        <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-10 w-48 p-2 shadow-lg">
+          <li>
+            <button phx-click="start_rename" phx-value-name={session.name}>
+              <.icon name="hero-pencil-micro" class="size-4" /> Rename
+            </button>
+          </li>
+          <li>
+            <button phx-click="create_window" phx-value-session={session.name}>
+              <.icon name="hero-window-micro" class="size-4" /> New Window
+            </button>
+          </li>
+          <li>
+            <button
+              class="text-error"
+              phx-click={JS.push("request_kill_session", value: %{name: session.name}) |> TmuxRmWeb.CoreComponents.show_modal("confirm-modal")}
+            >
+              <.icon name="hero-trash-micro" class="size-4" /> Kill Session
+            </button>
+          </li>
+        </ul>
+      </div>
     </div>
 
     <%!-- Expanded pane list --%>
@@ -143,13 +193,69 @@
             {pane.width}x{pane.height}
           </div>
         </div>
-        <.link
-          navigate={"/terminal/#{session.name}:#{pane.window_index}.#{pane.index}"}
-          class="btn btn-ghost btn-xs btn-primary"
-        >
-          Open
-        </.link>
+
+        <%!-- Pane actions --%>
+        <div class="flex items-center gap-1">
+          <.link
+            navigate={"/terminal/#{session.name}:#{pane.window_index}.#{pane.index}"}
+            class="btn btn-ghost btn-xs btn-primary"
+          >
+            Open
+          </.link>
+
+          <div class="dropdown dropdown-end">
+            <div tabindex="0" role="button" class="btn btn-ghost btn-xs">
+              <.icon name="hero-ellipsis-vertical-micro" class="size-3" />
+            </div>
+            <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-10 w-44 p-2 shadow-lg">
+              <li>
+                <button
+                  phx-click="split_pane"
+                  phx-value-target={"#{session.name}:#{pane.window_index}.#{pane.index}"}
+                  phx-value-direction="horizontal"
+                >
+                  <.icon name="hero-bars-3-micro" class="size-4 rotate-90" /> Split │
+                </button>
+              </li>
+              <li>
+                <button
+                  phx-click="split_pane"
+                  phx-value-target={"#{session.name}:#{pane.window_index}.#{pane.index}"}
+                  phx-value-direction="vertical"
+                >
+                  <.icon name="hero-bars-3-micro" class="size-4" /> Split ─
+                </button>
+              </li>
+              <li>
+                <button
+                  class="text-error"
+                  phx-click={
+                    JS.push("request_kill_pane", value: %{
+                      target: "#{session.name}:#{pane.window_index}.#{pane.index}",
+                      "pane-count": total_panes(session)
+                    })
+                    |> TmuxRmWeb.CoreComponents.show_modal("confirm-modal")
+                  }
+                >
+                  <.icon name="hero-trash-micro" class="size-4" /> Kill Pane
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </div>
+
+<%!-- Confirmation modal --%>
+<.modal
+  id="confirm-modal"
+  on_confirm={JS.push("confirm_action")}
+  confirm_variant="btn-error"
+>
+  <:title>Confirm</:title>
+  {@confirm_message || "Are you sure?"}
+  <:confirm>Confirm</:confirm>
+  <:cancel>Cancel</:cancel>
+</.modal>
