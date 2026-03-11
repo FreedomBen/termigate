@@ -10,7 +10,7 @@ Implement the `PaneStream` GenServer — the heart of the application. This brid
 
 ### 3.1 PaneStream GenServer
 
-**`lib/remote_code_agents/pane_stream.ex`**:
+**`lib/tmux_rm/pane_stream.ex`**:
 
 #### State
 ```elixir
@@ -55,7 +55,7 @@ If any step fails, set status to `:dead` and schedule termination.
 
 **Note**: `subscribe/1` callers that arrive while status is `:starting` should receive `{:error, :not_ready}`. The caller can retry after a short delay (PaneStream startup typically completes in <100ms).
 
-FIFO path: `/tmp/remote-code-agents/pane-{pane_id}.fifo` (e.g., `/tmp/remote-code-agents/pane-%0.fifo`)
+FIFO path: `/tmp/tmux-rm/pane-{pane_id}.fifo` (e.g., `/tmp/tmux-rm/pane-%0.fifo`)
 Uses the resolved `pane_id` (not the target string) for stability across session/window renames. The `%` prefix in tmux pane IDs is filesystem-safe.
 
 ### 3.2 Public API (Module Functions)
@@ -149,14 +149,14 @@ Key log events for PaneStream:
 
 ### 3.9 PaneStreamSupervisor
 
-**`lib/remote_code_agents/pane_stream_supervisor.ex`**:
+**`lib/tmux_rm/pane_stream_supervisor.ex`**:
 - DynamicSupervisor with `max_children` from config
 - `start_child/1` convenience function
 - PaneStream children use `restart: :transient`
 
 ### 3.10 Integration Tests
 
-**`test/remote_code_agents/pane_stream_test.exs`**:
+**`test/tmux_rm/pane_stream_test.exs`**:
 - Start a real tmux session, subscribe to a pane, verify output arrives
 - Send keys via `send_keys/2`, verify they reach the pane
 - Test grace period (unsubscribe, wait, verify PaneStream terminates)
@@ -171,9 +171,9 @@ Key log events for PaneStream:
 
 ## Files Created/Modified
 ```
-lib/remote_code_agents/pane_stream.ex
-lib/remote_code_agents/pane_stream_supervisor.ex
-test/remote_code_agents/pane_stream_test.exs
+lib/tmux_rm/pane_stream.ex
+lib/tmux_rm/pane_stream_supervisor.ex
+test/tmux_rm/pane_stream_test.exs
 test/support/tmux_helpers.ex
 ```
 

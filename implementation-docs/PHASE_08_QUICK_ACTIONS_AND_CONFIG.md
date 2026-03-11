@@ -11,11 +11,11 @@ Implement the `Config` GenServer, YAML config file management, quick action butt
 
 ### 8.1 Config GenServer
 
-**`lib/remote_code_agents/config.ex`**:
+**`lib/tmux_rm/config.ex`**:
 
 Implement the full GenServer as specified in APPLICATION_DESIGN.md (the design doc includes complete code). Key points:
 
-- **Location**: `$RCA_CONFIG_PATH` env var → `~/.config/remote_code_agents/config.yaml` → defaults
+- **Location**: `$RCA_CONFIG_PATH` env var → `~/.config/tmux_rm/config.yaml` → defaults
 - **Startup**: Read + validate config file. Generate missing IDs and rewrite if needed. If no file exists, write default config (empty quick_actions list).
 - **File change detection**: Poll mtime every 2s (`config_poll_interval`). Re-read on change, broadcast `{:config_changed, config}` on PubSub topic `"config"`.
 - **Reads**: `Config.get/0` — synchronous GenServer.call, returns in-memory config
@@ -93,7 +93,7 @@ LiveView modal for confirm-required actions:
 
 ### 8.7 Settings LiveView
 
-**`lib/remote_code_agents_web/live/settings_live.ex`**:
+**`lib/tmux_rm_web/live/settings_live.ex`**:
 
 - Route: `/settings`
 - Mount: subscribe to PubSub `"config"`, fetch config
@@ -104,7 +104,7 @@ LiveView modal for confirm-required actions:
 - All changes go through `Config.upsert_action/1`, `Config.delete_action/1`, `Config.reorder_actions/1`
 - PubSub broadcasts keep the view in sync with external edits
 
-**`lib/remote_code_agents_web/live/settings_live.html.heex`**:
+**`lib/tmux_rm_web/live/settings_live.html.heex`**:
 - Quick action list with edit/delete controls
 - Add/edit form with validation
 - Mobile-friendly: full-screen panel with large touch targets
@@ -112,10 +112,10 @@ LiveView modal for confirm-required actions:
 
 ### 8.8 REST API for Quick Actions
 
-**`lib/remote_code_agents_web/controllers/config_controller.ex`**:
+**`lib/tmux_rm_web/controllers/config_controller.ex`**:
 - `GET /api/config` — returns full config as JSON
 
-**`lib/remote_code_agents_web/controllers/quick_action_controller.ex`**:
+**`lib/tmux_rm_web/controllers/quick_action_controller.ex`**:
 - `GET /api/quick-actions` — list quick actions
 - `POST /api/quick-actions` — create (returns full list with generated ID)
 - `PUT /api/quick-actions/:id` — update by stable ID
@@ -154,17 +154,17 @@ Key log events for Config:
 
 ## Files Created/Modified
 ```
-lib/remote_code_agents/config.ex
-lib/remote_code_agents_web/live/terminal_live.ex (update)
-lib/remote_code_agents_web/live/terminal_live.html.heex (update)
-lib/remote_code_agents_web/live/settings_live.ex
-lib/remote_code_agents_web/live/settings_live.html.heex
-lib/remote_code_agents_web/controllers/config_controller.ex
-lib/remote_code_agents_web/controllers/quick_action_controller.ex
-lib/remote_code_agents_web/router.ex (update)
-test/remote_code_agents/config_test.exs
-test/remote_code_agents_web/live/settings_live_test.exs
-test/remote_code_agents_web/controllers/quick_action_controller_test.exs
+lib/tmux_rm/config.ex
+lib/tmux_rm_web/live/terminal_live.ex (update)
+lib/tmux_rm_web/live/terminal_live.html.heex (update)
+lib/tmux_rm_web/live/settings_live.ex
+lib/tmux_rm_web/live/settings_live.html.heex
+lib/tmux_rm_web/controllers/config_controller.ex
+lib/tmux_rm_web/controllers/quick_action_controller.ex
+lib/tmux_rm_web/router.ex (update)
+test/tmux_rm/config_test.exs
+test/tmux_rm_web/live/settings_live_test.exs
+test/tmux_rm_web/controllers/quick_action_controller_test.exs
 ```
 
 ## Exit Criteria

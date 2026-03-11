@@ -151,7 +151,7 @@ assets/js/hooks/terminal_hook.js (update — preference loading/saving)
 assets/js/preferences.js (new — preference management, theme definitions)
 assets/js/preferences_panel.js (new — settings panel UI)
 assets/css/app.css (update — preferences panel styles)
-lib/remote_code_agents_web/live/terminal_live.html.heex (update — gear icon triggers JS panel, NOT navigate to /settings)
+lib/tmux_rm_web/live/terminal_live.html.heex (update — gear icon triggers JS panel, NOT navigate to /settings)
 ```
 
 Note: Phase 8's `settings_live.ex` is NOT modified by this phase. The gear icon in the terminal header opens the client-side preferences panel, not the `/settings` page. A separate link to `/settings` (for quick action management) remains in the app navigation.

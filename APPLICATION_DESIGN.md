@@ -6,7 +6,7 @@ A web application built with Elixir, Phoenix, and LiveView that runs on a host c
 
 The application must work well over high-latency and low-bandwidth connections, and be fully usable on mobile browsers. A native Android app is also a target, so the architecture cleanly separates the transport/API layer from the web UI.
 
-**Naming**: The product is called **tmux-rm**. The Elixir project uses `remote_code_agents` / `RemoteCodeAgents` as its module namespace and Mix project name (a legacy of the original project scope). The Android app uses package ID `org.tamx.tmuxrm`. All user-facing references (UI, systemd unit, config file headers) use "tmux-rm".
+**Naming**: The product is called **tmux-rm**. The Elixir project uses `tmux_rm` / `TmuxRm` as its module namespace and Mix project name (a legacy of the original project scope). The Android app uses package ID `org.tamx.tmuxrm`. All user-facing references (UI, systemd unit, config file headers) use "tmux-rm".
 
 ## Goals
 
@@ -48,7 +48,7 @@ Phoenix Application
     |-- PaneStreamSupervisor (DynamicSupervisor)
     |       Lifecycle management for PaneStream processes
     |
-    |-- Registry (RemoteCodeAgents.PaneRegistry)
+    |-- Registry (TmuxRm.PaneRegistry)
     |       Process lookup for PaneStreams by target key
     |
     |-- Config (GenServer)
@@ -81,7 +81,7 @@ Android app:
 
 ### Key Modules
 
-#### `RemoteCodeAgents.TmuxManager`
+#### `TmuxRm.TmuxManager`
 - **Responsibility**: Discover, list, and create tmux sessions
 - **Interface**:
   - `list_sessions/0` — returns `[%Session{name, windows, created, attached?}]`
@@ -93,17 +93,17 @@ Android app:
 - **Session name validation**: Names must match `^[a-zA-Z0-9_-]+$` (alphanumeric, hyphens, underscores). Reject anything else at creation time. This prevents conflicts with the tmux target format `session:window.pane` where colons and periods are delimiters.
 - **Not a GenServer**: Stateless module with functions that shell out. No need to cache session state since the source of truth is tmux itself. Can be promoted to a GenServer later if we need to rate-limit tmux CLI calls.
 
-#### `RemoteCodeAgents.PaneStream`
+#### `TmuxRm.PaneStream`
 - **Responsibility**: Bidirectional bridge between a tmux pane and one or more viewers
 - **Registration**: Dual-key via `Registry`:
-    1. `{:pane, target}` — primary key, set via GenServer `name:` option at `start_link`. Used by `subscribe/1` to find an existing PaneStream for a given target. Lookup: `Registry.lookup(RemoteCodeAgents.PaneRegistry, {:pane, target})`.
+    1. `{:pane, target}` — primary key, set via GenServer `name:` option at `start_link`. Used by `subscribe/1` to find an existing PaneStream for a given target. Lookup: `Registry.lookup(TmuxRm.PaneRegistry, {:pane, target})`.
     2. `{:pane_id, pane_id}` — secondary key, registered manually via `Registry.register/3` during init after resolving the stable `pane_id`. Used to detect stale PaneStreams after a session/window rename (see "Stale PaneStream detection" in Lifecycle below).
 - **State**:
   - `target` — the `session:window.pane` identifier (human-readable, used for Registry key, PubSub topic, display, and URL routing)
   - `pane_id` — tmux's stable pane identifier (e.g., `%0`), resolved during startup via `tmux display-message -p -t {target} '#{pane_id}'`. Used for `send-keys` and pane existence checks. Stable across session/window renames.
   - `pipe_port` — Elixir Port running `cat` on the FIFO
   - `viewers` — `MapSet` of subscriber PIDs (monitored)
-  - `buffer` — ring buffer (`RemoteCodeAgents.RingBuffer`, a fixed-capacity circular binary buffer; API: `new(capacity)`, `append(buffer, binary)` — overwrites oldest data when full, `read(buffer)` — returns a single contiguous binary by concatenating the two halves, `size(buffer)` — current byte count) of all output (scrollback + streaming). Sized dynamically based on the pane's tmux `history-limit` and width (see Buffer Sizing below). All viewers — first or late — receive the same history from this buffer. `RingBuffer.read/1` returns a single contiguous binary by concatenating the two halves of the circular buffer internally. Note: this allocates a copy up to `ring_buffer_max_size` (default 8MB) per call. This is acceptable for the expected viewer count (single-user tool with a handful of concurrent tabs); if many viewers connect simultaneously to a large-buffer pane, the transient memory spike from concurrent `read/1` copies is bounded by `concurrent_viewers × ring_buffer_max_size` (since subscribes serialize through the GenServer, in practice only one copy exists at a time — the bound applies to the aggregate of copies held by viewers that haven't yet consumed them). Because `subscribe/1` makes a `GenServer.call` that triggers `RingBuffer.read/1`, concurrent subscribes to the same pane serialize through the GenServer — during high-throughput output, each subscribe briefly blocks output processing. This is acceptable for the expected concurrency (a few tabs); the call returns quickly since `read/1` is a memory copy, not I/O.
+  - `buffer` — ring buffer (`TmuxRm.RingBuffer`, a fixed-capacity circular binary buffer; API: `new(capacity)`, `append(buffer, binary)` — overwrites oldest data when full, `read(buffer)` — returns a single contiguous binary by concatenating the two halves, `size(buffer)` — current byte count) of all output (scrollback + streaming). Sized dynamically based on the pane's tmux `history-limit` and width (see Buffer Sizing below). All viewers — first or late — receive the same history from this buffer. `RingBuffer.read/1` returns a single contiguous binary by concatenating the two halves of the circular buffer internally. Note: this allocates a copy up to `ring_buffer_max_size` (default 8MB) per call. This is acceptable for the expected viewer count (single-user tool with a handful of concurrent tabs); if many viewers connect simultaneously to a large-buffer pane, the transient memory spike from concurrent `read/1` copies is bounded by `concurrent_viewers × ring_buffer_max_size` (since subscribes serialize through the GenServer, in practice only one copy exists at a time — the bound applies to the aggregate of copies held by viewers that haven't yet consumed them). Because `subscribe/1` makes a `GenServer.call` that triggers `RingBuffer.read/1`, concurrent subscribes to the same pane serialize through the GenServer — during high-throughput output, each subscribe briefly blocks output processing. This is acceptable for the expected concurrency (a few tabs); the call returns quickly since `read/1` is a memory copy, not I/O.
   - `status` — `:starting | :streaming | :dead | :shutting_down`. Transitions: `:starting` (init, before pipe-pane attach) → `:streaming` (after startup sequence completes successfully, and on successful pipeline recovery) → `:dead` (Port EOF with status 0, or recovery failure/exhaustion) or `:shutting_down` (grace period expired, deliberate shutdown). `:starting` prevents `send_keys` calls during the startup window (treated same as `:dead` — returns `{:error, :not_ready}`).
   - `grace_timer_ref` — reference from `Process.send_after/3` for the grace period timer, or `nil`. Used by `Process.cancel_timer/1` when a new viewer subscribes during the grace period.
   - `port_recovery` — `%{attempts: non_neg_integer, window_start: integer | nil}` tracking pipeline recovery attempts. Reset when 60 seconds elapse since `window_start` with no further crashes. Max 3 attempts per window.
@@ -128,14 +128,14 @@ Android app:
       4. Limit recovery attempts to 3 within a 60-second window to prevent infinite restart loops (e.g., if `cat` is repeatedly killed). After exhausting retries, follow the death path. The retry counter resets after 60 seconds of stable streaming.
     This distinction is safe because exit status 0 from `cat` reliably indicates EOF (the write end of the FIFO was closed, meaning pipe-pane detached because the pane died). Non-zero indicates an abnormal `cat` termination unrelated to pane lifecycle.
 
-#### `RemoteCodeAgents.Tmux.CommandRunner`
+#### `TmuxRm.Tmux.CommandRunner`
 - **Responsibility**: Execute tmux CLI commands and return parsed output
 - **Interface**:
   - `run/1` — takes a list of argument strings (e.g., `["list-sessions", "-F", "#{session_name}"]`), prepends the tmux binary path and any socket args (see below), executes via `System.cmd/3`. Returns `{:ok, output}` or `{:error, reason}`.
   - `run!/1` — same but raises on error.
 - **Rationale**: Single point of contact with the tmux CLI. Makes it easy to mock in tests and add logging/rate-limiting later.
 - **Implementation**: Uses `System.cmd/3` with stderr capture. Validates that `tmux` is available on startup.
-- **Socket path**: If `config :remote_code_agents, tmux_socket` is set, `CommandRunner` prepends `-S <path>` (absolute socket path) or `-L <name>` (named socket) to all tmux commands. This supports non-default tmux server sockets (e.g., when tmux is started with `tmux -L mysocket`). Default: `nil` (use tmux's default socket).
+- **Socket path**: If `config :tmux_rm, tmux_socket` is set, `CommandRunner` prepends `-S <path>` (absolute socket path) or `-L <name>` (named socket) to all tmux commands. This supports non-default tmux server sockets (e.g., when tmux is started with `tmux -L mysocket`). Default: `nil` (use tmux's default socket).
 - **Minimum tmux version**: 2.6+ required (`send-keys -H` was added in 2.6). `CommandRunner` checks the tmux version once on application startup (via `tmux -V`), caches the result in a persistent term (`:persistent_term.put({__MODULE__, :version_checked}, true)`), and logs an error if below 2.6. Subsequent calls skip the check.
 
 ### tmux pipe-pane Strategy
@@ -297,19 +297,19 @@ Example: User types "hi" then Ctrl+C
 
 ### LiveView Pages
 
-#### `RemoteCodeAgentsWeb.SessionListLive`
+#### `TmuxRmWeb.SessionListLive`
 - Route: `/`
 - Lists all active tmux sessions with their windows and panes
 - "New Session" button/form — creates a new tmux session (name input with validation, optional starting command)
 - **Session list updates** use a hybrid approach:
   - **Instant**: Subscribes to PubSub topic `"sessions"` on mount. `TmuxManager.create_session/1` and `kill_session/1` broadcast `{:sessions_changed}` on this topic after mutating state, so the session list updates immediately for app-driven changes.
-  - **Polling fallback**: `Process.send_after(self(), :refresh_sessions, interval)` in `handle_info` catches external changes (sessions created/killed from the terminal). Default interval is 3 seconds. This is a lightweight **server-local** call (`tmux list-sessions` reads tmux's in-memory state) — it does not generate network traffic unless the session list actually changed (LiveView only pushes diffs). The interval is configurable via `config :remote_code_agents, session_poll_interval: 3_000`.
+  - **Polling fallback**: `Process.send_after(self(), :refresh_sessions, interval)` in `handle_info` catches external changes (sessions created/killed from the terminal). Default interval is 3 seconds. This is a lightweight **server-local** call (`tmux list-sessions` reads tmux's in-memory state) — it does not generate network traffic unless the session list actually changed (LiveView only pushes diffs). The interval is configurable via `config :tmux_rm, session_poll_interval: 3_000`.
 - Click a pane to navigate to the terminal view via `push_navigate`
 - Shows pane dimensions and running command (from `tmux list-panes -F` format)
 - Mobile layout: full-width card list, large touch targets
 - Empty state: friendly message when no tmux sessions exist, with prominent "Create Session" CTA
 
-#### `RemoteCodeAgentsWeb.TerminalLive`
+#### `TmuxRmWeb.TerminalLive`
 - Route: `/sessions/:session/:window/:pane`
 - Full-viewport xterm.js terminal
 - **LiveView Hook (`TerminalHook`)**:
@@ -371,7 +371,7 @@ For native Android client only. Provides real-time session list updates, mirrori
 - **Join handler**:
   1. Subscribe to PubSub topic `"sessions"` — receives `{:sessions_changed}` broadcasts from `TmuxManager.create_session/1` and `kill_session/1`.
   2. Fetch the current session list via `TmuxManager.list_sessions/0` (with panes via `list_panes/1` for each session).
-  3. Start a poll timer via `Process.send_after(self(), :poll_sessions, session_poll_interval)` — catches external changes (sessions created/killed from the terminal), same interval as `SessionListLive` (default 3s, configurable via `config :remote_code_agents, session_poll_interval`).
+  3. Start a poll timer via `Process.send_after(self(), :poll_sessions, session_poll_interval)` — catches external changes (sessions created/killed from the terminal), same interval as `SessionListLive` (default 3s, configurable via `config :tmux_rm, session_poll_interval`).
   4. Store the last-sent session list in Channel assigns for diffing (only push when the list actually changed).
   5. Reply `{:ok, %{"sessions" => sessions_json}}` — the current session list, so the client has data immediately without a separate REST call.
 - **Server → Client events**:
@@ -543,11 +543,11 @@ Terminal output (text + ANSI escape codes) compresses very well — typical comp
 **Implementation**: Enable on the LiveView socket declaration in the Endpoint module:
 
 ```elixir
-# lib/remote_code_agents_web/endpoint.ex
+# lib/tmux_rm_web/endpoint.ex
 socket "/live", Phoenix.LiveView.Socket,
   websocket: [compress: true]  # enables permessage-deflate
 
-socket "/socket", RemoteCodeAgentsWeb.UserSocket,
+socket "/socket", TmuxRmWeb.UserSocket,
   websocket: [compress: true, connect_info: [:peer_data, :x_headers]]  # Phoenix Channel socket for native clients
 ```
 
@@ -571,7 +571,7 @@ During high-throughput output (e.g., `cat large_file`, build logs), the `cat` Po
 
 ```elixir
 # config/config.exs
-config :remote_code_agents,
+config :tmux_rm,
   # Coalescing window (ms) for PaneStream output. 0 = disabled (every Port
   # message triggers an immediate broadcast). Low values (2-5ms) help on
   # slow connections without perceptible delay on fast ones.
@@ -686,9 +686,9 @@ A fixed bottom toolbar providing keys that don't exist on mobile keyboards:
 ## Project Structure
 
 ```
-remote_code_agents/
+tmux_rm/
   lib/
-    remote_code_agents/
+    tmux_rm/
       application.ex               # Supervision tree
       tmux/
         command_runner.ex           # Thin wrapper around System.cmd for tmux CLI
@@ -700,7 +700,7 @@ remote_code_agents/
       pane_stream_supervisor.ex     # DynamicSupervisor for PaneStreams
       session_poller.ex             # GenServer: polls tmux session/pane list, broadcasts changes via PubSub
       config.ex                     # GenServer: YAML config loader/writer with mtime polling + PubSub (used by Quick Actions + Settings)
-    remote_code_agents_web/
+    tmux_rm_web/
       channels/
         terminal_channel.ex         # Raw terminal I/O channel (for native clients)
         session_channel.ex          # Real-time session list updates (for native clients)
@@ -746,10 +746,10 @@ remote_code_agents/
     prod.exs
     runtime.exs
   test/
-    remote_code_agents/
+    tmux_rm/
       tmux_manager_test.exs         # Unit tests with mocked CommandRunner
       pane_stream_test.exs          # Integration tests with real tmux
-    remote_code_agents_web/
+    tmux_rm_web/
       live/
         session_list_live_test.exs
         terminal_live_test.exs
@@ -763,17 +763,17 @@ remote_code_agents/
 
 ```
 Application
-  ├── RemoteCodeAgents.PaneRegistry (Registry)
-  ├── RemoteCodeAgents.PaneStreamSupervisor (DynamicSupervisor)
-  ├── Phoenix.PubSub (RemoteCodeAgents.PubSub)
-  ├── RemoteCodeAgents.SessionPoller (GenServer)
-  ├── RemoteCodeAgents.Config (GenServer)
-  ├── RemoteCodeAgentsWeb.RateLimitStore (GenServer — owns ETS table, periodic cleanup)
-  └── RemoteCodeAgentsWeb.Endpoint
+  ├── TmuxRm.PaneRegistry (Registry)
+  ├── TmuxRm.PaneStreamSupervisor (DynamicSupervisor)
+  ├── Phoenix.PubSub (TmuxRm.PubSub)
+  ├── TmuxRm.SessionPoller (GenServer)
+  ├── TmuxRm.Config (GenServer)
+  ├── TmuxRmWeb.RateLimitStore (GenServer — owns ETS table, periodic cleanup)
+  └── TmuxRmWeb.Endpoint
 ```
 
 - `PaneRegistry` starts first — PaneStreams need it for registration
-- `PaneStreamSupervisor` starts next — ready to accept PaneStream children. Configured with `max_children: 100` to bound resource usage (FIFOs, ports, memory). If the limit is hit, `subscribe/1` returns `{:error, :max_pane_streams}`. This is configurable via `config :remote_code_agents, max_pane_streams: 100`. PaneStream children use `restart: :transient` — they are restarted on abnormal exits but not on `:normal`, `:shutdown`, or `{:shutdown, reason}` exits. All deliberate PaneStream terminations (grace period expiry, pane death, superseded) use `{:stop, :normal, state}` to avoid triggering a supervisor restart.
+- `PaneStreamSupervisor` starts next — ready to accept PaneStream children. Configured with `max_children: 100` to bound resource usage (FIFOs, ports, memory). If the limit is hit, `subscribe/1` returns `{:error, :max_pane_streams}`. This is configurable via `config :tmux_rm, max_pane_streams: 100`. PaneStream children use `restart: :transient` — they are restarted on abnormal exits but not on `:normal`, `:shutdown`, or `{:shutdown, reason}` exits. All deliberate PaneStream terminations (grace period expiry, pane death, superseded) use `{:stop, :normal, state}` to avoid triggering a supervisor restart.
 - PubSub starts before SessionPoller and Config — both broadcast via PubSub
 - `SessionPoller` polls tmux for session/pane lists every `session_poll_interval` (default 3s) via `TmuxManager.list_sessions/0`. Compares the result to the previous snapshot; if changed, broadcasts `{:sessions_updated, sessions}` on PubSub topic `"sessions"`. Exposes `SessionPoller.get/0` (GenServer.call) for synchronous reads (e.g., Channel join replies, REST API). This single process replaces per-viewer polling — `SessionListLive` and `SessionChannel` both subscribe to the `"sessions"` PubSub topic and receive updates without their own timers.
 - Config starts before Endpoint — config must be loaded before LiveViews mount
@@ -783,7 +783,7 @@ Application
 
 ```elixir
 # config/config.exs
-config :remote_code_agents,
+config :tmux_rm,
   # Polling interval (ms) for SessionPoller to check tmux for session/pane changes
   session_poll_interval: 3_000,
   # Grace period (ms) before shutting down a PaneStream with zero viewers
@@ -806,7 +806,7 @@ config :remote_code_agents,
   # Polling interval (ms) for detecting external config file changes
   config_poll_interval: 2_000,
   # FIFO directory for pipe-pane output
-  fifo_dir: "/tmp/remote-code-agents",
+  fifo_dir: "/tmp/tmux-rm",
   # Path to tmux binary (auto-detected if nil)
   tmux_path: nil,
   # tmux socket path (-S) or name (-L). nil = default socket.
@@ -823,23 +823,23 @@ config :remote_code_agents,
   auth_session_ttl_days: 30
 
 # config/dev.exs
-config :remote_code_agents, RemoteCodeAgentsWeb.Endpoint,
+config :tmux_rm, TmuxRmWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4000]
   # WebSocket compression is configured on the socket declaration in endpoint.ex,
   # not here — see Bandwidth Optimization section.
 
 # config/test.exs
-config :remote_code_agents,
+config :tmux_rm,
   # Use shorter grace period in tests
   pane_stream_grace_period: 100,
-  fifo_dir: "/tmp/remote-code-agents-test"
+  fifo_dir: "/tmp/tmux-rm-test"
 ```
 
 ## Health Check Endpoint
 
 `GET /healthz` — unauthenticated, returns a JSON response indicating application and tmux status.
 
-- **Implementation**: `RemoteCodeAgentsWeb.HealthController` — a plain Phoenix controller (not LiveView).
+- **Implementation**: `TmuxRmWeb.HealthController` — a plain Phoenix controller (not LiveView).
 - **Check**: Calls `CommandRunner.run(["list-sessions"])` to verify tmux is reachable. Does not parse the output — success/failure of the command is sufficient.
 - **Response**:
   - `200 OK` with `{"status": "ok", "tmux": "ok"}` — app running, tmux reachable
@@ -868,12 +868,12 @@ config :remote_code_agents,
   | WebSocket upgrade (`/socket/websocket`) | 10 attempts | 1 minute | Connection rejected (`:error` from `UserSocket.connect/3`) |
   | `POST /api/sessions` | 10 requests | 1 minute | `429 Too Many Requests` with same format |
 
-  **Implementation**: `RemoteCodeAgentsWeb.Plugs.RateLimit` — a Plug for HTTP endpoints (login, session create). WebSocket rate limiting is handled in `UserSocket.connect/3` instead of a Plug, since WebSocket upgrades bypass the router pipeline — `connect/3` reads the peer IP from `connect_info` and calls `RateLimitStore.check/2` directly. Both paths use the same ETS table (`:set`, `:public`, with `read_concurrency: true`) to track `{ip, endpoint_key, window_start}` → `count`. The window start is truncated to the current minute (`System.system_time(:second) |> div(60)`). Stale entries are cleaned up lazily — on each request, if the window has rolled over, the old entry is replaced. A periodic cleanup (every 5 minutes via a `Process.send_after` loop inside the `RateLimit` module's companion GenServer, started in the supervision tree) sweeps entries older than 2 minutes to prevent unbounded ETS growth from many distinct IPs. The GenServer owns the ETS table; the Plug reads from it directly (`:public` table with `read_concurrency: true`).
+  **Implementation**: `TmuxRmWeb.Plugs.RateLimit` — a Plug for HTTP endpoints (login, session create). WebSocket rate limiting is handled in `UserSocket.connect/3` instead of a Plug, since WebSocket upgrades bypass the router pipeline — `connect/3` reads the peer IP from `connect_info` and calls `RateLimitStore.check/2` directly. Both paths use the same ETS table (`:set`, `:public`, with `read_concurrency: true`) to track `{ip, endpoint_key, window_start}` → `count`. The window start is truncated to the current minute (`System.system_time(:second) |> div(60)`). Stale entries are cleaned up lazily — on each request, if the window has rolled over, the old entry is replaced. A periodic cleanup (every 5 minutes via a `Process.send_after` loop inside the `RateLimit` module's companion GenServer, started in the supervision tree) sweeps entries older than 2 minutes to prevent unbounded ETS growth from many distinct IPs. The GenServer owns the ETS table; the Plug reads from it directly (`:public` table with `read_concurrency: true`).
 
   **Configuration**:
   ```elixir
   # config/config.exs
-  config :remote_code_agents,
+  config :tmux_rm,
     rate_limits: %{
       login: {5, 60},           # {max_requests, window_seconds}
       websocket: {10, 60},
@@ -964,7 +964,7 @@ config :remote_code_agents,
 
 8. **FIFO blocking → cat Port**: The `cat` command runs as a Port (separate OS process), blocking on FIFO open without blocking the GenServer. `pipe-pane` opens the write end, unblocking `cat`. Simple and reliable.
 
-9. **Process lookup → Elixir Registry**: PaneStreams registered in `RemoteCodeAgents.PaneRegistry` with key `{:pane, target}`. `subscribe/1` is a module function (not a GenServer call) that checks Registry for an existing PaneStream; if not found, starts one under DynamicSupervisor via `start_link/1`. It then makes a `GenServer.call` to register the viewer. Returns `{:ok, history_binary, cols, rows}` on success or `{:error, reason}` (where reason is `:pane_not_found`, `:max_pane_streams`, etc.) on failure. This "get or start" logic lives inside `subscribe/1` — there is no separate public `get_or_start` function.
+9. **Process lookup → Elixir Registry**: PaneStreams registered in `TmuxRm.PaneRegistry` with key `{:pane, target}`. `subscribe/1` is a module function (not a GenServer call) that checks Registry for an existing PaneStream; if not found, starts one under DynamicSupervisor via `start_link/1`. It then makes a `GenServer.call` to register the viewer. Returns `{:ok, history_binary, cols, rows}` on success or `{:error, reason}` (where reason is `:pane_not_found`, `:max_pane_streams`, etc.) on failure. This "get or start" logic lives inside `subscribe/1` — there is no separate public `get_or_start` function.
 
     **Race condition handling**: If two viewers call `subscribe/1` concurrently for the same target, both may see "not found" in Registry and attempt `DynamicSupervisor.start_child`. PaneStream's `init/1` registers itself in the Registry via `{:via, Registry, {PaneRegistry, {:pane, target}}}` (the `name` option in `start_link`). The second `start_child` receives `{:error, {:already_started, pid}}` because Registry rejects duplicate keys. `subscribe/1` handles this by extracting the existing PID from the error tuple and proceeding with the `GenServer.call` to register the viewer — same as if the process had been found in the initial lookup.
 
@@ -1012,7 +1012,7 @@ This application is **fully stateless from a storage perspective**. No database 
 | Session/pane state     | tmux itself (source of truth)                          |
 | Streaming state        | PaneStream GenServer memory (ephemeral)                |
 | Viewer tracking        | PaneStream GenServer memory (ephemeral)                |
-| Auth credentials       | `~/.config/remote_code_agents/credentials` (bcrypt hash) or `RCA_AUTH_TOKEN` env var |
+| Auth credentials       | `~/.config/tmux_rm/credentials` (bcrypt hash) or `RCA_AUTH_TOKEN` env var |
 | Quick actions          | YAML config file, cached in `Config` GenServer memory      |
 | User preferences       | Browser `localStorage` (client-side)                   |
 | Layout preferences     | Browser `localStorage` (client-side)                   |
@@ -1035,18 +1035,18 @@ This application is **fully stateless from a storage perspective**. No database 
 
 #### Username + Password Authentication
 
-- **Credentials**: Username and bcrypt-hashed password stored in `~/.config/remote_code_agents/credentials`. The username defaults to the system user running the application. The user chooses a memorable password — no random tokens to transfer between devices.
+- **Credentials**: Username and bcrypt-hashed password stored in `~/.config/tmux_rm/credentials`. The username defaults to the system user running the application. The user chooses a memorable password — no random tokens to transfer between devices.
 - **Setup**: `mix rca.setup` Mix task (also triggered on first launch if no credentials file exists):
   1. Prompts for username (pre-filled with `whoami` output)
   2. Prompts for password (with confirmation)
   3. Hashes password via `Bcrypt.hash_pwd_salt/1`
-  4. Writes `username:hash` to `~/.config/remote_code_agents/credentials` (plain text, one line, colon-delimited — human-inspectable and easy to parse via `String.split(line, ":", parts: 2)`)
+  4. Writes `username:hash` to `~/.config/tmux_rm/credentials` (plain text, one line, colon-delimited — human-inspectable and easy to parse via `String.split(line, ":", parts: 2)`)
 - **Password change**: `mix rca.change_password` — prompts for current password (verified against stored hash), then new password with confirmation.
 - **Dependencies**: `bcrypt_elixir` (+ `comeonin`) — the standard password hashing library in the Phoenix ecosystem.
 
 #### Fallback: Static Token (for headless/automated setups)
 
-- **`RCA_AUTH_TOKEN` env var**: If set (via `config :remote_code_agents, auth_token:` in `runtime.exs`), the login page accepts this token in the password field (with any username). The `Auth` module reads the token from application config (`Application.get_env(:remote_code_agents, :auth_token)`) and verifies via `Plug.Crypto.secure_compare/2` (constant-time comparison). This supports systemd services, CI, and scripted deployments where interactive setup isn't possible.
+- **`RCA_AUTH_TOKEN` env var**: If set (via `config :tmux_rm, auth_token:` in `runtime.exs`), the login page accepts this token in the password field (with any username). The `Auth` module reads the token from application config (`Application.get_env(:tmux_rm, :auth_token)`) and verifies via `Plug.Crypto.secure_compare/2` (constant-time comparison). This supports systemd services, CI, and scripted deployments where interactive setup isn't possible.
 - **Precedence**: If `auth_token` is configured, both token auth and credentials auth are accepted — whichever matches. If neither credentials file nor token config exists, auth is disabled (localhost-only mode). If the endpoint is bound to `0.0.0.0` and no auth is configured, log a warning on startup.
 
 #### Auth Flow — Web
@@ -1056,7 +1056,7 @@ This application is **fully stateless from a storage perspective**. No database 
 3. On submit, server checks:
    a. If `RCA_AUTH_TOKEN` is set and the password matches (constant-time compare), authenticate.
    b. Otherwise, look up the stored username. If the username doesn't match, call `Bcrypt.no_user_verify/0` (performs a dummy hash to prevent timing-based username enumeration) and reject. If the username matches, verify the password via `Bcrypt.verify_pass/2`.
-4. On success, set a signed session cookie (`Plug.Session` with `:cookie` store, signed with `secret_key_base`). Store `authenticated_at: System.system_time(:second)` in the session data. Configured via `config :remote_code_agents, auth_session_ttl_days: 30` in application config (not `config.yaml` — auth settings use application config, not the YAML config file, to avoid a circular dependency on the Config GenServer during boot).
+4. On success, set a signed session cookie (`Plug.Session` with `:cookie` store, signed with `secret_key_base`). Store `authenticated_at: System.system_time(:second)` in the session data. Configured via `config :tmux_rm, auth_session_ttl_days: 30` in application config (not `config.yaml` — auth settings use application config, not the YAML config file, to avoid a circular dependency on the Config GenServer during boot).
 5. All LiveView mounts check `on_mount` hook (`AuthHook`) for valid session. `AuthHook` reads `authenticated_at` from the session and compares against `auth_session_ttl_days` (default 30 days; `nil` = never expire, re-auth only on explicit logout). If the timestamp is missing or expired, redirect to `/login` with a flash message ("Session expired, please log in again" for expired vs no message for missing). This gives the server authoritative control over session lifetime — config changes take effect immediately for all existing sessions.
 6. **Logout**: `DELETE /logout` (handled by `AuthController`) clears the session cookie and redirects to `/login`. A "Logout" link is shown in the settings panel. For the Android app, logout clears the stored token from `EncryptedSharedPreferences` and navigates to the Login Screen — no server call needed since Phoenix.Token is stateless (the server doesn't track issued tokens).
 
@@ -1071,12 +1071,12 @@ This application is **fully stateless from a storage perspective**. No database 
 
 #### Implementation Modules
 
-- `RemoteCodeAgentsWeb.Plugs.RequireAuth` — Plug that checks session cookie exists, redirects to `/login` if missing. Does not check TTL — that's handled by `AuthHook` on LiveView mount (Plugs run on the initial HTTP request; `AuthHook` runs on every LiveView mount including reconnects, so TTL expiry is checked more frequently).
-- `RemoteCodeAgentsWeb.Plugs.RequireAuthToken` — Plug that reads bearer token from `Authorization` header, verifies via `Phoenix.Token.verify/4`, returns 401 on failure. Used by the `:require_auth_token` pipeline for REST API routes.
-- `RemoteCodeAgentsWeb.AuthLive` — LiveView for the web login page (username + password form, submits via `handle_event`). The REST API login (`POST /api/login`) is handled by `AuthController` — a separate path for native clients.
-- `RemoteCodeAgentsWeb.AuthController` — handles `POST /api/login` (returns Phoenix.Token for native clients) and `DELETE /logout` (clears session cookie, redirects to `/login`)
-- `RemoteCodeAgentsWeb.AuthHook` — `on_mount` hook for LiveView auth checks (used in `live_session` block in router)
-- `RemoteCodeAgents.Auth` — module that handles credential verification (bcrypt check, token fallback, credentials file I/O)
+- `TmuxRmWeb.Plugs.RequireAuth` — Plug that checks session cookie exists, redirects to `/login` if missing. Does not check TTL — that's handled by `AuthHook` on LiveView mount (Plugs run on the initial HTTP request; `AuthHook` runs on every LiveView mount including reconnects, so TTL expiry is checked more frequently).
+- `TmuxRmWeb.Plugs.RequireAuthToken` — Plug that reads bearer token from `Authorization` header, verifies via `Phoenix.Token.verify/4`, returns 401 on failure. Used by the `:require_auth_token` pipeline for REST API routes.
+- `TmuxRmWeb.AuthLive` — LiveView for the web login page (username + password form, submits via `handle_event`). The REST API login (`POST /api/login`) is handled by `AuthController` — a separate path for native clients.
+- `TmuxRmWeb.AuthController` — handles `POST /api/login` (returns Phoenix.Token for native clients) and `DELETE /logout` (clears session cookie, redirects to `/login`)
+- `TmuxRmWeb.AuthHook` — `on_mount` hook for LiveView auth checks (used in `live_session` block in router)
+- `TmuxRm.Auth` — module that handles credential verification (bcrypt check, token fallback, credentials file I/O)
 
 #### HTTPS
 
@@ -1091,10 +1091,10 @@ For remote access, HTTPS is required (both for security and Clipboard API).
 
 ```elixir
 # config/runtime.exs — remote access example
-config :remote_code_agents,
+config :tmux_rm,
   auth_token: System.get_env("RCA_AUTH_TOKEN")  # optional fallback for headless setups
 
-config :remote_code_agents, RemoteCodeAgentsWeb.Endpoint,
+config :tmux_rm, TmuxRmWeb.Endpoint,
   http: [ip: {0, 0, 0, 0}, port: 4000]
 ```
 
@@ -1248,14 +1248,14 @@ In multi-pane view, all panes are **passive resizers** — they read the current
 
 #### New Module
 
-This feature introduces `RemoteCodeAgents.Config` (`lib/remote_code_agents/config.ex`) — a GenServer that holds parsed config in memory, serializes all reads and writes to `~/.config/remote_code_agents/config.yaml`, detects external file changes via mtime polling, and broadcasts updates via PubSub so LiveViews stay in sync.
+This feature introduces `TmuxRm.Config` (`lib/tmux_rm/config.ex`) — a GenServer that holds parsed config in memory, serializes all reads and writes to `~/.config/tmux_rm/config.yaml`, detects external file changes via mtime polling, and broadcasts updates via PubSub so LiveViews stay in sync.
 
 #### Configuration File
 
-Quick actions are defined in a YAML configuration file at `~/.config/remote_code_agents/config.yaml`. This file is the central place for quick actions and other non-auth settings. Auth credentials are stored separately (see Authentication & Remote Access).
+Quick actions are defined in a YAML configuration file at `~/.config/tmux_rm/config.yaml`. This file is the central place for quick actions and other non-auth settings. Auth credentials are stored separately (see Authentication & Remote Access).
 
 ```yaml
-# ~/.config/remote_code_agents/config.yaml
+# ~/.config/tmux_rm/config.yaml
 
 # Quick action buttons displayed above the terminal
 quick_actions:
@@ -1292,9 +1292,9 @@ quick_actions:
 
 #### Config Loading & Persistence
 
-`RemoteCodeAgents.Config` is a **GenServer** that owns all access to the config file. This serializes concurrent writes (multiple browser tabs), enables PubSub-driven LiveView updates, and detects external file edits.
+`TmuxRm.Config` is a **GenServer** that owns all access to the config file. This serializes concurrent writes (multiple browser tabs), enables PubSub-driven LiveView updates, and detects external file edits.
 
-- **Location resolution**: Check `$RCA_CONFIG_PATH` env var first, then `~/.config/remote_code_agents/config.yaml`, then fall back to defaults (no quick actions).
+- **Location resolution**: Check `$RCA_CONFIG_PATH` env var first, then `~/.config/tmux_rm/config.yaml`, then fall back to defaults (no quick actions).
 - **Parsing**: Use `yaml_elixir` hex package to parse YAML.
 - **Startup**: Reads and validates the config file in `init/1`. Stores the parsed config and the file's mtime in GenServer state. If any quick actions were missing `id` fields, the file is rewritten immediately with the generated IDs — this ensures IDs are stable across reloads and cached by API clients (e.g., the Android app). Starts a periodic mtime check via `Process.send_after/3`.
 - **File change detection**: Every 2 seconds (`config_poll_interval`, configurable), the GenServer checks the config file's mtime via `File.stat/1`. If the mtime has changed, it re-reads and re-parses the file, updates state, and broadcasts `{:config_changed, config}` on PubSub topic `"config"`. This catches manual YAML edits without needing a filesystem watcher dependency.
@@ -1308,11 +1308,11 @@ quick_actions:
 - **PubSub topic**: `"config"` — LiveViews subscribe on mount and update assigns on `{:config_changed, config}`.
 
 ```elixir
-defmodule RemoteCodeAgents.Config do
+defmodule TmuxRm.Config do
   use GenServer
   require Logger
 
-  @default_path "~/.config/remote_code_agents/config.yaml"
+  @default_path "~/.config/tmux_rm/config.yaml"
 
   # --- Public API ---
 
@@ -1357,7 +1357,7 @@ defmodule RemoteCodeAgents.Config do
   @impl true
   def init(_opts) do
     path = config_path() |> Path.expand()
-    poll_interval = Application.get_env(:remote_code_agents, :config_poll_interval, 2_000)
+    poll_interval = Application.get_env(:tmux_rm, :config_poll_interval, 2_000)
     {config, mtime} =
       case load_from_disk(path) do
         {:ok, config, ids_generated?, mtime} ->
@@ -1483,7 +1483,7 @@ defmodule RemoteCodeAgents.Config do
   end
 
   defp broadcast_change(config) do
-    Phoenix.PubSub.broadcast(RemoteCodeAgents.PubSub, "config", {:config_changed, config})
+    Phoenix.PubSub.broadcast(TmuxRm.PubSub, "config", {:config_changed, config})
   end
 
   defp defaults, do: %{quick_actions: []}
@@ -1620,10 +1620,10 @@ A horizontally-scrollable toolbar rendered above the terminal, below the session
 # terminal_live.ex
 def mount(params, _session, socket) do
   if connected?(socket) do
-    Phoenix.PubSub.subscribe(RemoteCodeAgents.PubSub, "config")
+    Phoenix.PubSub.subscribe(TmuxRm.PubSub, "config")
   end
 
-  config = RemoteCodeAgents.Config.get()
+  config = TmuxRm.Config.get()
 
   socket =
     socket
@@ -1759,7 +1759,7 @@ end
 
 #### Design Principles
 
-- **YAML remains the source of truth**: The UI and API read from and write to `~/.config/remote_code_agents/config.yaml`. No database introduced.
+- **YAML remains the source of truth**: The UI and API read from and write to `~/.config/tmux_rm/config.yaml`. No database introduced.
 - **Round-trip safe**: The YAML writer rewrites the file cleanly using `ymlr` (a YAML encoder library) with a header comment explaining the format. Comments in the original file are not preserved. Unknown top-level keys are also dropped — `to_yaml/1` only serializes known fields (`quick_actions`). This is acceptable since the structure is simple, the header documents the format, and new config sections will be added to `to_yaml/1` as they are implemented.
 - **Immediate effect**: After a save, the updated config is available on the next LiveView mount (already the case — config is re-read per mount).
 - **Conflict-free**: Single-user tool — no concurrent write concerns. The UI reads the current file, presents it for editing, and writes it back atomically (write to temp file + rename).
@@ -1799,34 +1799,34 @@ Accessible via a gear icon in the terminal header or session list.
 A new LiveView or LiveComponent for the settings panel:
 
 ```elixir
-defmodule RemoteCodeAgentsWeb.SettingsLive do
-  use RemoteCodeAgentsWeb, :live_view
+defmodule TmuxRmWeb.SettingsLive do
+  use TmuxRmWeb, :live_view
 
   def mount(_params, _session, socket) do
     if connected?(socket) do
-      Phoenix.PubSub.subscribe(RemoteCodeAgents.PubSub, "config")
+      Phoenix.PubSub.subscribe(TmuxRm.PubSub, "config")
     end
 
-    config = RemoteCodeAgents.Config.get()
+    config = TmuxRm.Config.get()
     {:ok, assign(socket, :config, config)}
   end
 
   def handle_event("save_action", %{"action" => action_params}, socket) do
-    case RemoteCodeAgents.Config.upsert_action(action_params) do
+    case TmuxRm.Config.upsert_action(action_params) do
       {:ok, updated} -> {:noreply, assign(socket, :config, updated)}
       {:error, _reason} -> {:noreply, put_flash(socket, :error, "Failed to save — check file permissions")}
     end
   end
 
   def handle_event("delete_action", %{"id" => id}, socket) do
-    case RemoteCodeAgents.Config.delete_action(id) do
+    case TmuxRm.Config.delete_action(id) do
       {:ok, updated} -> {:noreply, assign(socket, :config, updated)}
       {:error, _reason} -> {:noreply, put_flash(socket, :error, "Failed to delete — check file permissions")}
     end
   end
 
   def handle_event("reorder_actions", %{"ids" => ids}, socket) do
-    case RemoteCodeAgents.Config.reorder_actions(ids) do
+    case TmuxRm.Config.reorder_actions(ids) do
       {:ok, updated} -> {:noreply, assign(socket, :config, updated)}
       {:error, :id_mismatch} -> {:noreply, put_flash(socket, :error, "Quick actions changed — please refresh and try again")}
       {:error, _reason} -> {:noreply, put_flash(socket, :error, "Failed to reorder — check file permissions")}
@@ -1888,16 +1888,16 @@ All endpoints require the same bearer token auth as other API routes.
 #### Controller
 
 ```elixir
-defmodule RemoteCodeAgentsWeb.QuickActionController do
-  use RemoteCodeAgentsWeb, :controller
+defmodule TmuxRmWeb.QuickActionController do
+  use TmuxRmWeb, :controller
 
   def index(conn, _params) do
-    config = RemoteCodeAgents.Config.get()
+    config = TmuxRm.Config.get()
     json(conn, %{quick_actions: config.quick_actions})
   end
 
   def create(conn, %{"action" => action_params}) do
-    case RemoteCodeAgents.Config.upsert_action(action_params) do
+    case TmuxRm.Config.upsert_action(action_params) do
       {:ok, updated} ->
         conn |> put_status(201) |> json(%{quick_actions: updated.quick_actions})
       {:error, reason} ->
@@ -1906,7 +1906,7 @@ defmodule RemoteCodeAgentsWeb.QuickActionController do
   end
 
   def update(conn, %{"id" => id, "action" => action_params}) do
-    case RemoteCodeAgents.Config.upsert_action(Map.put(action_params, "id", id)) do
+    case TmuxRm.Config.upsert_action(Map.put(action_params, "id", id)) do
       {:ok, updated} -> json(conn, %{quick_actions: updated.quick_actions})
       {:error, reason} ->
         conn |> put_status(500) |> json(%{error: "Failed to write config: #{inspect(reason)}"})
@@ -1914,7 +1914,7 @@ defmodule RemoteCodeAgentsWeb.QuickActionController do
   end
 
   def delete(conn, %{"id" => id}) do
-    case RemoteCodeAgents.Config.delete_action(id) do
+    case TmuxRm.Config.delete_action(id) do
       {:ok, updated} -> json(conn, %{quick_actions: updated.quick_actions})
       {:error, reason} ->
         conn |> put_status(500) |> json(%{error: "Failed to write config: #{inspect(reason)}"})
@@ -1922,7 +1922,7 @@ defmodule RemoteCodeAgentsWeb.QuickActionController do
   end
 
   def reorder(conn, %{"ids" => ids}) do
-    case RemoteCodeAgents.Config.reorder_actions(ids) do
+    case TmuxRm.Config.reorder_actions(ids) do
       {:ok, updated} -> json(conn, %{quick_actions: updated.quick_actions})
       {:error, :id_mismatch} ->
         conn |> put_status(422) |> json(%{error: "ID list does not match existing quick action IDs"})
@@ -1939,19 +1939,19 @@ end
 # router.ex
 
 pipeline :require_auth_token do
-  plug RemoteCodeAgentsWeb.Plugs.RequireAuthToken
+  plug TmuxRmWeb.Plugs.RequireAuthToken
   # Reads bearer token from Authorization header, verifies via
   # Phoenix.Token.verify/4. Returns 401 with {"error": "unauthorized"}
   # on missing/invalid/expired token.
 end
 
-scope "/api", RemoteCodeAgentsWeb do
+scope "/api", TmuxRmWeb do
   pipe_through :api
 
   post "/login", AuthController, :login  # rate limited via plug RateLimit, key: :login in AuthController
 end
 
-scope "/api", RemoteCodeAgentsWeb do
+scope "/api", TmuxRmWeb do
   pipe_through [:api, :require_auth_token]
 
   get "/sessions", SessionController, :index
@@ -1968,7 +1968,7 @@ scope "/api", RemoteCodeAgentsWeb do
   resources "/quick-actions", QuickActionController, only: [:index, :create, :update, :delete]
 end
 
-scope "/", RemoteCodeAgentsWeb do
+scope "/", TmuxRmWeb do
   pipe_through :browser
 
   # Login page — outside authenticated scope so unauthenticated users can reach it.
@@ -1979,14 +1979,14 @@ scope "/", RemoteCodeAgentsWeb do
   end
 end
 
-scope "/", RemoteCodeAgentsWeb do
+scope "/", TmuxRmWeb do
   pipe_through [:browser, :require_auth]
   # :require_auth is a no-op in localhost mode (no auth configured).
   # When auth is enabled (remote access), this protects all LiveViews.
 
   delete "/logout", AuthController, :logout
 
-  live_session :authenticated, on_mount: [RemoteCodeAgentsWeb.AuthHook] do
+  live_session :authenticated, on_mount: [TmuxRmWeb.AuthHook] do
     live "/", SessionListLive
     live "/terminal/:target", TerminalLive
     live "/sessions/:session", MultiPaneLive  # redirects to active window
@@ -2048,7 +2048,7 @@ MIX_ENV=prod mix assets.deploy
 MIX_ENV=prod mix release
 
 # Run
-RCA_AUTH_TOKEN="my-secret-token" _build/prod/rel/remote_code_agents/bin/remote_code_agents start
+RCA_AUTH_TOKEN="my-secret-token" _build/prod/rel/tmux_rm/bin/tmux_rm start
 ```
 
 ### Requirements
@@ -2069,8 +2069,8 @@ Type=exec
 User=ben
 Environment=RCA_AUTH_TOKEN=<token>
 Environment=HOME=/home/ben
-ExecStart=/opt/remote_code_agents/bin/remote_code_agents start
-ExecStop=/opt/remote_code_agents/bin/remote_code_agents stop
+ExecStart=/opt/tmux_rm/bin/tmux_rm start
+ExecStop=/opt/tmux_rm/bin/tmux_rm stop
 Restart=on-failure
 RestartSec=5
 
@@ -2086,8 +2086,8 @@ FROM elixir:1.17-slim AS build  # Pin to match minimum Elixir version; bump as n
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y tmux && rm -rf /var/lib/apt/lists/*
-COPY --from=build /app/_build/prod/rel/remote_code_agents /app
-CMD ["/app/bin/remote_code_agents", "start"]
+COPY --from=build /app/_build/prod/rel/tmux_rm /app
+CMD ["/app/bin/tmux_rm", "start"]
 ```
 
 **Docker caveat**: The app needs access to the host's tmux server. Options:

@@ -91,7 +91,7 @@ end
 
 ### 7.8 REST API for Session Management
 
-**`lib/remote_code_agents_web/controllers/session_controller.ex`**:
+**`lib/tmux_rm_web/controllers/session_controller.ex`**:
 ```
 GET    /api/sessions             — list sessions with panes (from SessionPoller.get/0)
 POST   /api/sessions             — create session (rate limited)
@@ -138,7 +138,7 @@ POST   /api/sessions/:name/windows — create window
 - 422: `{"error": "validation_failed", "message": "..."}`
 - 429: `{"error": "rate_limited", "retry_after": 45}`
 
-**`lib/remote_code_agents_web/controllers/pane_controller.ex`**:
+**`lib/tmux_rm_web/controllers/pane_controller.ex`**:
 ```
 POST   /api/panes/:target/split  — split pane (body: {"direction": "horizontal"|"vertical"})
 DELETE /api/panes/:target        — kill pane
@@ -158,14 +158,14 @@ DELETE /api/panes/:target        — kill pane
 
 ## Files Created/Modified
 ```
-lib/remote_code_agents_web/live/session_list_live.ex (update)
-lib/remote_code_agents_web/live/session_list_live.html.heex (update)
-lib/remote_code_agents_web/controllers/session_controller.ex
-lib/remote_code_agents_web/controllers/pane_controller.ex
-lib/remote_code_agents_web/router.ex (add API routes)
-test/remote_code_agents_web/live/session_list_live_test.exs (extend)
-test/remote_code_agents_web/controllers/session_controller_test.exs
-test/remote_code_agents_web/controllers/pane_controller_test.exs
+lib/tmux_rm_web/live/session_list_live.ex (update)
+lib/tmux_rm_web/live/session_list_live.html.heex (update)
+lib/tmux_rm_web/controllers/session_controller.ex
+lib/tmux_rm_web/controllers/pane_controller.ex
+lib/tmux_rm_web/router.ex (add API routes)
+test/tmux_rm_web/live/session_list_live_test.exs (extend)
+test/tmux_rm_web/controllers/session_controller_test.exs
+test/tmux_rm_web/controllers/pane_controller_test.exs
 ```
 
 ## Exit Criteria

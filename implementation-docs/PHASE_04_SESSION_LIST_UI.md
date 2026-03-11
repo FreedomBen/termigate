@@ -11,7 +11,7 @@ Implement the `SessionListLive` page and the `SessionPoller` GenServer. After th
 
 ### 4.1 SessionPoller GenServer
 
-**`lib/remote_code_agents/session_poller.ex`**:
+**`lib/tmux_rm/session_poller.ex`**:
 
 - Polls `TmuxManager.list_sessions/0` (with panes via `list_panes/1`) every `session_poll_interval` (default 3s)
 - Compares result to previous snapshot; if changed, broadcasts `{:sessions_updated, sessions}` on PubSub topic `"sessions:state"`
@@ -25,7 +25,7 @@ Implement the `SessionListLive` page and the `SessionPoller` GenServer. After th
 
 ### 4.2 SessionListLive
 
-**`lib/remote_code_agents_web/live/session_list_live.ex`**:
+**`lib/tmux_rm_web/live/session_list_live.ex`**:
 
 **`mount/3`**:
 - Subscribe to PubSub topic `"sessions:state"` (receives `{:sessions_updated, sessions}`)
@@ -112,14 +112,14 @@ Key log events for SessionPoller:
 
 ### 4.7 Health Check Endpoint
 
-**`lib/remote_code_agents_web/controllers/health_controller.ex`**:
+**`lib/tmux_rm_web/controllers/health_controller.ex`**:
 - `GET /healthz` — unauthenticated
 - Calls `CommandRunner.run(["list-sessions"])` to verify tmux reachable
 - Returns `200 {"status": "ok", "tmux": "ok"}` or `{"tmux": "no_server"}` or `503 {"status": "error", "tmux": "not_found"}`
 
 ### 4.8 Tests
 
-**`test/remote_code_agents_web/live/session_list_live_test.exs`**:
+**`test/tmux_rm_web/live/session_list_live_test.exs`**:
 - Mount page, verify sessions render
 - Test "New Session" form submission (valid name, invalid name)
 - Test session list updates via PubSub broadcast
@@ -128,13 +128,13 @@ Key log events for SessionPoller:
 
 ## Files Created/Modified
 ```
-lib/remote_code_agents/session_poller.ex
-lib/remote_code_agents_web/live/session_list_live.ex
-lib/remote_code_agents_web/live/session_list_live.html.heex
-lib/remote_code_agents_web/controllers/health_controller.ex
-lib/remote_code_agents_web/router.ex (add routes)
-test/remote_code_agents/session_poller_test.exs
-test/remote_code_agents_web/live/session_list_live_test.exs
+lib/tmux_rm/session_poller.ex
+lib/tmux_rm_web/live/session_list_live.ex
+lib/tmux_rm_web/live/session_list_live.html.heex
+lib/tmux_rm_web/controllers/health_controller.ex
+lib/tmux_rm_web/router.ex (add routes)
+test/tmux_rm/session_poller_test.exs
+test/tmux_rm_web/live/session_list_live_test.exs
 ```
 
 ## Exit Criteria

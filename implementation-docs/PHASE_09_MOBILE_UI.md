@@ -167,9 +167,9 @@ The "Paste" button in the virtual toolbar:
 ```
 assets/js/hooks/terminal_hook.js (update — keyboard handling, toolbar, gestures)
 assets/css/app.css (update — mobile styles, breakpoints, toolbar, auto-hide)
-lib/remote_code_agents_web/live/terminal_live.html.heex (update — toolbar markup)
-lib/remote_code_agents_web/live/session_list_live.html.heex (update — mobile card layout)
-lib/remote_code_agents_web/components/core_components.ex (update — mobile-friendly components)
+lib/tmux_rm_web/live/terminal_live.html.heex (update — toolbar markup)
+lib/tmux_rm_web/live/session_list_live.html.heex (update — mobile card layout)
+lib/tmux_rm_web/components/core_components.ex (update — mobile-friendly components)
 ```
 
 ## Exit Criteria

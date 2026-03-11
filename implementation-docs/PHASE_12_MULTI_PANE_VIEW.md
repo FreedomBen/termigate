@@ -11,7 +11,7 @@ Implement `MultiPaneLive` — a view that shows all panes in a tmux window side-
 
 ### 12.1 MultiPaneLive
 
-**`lib/remote_code_agents_web/live/multi_pane_live.ex`**:
+**`lib/tmux_rm_web/live/multi_pane_live.ex`**:
 
 **Routes**:
 - `/sessions/:session` — redirects to the session's active window (via `tmux display-message -p -t {session} '#{window_index}'`)
@@ -127,7 +127,7 @@ Multi-pane view is desktop/tablet only (>640px):
 
 ### 12.8 LayoutPoller GenServer
 
-**`lib/remote_code_agents/layout_poller.ex`**:
+**`lib/tmux_rm/layout_poller.ex`**:
 
 Shared layout poller that avoids redundant `tmux list-panes` calls across multiple viewers of the same window. Same pattern as `SessionPoller`.
 
@@ -162,13 +162,13 @@ The LayoutPoller (every 2-3s) detects layout changes:
 
 ## Files Created/Modified
 ```
-lib/remote_code_agents/layout_poller.ex
-lib/remote_code_agents_web/live/multi_pane_live.ex
-lib/remote_code_agents_web/live/multi_pane_live.html.heex
+lib/tmux_rm/layout_poller.ex
+lib/tmux_rm_web/live/multi_pane_live.ex
+lib/tmux_rm_web/live/multi_pane_live.html.heex
 assets/js/hooks/terminal_hook.js (update — multi-instance support)
-lib/remote_code_agents_web/router.ex (add routes)
-test/remote_code_agents/layout_poller_test.exs
-test/remote_code_agents_web/live/multi_pane_live_test.exs
+lib/tmux_rm_web/router.ex (add routes)
+test/tmux_rm/layout_poller_test.exs
+test/tmux_rm_web/live/multi_pane_live_test.exs
 ```
 
 ## Exit Criteria

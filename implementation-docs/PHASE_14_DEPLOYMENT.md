@@ -16,7 +16,7 @@ def project do
   [
     # ...
     releases: [
-      remote_code_agents: [
+      tmux_rm: [
         include_erts: true  # Bundle Erlang runtime
         # Cookie is set via RELEASE_COOKIE env var at runtime, not hardcoded
       ]
@@ -40,19 +40,19 @@ if config_env() == :prod do
   port = String.to_integer(System.get_env("PORT") || "4000")
   bind_ip = if System.get_env("PHX_BIND") == "0.0.0.0", do: {0, 0, 0, 0}, else: {127, 0, 0, 1}
 
-  config :remote_code_agents, RemoteCodeAgentsWeb.Endpoint,
+  config :tmux_rm, TmuxRmWeb.Endpoint,
     url: [host: host, port: port],
     http: [ip: bind_ip, port: port],
     secret_key_base: secret_key_base,
     server: true
 
   # Optional auth token for headless setups
-  config :remote_code_agents,
+  config :tmux_rm,
     auth_token: System.get_env("RCA_AUTH_TOKEN")
 
   # Optional tmux socket
   if socket = System.get_env("RCA_TMUX_SOCKET") do
-    config :remote_code_agents, tmux_socket: socket
+    config :tmux_rm, tmux_socket: socket
   end
 end
 ```
@@ -91,7 +91,7 @@ mix assets.deploy
 echo "==> Building release"
 mix release
 
-echo "==> Release built at _build/prod/rel/remote_code_agents/"
+echo "==> Release built at _build/prod/rel/tmux_rm/"
 ```
 
 ### 14.5 Systemd Service
@@ -106,7 +106,7 @@ After=network.target
 Type=exec
 User=ben
 Group=ben
-WorkingDirectory=/opt/remote_code_agents
+WorkingDirectory=/opt/tmux_rm
 Environment=HOME=/home/ben
 Environment=PORT=4000
 Environment=PHX_HOST=localhost
@@ -114,14 +114,14 @@ Environment=SECRET_KEY_BASE=generate-a-secret-key-base-here
 # Uncomment for remote access:
 # Environment=PHX_BIND=0.0.0.0
 # Environment=RCA_AUTH_TOKEN=your-secure-token
-ExecStart=/opt/remote_code_agents/bin/remote_code_agents start
-ExecStop=/opt/remote_code_agents/bin/remote_code_agents stop
+ExecStart=/opt/tmux_rm/bin/tmux_rm start
+ExecStop=/opt/tmux_rm/bin/tmux_rm stop
 Restart=on-failure
 RestartSec=5
 # Security hardening
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/tmp/remote-code-agents /home/ben/.config/remote_code_agents
+ReadWritePaths=/tmp/tmux-rm /home/ben/.config/tmux_rm
 ProtectHome=read-only
 
 [Install]
@@ -170,11 +170,11 @@ ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 
-COPY --from=build /app/_build/prod/rel/remote_code_agents /app
+COPY --from=build /app/_build/prod/rel/tmux_rm /app
 
 EXPOSE 4000
 
-CMD ["/app/bin/remote_code_agents", "start"]
+CMD ["/app/bin/tmux_rm", "start"]
 ```
 
 **Docker deployment modes**:
@@ -207,7 +207,7 @@ services:
 When the same setting can be specified in multiple places, the precedence order is:
 
 1. **Environment variables** (highest priority) — e.g., `RCA_AUTH_TOKEN`, `PORT`, `PHX_HOST`
-2. **YAML config file** (`~/.config/remote_code_agents/config.yaml`) — quick actions, app settings
+2. **YAML config file** (`~/.config/tmux_rm/config.yaml`) — quick actions, app settings
 3. **`config/runtime.exs`** compile-time defaults (lowest priority)
 
 This is enforced in `config/runtime.exs` by only reading env vars with `||` fallbacks, and in the `Config` GenServer by merging YAML values over defaults. Environment variables always win because they're read in `runtime.exs` before the Config GenServer starts.
@@ -220,7 +220,7 @@ For deployments where native clients or external tools access the REST API from 
 - If `RCA_CORS_ORIGIN` env var is set, add CORS headers via a Plug:
   ```elixir
   # In endpoint.ex or a dedicated plug:
-  if origin = Application.get_env(:remote_code_agents, :cors_origin) do
+  if origin = Application.get_env(:tmux_rm, :cors_origin) do
     plug Corsica, origins: origin, allow_headers: ["authorization", "content-type"]
   end
   ```
@@ -320,7 +320,7 @@ docker-compose.yml (optional)
 
 ## Exit Criteria
 - `MIX_ENV=prod mix release` builds a self-contained release
-- Release starts with `bin/remote_code_agents start` — serves the app
+- Release starts with `bin/tmux_rm start` — serves the app
 - systemd service file installs and works
 - Docker image builds and runs (with tmux inside container)
 - Health check endpoint responds correctly in production

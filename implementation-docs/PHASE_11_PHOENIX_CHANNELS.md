@@ -14,7 +14,7 @@ Implement `TerminalChannel` and `SessionChannel` — the server-side Channel inf
 
 ### 11.1 TerminalChannel
 
-**`lib/remote_code_agents_web/channels/terminal_channel.ex`**:
+**`lib/tmux_rm_web/channels/terminal_channel.ex`**:
 
 **Topic**: `"terminal:{session}:{window}:{pane}"` — client-facing join topic. Uses colons as separators because Phoenix Channel topics use `:` for namespacing.
 
@@ -44,7 +44,7 @@ Implement `TerminalChannel` and `SessionChannel` — the server-side Channel inf
 
 ### 11.2 SessionChannel
 
-**`lib/remote_code_agents_web/channels/session_channel.ex`**:
+**`lib/tmux_rm_web/channels/session_channel.ex`**:
 
 **Topic**: `"sessions"`
 
@@ -63,8 +63,8 @@ Implement `TerminalChannel` and `SessionChannel` — the server-side Channel inf
 
 Update `user_socket.ex`:
 ```elixir
-channel "terminal:*", RemoteCodeAgentsWeb.TerminalChannel
-channel "sessions", RemoteCodeAgentsWeb.SessionChannel
+channel "terminal:*", TmuxRmWeb.TerminalChannel
+channel "sessions", TmuxRmWeb.SessionChannel
 ```
 
 ### 11.4 Binary Frame Support
@@ -126,7 +126,7 @@ def id(_socket), do: nil
 
 ### 11.6 Tests
 
-**`test/remote_code_agents_web/channels/terminal_channel_test.exs`**:
+**`test/tmux_rm_web/channels/terminal_channel_test.exs`**:
 - Join with valid target → receive history in reply
 - Join with invalid target → error reply
 - Send input → verify reaches tmux pane
@@ -134,18 +134,18 @@ def id(_socket), do: nil
 - Pane death → receive `pane_dead` event
 - PaneStream crash → receive `reconnected` event with fresh history
 
-**`test/remote_code_agents_web/channels/session_channel_test.exs`**:
+**`test/tmux_rm_web/channels/session_channel_test.exs`**:
 - Join → receive current session list
 - Create session externally → receive `sessions_updated` push
 - Verify diffing (no push when list unchanged)
 
 ## Files Created/Modified
 ```
-lib/remote_code_agents_web/channels/terminal_channel.ex
-lib/remote_code_agents_web/channels/session_channel.ex
-lib/remote_code_agents_web/channels/user_socket.ex (update — register channels)
-test/remote_code_agents_web/channels/terminal_channel_test.exs
-test/remote_code_agents_web/channels/session_channel_test.exs
+lib/tmux_rm_web/channels/terminal_channel.ex
+lib/tmux_rm_web/channels/session_channel.ex
+lib/tmux_rm_web/channels/user_socket.ex (update — register channels)
+test/tmux_rm_web/channels/terminal_channel_test.exs
+test/tmux_rm_web/channels/session_channel_test.exs
 ```
 
 ## Exit Criteria

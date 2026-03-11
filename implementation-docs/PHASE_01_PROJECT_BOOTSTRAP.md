@@ -11,9 +11,9 @@ Set up the Elixir/Phoenix project with all dependencies, configuration, and the 
 ## Steps
 
 ### 1.1 Generate Phoenix Project
-- `mix phx.new remote_code_agents --no-ecto --no-mailer --no-dashboard`
+- `mix phx.new tmux_rm --no-ecto --no-mailer --no-dashboard`
 - No Ecto (no database), no mailer, no LiveDashboard
-- Verify `mix.exs` has `remote_code_agents` as the project name
+- Verify `mix.exs` has `tmux_rm` as the project name
 
 ### 1.2 Add Dependencies to `mix.exs`
 ```elixir
@@ -51,7 +51,7 @@ end
 
 **config/config.exs** — all application-level defaults:
 ```elixir
-config :remote_code_agents,
+config :tmux_rm,
   session_poll_interval: 3_000,
   pane_stream_grace_period: 30_000,
   ring_buffer_min_size: 524_288,
@@ -62,7 +62,7 @@ config :remote_code_agents,
   default_cols: 120,
   default_rows: 40,
   config_poll_interval: 2_000,
-  fifo_dir: "/tmp/remote-code-agents",
+  fifo_dir: "/tmp/tmux-rm",
   tmux_path: nil,
   tmux_socket: nil,
   output_coalesce_ms: 3,
@@ -80,15 +80,15 @@ config :remote_code_agents,
 Set up `Application.start/2`:
 1. FIFO directory cleanup on boot: `File.rm_rf(fifo_dir)` then `File.mkdir_p(fifo_dir)`
 2. Start children in order:
-   - `RemoteCodeAgents.Telemetry` (Supervisor — wraps `telemetry_poller`; started first so metrics are available from boot. See Phase 15 for full implementation, but the supervisor shell is created here.)
-   - `RemoteCodeAgents.PaneRegistry` (Registry, keys: :unique)
-   - `RemoteCodeAgents.PaneStreamSupervisor` (DynamicSupervisor, `max_children` from config)
-   - `Phoenix.PubSub` (name: `RemoteCodeAgents.PubSub`)
-   - `RemoteCodeAgents.SessionPoller` (GenServer — stub for now)
-   - `RemoteCodeAgents.Config` (GenServer — stub for now)
-   - `RemoteCodeAgentsWeb.RateLimitStore` (GenServer — stub for now)
-   - `RemoteCodeAgents.LayoutPollerSupervisor` (DynamicSupervisor — used by Phase 12 for layout pollers, started early so the supervision tree doesn't need modification later)
-   - `RemoteCodeAgentsWeb.Endpoint`
+   - `TmuxRm.Telemetry` (Supervisor — wraps `telemetry_poller`; started first so metrics are available from boot. See Phase 15 for full implementation, but the supervisor shell is created here.)
+   - `TmuxRm.PaneRegistry` (Registry, keys: :unique)
+   - `TmuxRm.PaneStreamSupervisor` (DynamicSupervisor, `max_children` from config)
+   - `Phoenix.PubSub` (name: `TmuxRm.PubSub`)
+   - `TmuxRm.SessionPoller` (GenServer — stub for now)
+   - `TmuxRm.Config` (GenServer — stub for now)
+   - `TmuxRmWeb.RateLimitStore` (GenServer — stub for now)
+   - `TmuxRm.LayoutPollerSupervisor` (DynamicSupervisor — used by Phase 12 for layout pollers, started early so the supervision tree doesn't need modification later)
+   - `TmuxRmWeb.Endpoint`
 
 ### 1.7 Endpoint Configuration
 
@@ -97,7 +97,7 @@ Set up `Application.start/2`:
 socket "/live", Phoenix.LiveView.Socket,
   websocket: [compress: true]
 
-socket "/socket", RemoteCodeAgentsWeb.UserSocket,
+socket "/socket", TmuxRmWeb.UserSocket,
   websocket: [compress: true, connect_info: [:peer_data, :x_headers]]
 ```
 
@@ -119,9 +119,9 @@ Set up route structure with pipeline stubs:
 
 ### 1.10 CommandRunner Behaviour & Implementation
 
-**`lib/remote_code_agents/tmux/command_runner_behaviour.ex`** — behaviour for testability:
+**`lib/tmux_rm/tmux/command_runner_behaviour.ex`** — behaviour for testability:
 ```elixir
-defmodule RemoteCodeAgents.Tmux.CommandRunnerBehaviour do
+defmodule TmuxRm.Tmux.CommandRunnerBehaviour do
   @doc "Run a tmux command with the given arguments. Returns stdout on success."
   @callback run(args :: [String.t()]) :: {:ok, String.t()} | {:error, {String.t(), non_neg_integer()}}
 
@@ -130,7 +130,7 @@ defmodule RemoteCodeAgents.Tmux.CommandRunnerBehaviour do
 end
 ```
 
-**`lib/remote_code_agents/tmux/command_runner.ex`** — real implementation:
+**`lib/tmux_rm/tmux/command_runner.ex`** — real implementation:
 - Implements `CommandRunnerBehaviour`
 - `run/1` — builds full command with socket args, calls `System.cmd/3`, returns `{:ok, stdout}` or `{:error, {stderr, exit_code}}`
 - `run!/1` — calls `run/1`, raises on error
@@ -141,15 +141,15 @@ end
 **Application config** — allow swapping the implementation for tests:
 ```elixir
 # config/config.exs
-config :remote_code_agents, :command_runner, RemoteCodeAgents.Tmux.CommandRunner
+config :tmux_rm, :command_runner, TmuxRm.Tmux.CommandRunner
 
 # config/test.exs
-config :remote_code_agents, :command_runner, RemoteCodeAgents.MockCommandRunner
+config :tmux_rm, :command_runner, TmuxRm.MockCommandRunner
 ```
 
 All modules that call CommandRunner should use:
 ```elixir
-defp command_runner, do: Application.get_env(:remote_code_agents, :command_runner)
+defp command_runner, do: Application.get_env(:tmux_rm, :command_runner)
 ```
 
 ### 1.11 Test Infrastructure
@@ -168,12 +168,12 @@ end
 
 **`test/support/mocks.ex`**:
 ```elixir
-Mox.defmock(RemoteCodeAgents.MockCommandRunner, for: RemoteCodeAgents.Tmux.CommandRunnerBehaviour)
+Mox.defmock(TmuxRm.MockCommandRunner, for: TmuxRm.Tmux.CommandRunnerBehaviour)
 ```
 
 **`test/support/tmux_helpers.ex`**:
 ```elixir
-defmodule RemoteCodeAgents.TmuxHelpers do
+defmodule TmuxRm.TmuxHelpers do
   def create_test_session(name \\ nil) do
     name = name || "test-#{:rand.uniform(100_000)}"
     {_, 0} = System.cmd("tmux", ["new-session", "-d", "-s", name])
@@ -225,13 +225,13 @@ Add `require Logger` to all modules. Key log events for this phase:
 
 ## Files Created/Modified
 ```
-lib/remote_code_agents/application.ex
-lib/remote_code_agents/tmux/command_runner_behaviour.ex
-lib/remote_code_agents/tmux/command_runner.ex
-lib/remote_code_agents_web/endpoint.ex
-lib/remote_code_agents_web/router.ex
-lib/remote_code_agents_web/components/layouts.ex
-lib/remote_code_agents_web/components/core_components.ex
+lib/tmux_rm/application.ex
+lib/tmux_rm/tmux/command_runner_behaviour.ex
+lib/tmux_rm/tmux/command_runner.ex
+lib/tmux_rm_web/endpoint.ex
+lib/tmux_rm_web/router.ex
+lib/tmux_rm_web/components/layouts.ex
+lib/tmux_rm_web/components/core_components.ex
 config/config.exs
 config/dev.exs
 config/test.exs

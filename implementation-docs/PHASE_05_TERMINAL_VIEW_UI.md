@@ -102,7 +102,7 @@ let liveSocket = new LiveSocket("/live", Socket, {
 
 ### 5.3 TerminalLive (Server)
 
-**`lib/remote_code_agents_web/live/terminal_live.ex`**:
+**`lib/tmux_rm_web/live/terminal_live.ex`**:
 
 **Architecture**: TerminalLive handles UI/control concerns only. Terminal data (output/input) flows through the companion TerminalChannel (Phase 11) opened by the JS hook. LiveView does NOT subscribe to PaneStream for output — the Channel handles that. This eliminates base64 overhead entirely for terminal data.
 
@@ -127,7 +127,7 @@ let liveSocket = new LiveSocket("/live", Socket, {
 
 ### 5.4 Terminal View Template
 
-**`lib/remote_code_agents_web/live/terminal_live.html.heex`**:
+**`lib/tmux_rm_web/live/terminal_live.html.heex`**:
 
 ```heex
 <div class="flex flex-col h-dvh bg-black">
@@ -183,10 +183,10 @@ pane_dead → PaneStream → LiveView (JSON) → TerminalHook → overlay
 
 **UserSocket**: Phase 5 creates `user_socket.ex` as a stub (no auth verification — pass-through `connect/3`). Phase 6 adds token verification to `connect/3`. Phase 11 adds the `channel "sessions", SessionChannel` registration. The initial Phase 5 UserSocket:
 ```elixir
-defmodule RemoteCodeAgentsWeb.UserSocket do
+defmodule TmuxRmWeb.UserSocket do
   use Phoenix.Socket
 
-  channel "terminal:*", RemoteCodeAgentsWeb.TerminalChannel
+  channel "terminal:*", TmuxRmWeb.TerminalChannel
 
   @impl true
   def connect(_params, socket, _connect_info), do: {:ok, socket}
@@ -229,7 +229,7 @@ Note: The target param uses `:` and `.` separators (e.g., `mysession:0.1`). Phoe
 
 ### 5.8 Tests
 
-**`test/remote_code_agents_web/live/terminal_live_test.exs`**:
+**`test/tmux_rm_web/live/terminal_live_test.exs`**:
 - Mount with valid target, verify history push
 - Mount with invalid target, verify error UI
 - Test key_input event handling (valid base64, invalid base64)
@@ -240,13 +240,13 @@ Note: The target param uses `:` and `.` separators (e.g., `mysession:0.1`). Phoe
 ```
 assets/js/hooks/terminal_hook.js
 assets/js/app.js (update — add UserSocket connection)
-lib/remote_code_agents_web/live/terminal_live.ex
-lib/remote_code_agents_web/live/terminal_live.html.heex
-lib/remote_code_agents_web/channels/terminal_channel.ex (core TerminalChannel — extended in Phase 11)
-lib/remote_code_agents_web/channels/user_socket.ex (update — register terminal:* channel)
-lib/remote_code_agents_web/router.ex (update routes)
-test/remote_code_agents_web/live/terminal_live_test.exs
-test/remote_code_agents_web/channels/terminal_channel_test.exs
+lib/tmux_rm_web/live/terminal_live.ex
+lib/tmux_rm_web/live/terminal_live.html.heex
+lib/tmux_rm_web/channels/terminal_channel.ex (core TerminalChannel — extended in Phase 11)
+lib/tmux_rm_web/channels/user_socket.ex (update — register terminal:* channel)
+lib/tmux_rm_web/router.ex (update routes)
+test/tmux_rm_web/live/terminal_live_test.exs
+test/tmux_rm_web/channels/terminal_channel_test.exs
 ```
 
 ## Exit Criteria

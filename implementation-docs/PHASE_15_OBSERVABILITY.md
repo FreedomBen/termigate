@@ -7,7 +7,7 @@ Wire up the Telemetry dependencies (added in Phase 1) into actionable metrics, s
 - Phase 14 complete (deployment infrastructure)
 - `telemetry_metrics` and `telemetry_poller` dependencies (Phase 1)
 
-**Implementation note**: While this phase is listed last, the `RemoteCodeAgents.Telemetry` supervisor should be added to the supervision tree during **Phase 1** (it's just a supervisor with telemetry_poller — no deps on other phases). Then, as each subsequent phase is built, add the `:telemetry.execute/3` calls inline (step 15.5 lists them all). This phase formalizes the metrics endpoint, structured logging, and health check enrichment — but the instrumentation itself should be incremental.
+**Implementation note**: While this phase is listed last, the `TmuxRm.Telemetry` supervisor should be added to the supervision tree during **Phase 1** (it's just a supervisor with telemetry_poller — no deps on other phases). Then, as each subsequent phase is built, add the `:telemetry.execute/3` calls inline (step 15.5 lists them all). This phase formalizes the metrics endpoint, structured logging, and health check enrichment — but the instrumentation itself should be incremental.
 
 ## Steps
 
@@ -15,7 +15,7 @@ Wire up the Telemetry dependencies (added in Phase 1) into actionable metrics, s
 
 Define custom Telemetry events emitted throughout the application:
 
-**PaneStream events** (`[:remote_code_agents, :pane_stream, *]`):
+**PaneStream events** (`[:tmux_rm, :pane_stream, *]`):
 - `[:pane_stream, :start]` — PaneStream started (metadata: target, pane_id)
 - `[:pane_stream, :stop]` — PaneStream stopped (metadata: target, reason, duration_ms)
 - `[:pane_stream, :output]` — Output flushed (measurements: bytes, metadata: target)
@@ -23,20 +23,20 @@ Define custom Telemetry events emitted throughout the application:
 - `[:pane_stream, :viewer_change]` — Viewer count changed (measurements: count, metadata: target)
 - `[:pane_stream, :recovery]` — Port crash recovery attempted (metadata: target, attempt)
 
-**Auth events** (`[:remote_code_agents, :auth, *]`):
+**Auth events** (`[:tmux_rm, :auth, *]`):
 - `[:auth, :login, :success]` — (metadata: username, ip)
 - `[:auth, :login, :failure]` — (metadata: username, ip)
 - `[:auth, :rate_limited]` — (metadata: ip, endpoint_key)
 
-**SessionPoller events** (`[:remote_code_agents, :session_poller, *]`):
+**SessionPoller events** (`[:tmux_rm, :session_poller, *]`):
 - `[:session_poller, :poll]` — Poll completed (measurements: duration_ms, session_count)
 
 ### 15.2 Telemetry Module
 
-**`lib/remote_code_agents/telemetry.ex`**:
+**`lib/tmux_rm/telemetry.ex`**:
 
 ```elixir
-defmodule RemoteCodeAgents.Telemetry do
+defmodule TmuxRm.Telemetry do
   use Supervisor
   import Telemetry.Metrics
 
@@ -52,21 +52,21 @@ defmodule RemoteCodeAgents.Telemetry do
   def metrics do
     [
       # PaneStream
-      counter("remote_code_agents.pane_stream.start.total"),
-      counter("remote_code_agents.pane_stream.stop.total", tag_values: fn m -> %{reason: m.reason} end),
-      sum("remote_code_agents.pane_stream.output.bytes"),
-      sum("remote_code_agents.pane_stream.input.bytes"),
-      last_value("remote_code_agents.pane_stream.viewer_change.count"),
-      counter("remote_code_agents.pane_stream.recovery.total"),
+      counter("tmux_rm.pane_stream.start.total"),
+      counter("tmux_rm.pane_stream.stop.total", tag_values: fn m -> %{reason: m.reason} end),
+      sum("tmux_rm.pane_stream.output.bytes"),
+      sum("tmux_rm.pane_stream.input.bytes"),
+      last_value("tmux_rm.pane_stream.viewer_change.count"),
+      counter("tmux_rm.pane_stream.recovery.total"),
 
       # Auth
-      counter("remote_code_agents.auth.login.success.total"),
-      counter("remote_code_agents.auth.login.failure.total"),
-      counter("remote_code_agents.auth.rate_limited.total"),
+      counter("tmux_rm.auth.login.success.total"),
+      counter("tmux_rm.auth.login.failure.total"),
+      counter("tmux_rm.auth.rate_limited.total"),
 
       # SessionPoller
-      summary("remote_code_agents.session_poller.poll.duration_ms"),
-      last_value("remote_code_agents.session_poller.poll.session_count"),
+      summary("tmux_rm.session_poller.poll.duration_ms"),
+      last_value("tmux_rm.session_poller.poll.session_count"),
 
       # VM metrics (from telemetry_poller)
       last_value("vm.memory.total"),
@@ -87,20 +87,20 @@ defmodule RemoteCodeAgents.Telemetry do
   end
 
   def pane_stream_count do
-    count = DynamicSupervisor.count_children(RemoteCodeAgents.PaneStreamSupervisor)[:active] || 0
-    :telemetry.execute([:remote_code_agents, :pane_streams], %{active: count}, %{})
+    count = DynamicSupervisor.count_children(TmuxRm.PaneStreamSupervisor)[:active] || 0
+    :telemetry.execute([:tmux_rm, :pane_streams], %{active: count}, %{})
   end
 
   def rate_limit_table_size do
     size = :ets.info(:rate_limit_store, :size) || 0
-    :telemetry.execute([:remote_code_agents, :rate_limit_store], %{size: size}, %{})
+    :telemetry.execute([:tmux_rm, :rate_limit_store], %{size: size}, %{})
   end
 end
 ```
 
 ### 15.3 Metrics Endpoint
 
-**`lib/remote_code_agents_web/controllers/metrics_controller.ex`**:
+**`lib/tmux_rm_web/controllers/metrics_controller.ex`**:
 
 - `GET /metrics` — returns metrics in JSON format
 - Unauthenticated (like `/healthz`) — operators need metrics without app credentials
@@ -163,11 +163,11 @@ Update `/healthz` (from Phase 4) to include richer diagnostics:
 
 ### 15.7 Supervision Tree
 
-Add `RemoteCodeAgents.Telemetry` to the supervision tree in `application.ex` (early, before other children so metrics are available from boot):
+Add `TmuxRm.Telemetry` to the supervision tree in `application.ex` (early, before other children so metrics are available from boot):
 
 ```elixir
 children = [
-  RemoteCodeAgents.Telemetry,
+  TmuxRm.Telemetry,
   # ... existing children ...
 ]
 ```
@@ -180,18 +180,18 @@ children = [
 
 ## Files Created/Modified
 ```
-lib/remote_code_agents/telemetry.ex
-lib/remote_code_agents_web/controllers/metrics_controller.ex
-lib/remote_code_agents/application.ex (add Telemetry supervisor)
-lib/remote_code_agents/pane_stream.ex (add telemetry calls)
-lib/remote_code_agents/auth.ex (add telemetry calls)
-lib/remote_code_agents/session_poller.ex (add telemetry calls)
-lib/remote_code_agents_web/rate_limit_store.ex (add telemetry calls)
-lib/remote_code_agents_web/controllers/health_controller.ex (enrich response)
-lib/remote_code_agents_web/router.ex (add /metrics route)
+lib/tmux_rm/telemetry.ex
+lib/tmux_rm_web/controllers/metrics_controller.ex
+lib/tmux_rm/application.ex (add Telemetry supervisor)
+lib/tmux_rm/pane_stream.ex (add telemetry calls)
+lib/tmux_rm/auth.ex (add telemetry calls)
+lib/tmux_rm/session_poller.ex (add telemetry calls)
+lib/tmux_rm_web/rate_limit_store.ex (add telemetry calls)
+lib/tmux_rm_web/controllers/health_controller.ex (enrich response)
+lib/tmux_rm_web/router.ex (add /metrics route)
 config/runtime.exs (structured logging config)
-test/remote_code_agents/telemetry_test.exs
-test/remote_code_agents_web/controllers/metrics_controller_test.exs
+test/tmux_rm/telemetry_test.exs
+test/tmux_rm_web/controllers/metrics_controller_test.exs
 ```
 
 ## Exit Criteria

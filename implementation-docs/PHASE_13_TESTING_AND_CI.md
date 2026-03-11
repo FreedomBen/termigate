@@ -14,9 +14,9 @@ Set up CI/CD via GitHub Actions and consolidate test coverage across all layers.
 
 **Test configuration** (`config/test.exs`) — extend what Phase 1 set up:
 ```elixir
-config :remote_code_agents,
+config :tmux_rm,
   pane_stream_grace_period: 100,    # Short for fast tests
-  fifo_dir: "/tmp/remote-code-agents-test",
+  fifo_dir: "/tmp/tmux-rm-test",
   session_poll_interval: 500,       # Faster polling in tests
   config_poll_interval: 500,
   output_coalesce_ms: 0             # Disable coalescing in tests for determinism
@@ -203,28 +203,28 @@ end
 test/test_helper.exs
 test/support/tmux_helpers.ex
 test/support/mocks.ex
-test/remote_code_agents/ring_buffer_test.exs
-test/remote_code_agents/tmux_manager_test.exs
-test/remote_code_agents/tmux_manager_integration_test.exs
-test/remote_code_agents/pane_stream_test.exs
-test/remote_code_agents/auth_test.exs
-test/remote_code_agents/config_test.exs
-test/remote_code_agents/session_poller_test.exs
-test/remote_code_agents_web/live/session_list_live_test.exs
-test/remote_code_agents_web/live/terminal_live_test.exs
-test/remote_code_agents_web/live/auth_live_test.exs
-test/remote_code_agents_web/live/settings_live_test.exs
-test/remote_code_agents_web/live/multi_pane_live_test.exs
-test/remote_code_agents_web/channels/terminal_channel_test.exs
-test/remote_code_agents_web/channels/session_channel_test.exs
-test/remote_code_agents_web/controllers/auth_controller_test.exs
-test/remote_code_agents_web/controllers/health_controller_test.exs
-test/remote_code_agents_web/controllers/session_controller_test.exs
-test/remote_code_agents_web/controllers/pane_controller_test.exs
-test/remote_code_agents_web/controllers/quick_action_controller_test.exs
-test/remote_code_agents_web/plugs/require_auth_test.exs
-test/remote_code_agents_web/plugs/require_auth_token_test.exs
-test/remote_code_agents_web/plugs/rate_limit_test.exs
+test/tmux_rm/ring_buffer_test.exs
+test/tmux_rm/tmux_manager_test.exs
+test/tmux_rm/tmux_manager_integration_test.exs
+test/tmux_rm/pane_stream_test.exs
+test/tmux_rm/auth_test.exs
+test/tmux_rm/config_test.exs
+test/tmux_rm/session_poller_test.exs
+test/tmux_rm_web/live/session_list_live_test.exs
+test/tmux_rm_web/live/terminal_live_test.exs
+test/tmux_rm_web/live/auth_live_test.exs
+test/tmux_rm_web/live/settings_live_test.exs
+test/tmux_rm_web/live/multi_pane_live_test.exs
+test/tmux_rm_web/channels/terminal_channel_test.exs
+test/tmux_rm_web/channels/session_channel_test.exs
+test/tmux_rm_web/controllers/auth_controller_test.exs
+test/tmux_rm_web/controllers/health_controller_test.exs
+test/tmux_rm_web/controllers/session_controller_test.exs
+test/tmux_rm_web/controllers/pane_controller_test.exs
+test/tmux_rm_web/controllers/quick_action_controller_test.exs
+test/tmux_rm_web/plugs/require_auth_test.exs
+test/tmux_rm_web/plugs/require_auth_token_test.exs
+test/tmux_rm_web/plugs/rate_limit_test.exs
 ```
 
 ## Exit Criteria
