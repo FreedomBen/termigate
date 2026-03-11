@@ -103,8 +103,8 @@ server/test/tmux_rm/ring_buffer_test.exs
 - All unit tests pass with mocked CommandRunner
 
 ## Checklist
-- [ ] 2.1 Data Structures
-- [ ] 2.2 TmuxManager Module
-- [ ] 2.3 Session Name Validation
-- [ ] 2.4 RingBuffer Module
-- [ ] 2.5 Unit Tests
+- [x] 2.1 Data Structures
+- [x] 2.2 TmuxManager Module
+- [x] 2.3 Session Name Validation
+- [x] 2.4 RingBuffer Module
+- [x] 2.5 Unit Tests
