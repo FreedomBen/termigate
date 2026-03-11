@@ -17,7 +17,17 @@
       "Bash(cd /home/ben/gitclone/tmux-ru && mix compile 2>&1 | tail -20)",
       "Bash(mix compile:*)",
       "Bash(mix test:*)",
-      "Bash(timeout 8 mix phx.server 2>&1 || true)"
+      "Bash(timeout 8 mix phx.server 2>&1 || true)",
+      "Bash(which tmux:*)",
+      "Bash(tmux new-session:*)",
+      "Bash(mkfifo -m 0600 /tmp/tmux-rm-test-debug.fifo)",
+      "Bash(tmux pipe-pane:*)",
+      "Bash(tmux send-keys:*)",
+      "Read(//tmp/**)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(rm -f /tmp/tmux-rm-test-debug.fifo)",
+      "Bash(tmux kill-session:*)",
+      "Bash(MIX_ENV=test mix test test/tmux_rm/pane_stream_test.exs --include tmux --seed 0 --trace 2>&1 | head -80)"
     ]
   }
 }

@@ -189,13 +189,13 @@ server/test/support/tmux_helpers.ex
 - All integration tests pass (tagged `@tag :tmux`)
 
 ## Checklist
-- [ ] 3.1 PaneStream GenServer
-- [ ] 3.2 Public API (Module Functions)
-- [ ] 3.3 Output Handling (Coalescing)
-- [ ] 3.4 Viewer Lifecycle
-- [ ] 3.5 Pane Death Detection
-- [ ] 3.6 Shutdown Sequence
-- [ ] 3.7 Supersede Flow
-- [ ] 3.8 Logging
-- [ ] 3.9 PaneStreamSupervisor
-- [ ] 3.10 Integration Tests
+- [x] 3.1 PaneStream GenServer
+- [x] 3.2 Public API (Module Functions)
+- [x] 3.3 Output Handling (Coalescing)
+- [x] 3.4 Viewer Lifecycle
+- [x] 3.5 Pane Death Detection
+- [x] 3.6 Shutdown Sequence
+- [x] 3.7 Supersede Flow
+- [x] 3.8 Logging
+- [x] 3.9 PaneStreamSupervisor
+- [x] 3.10 Integration Tests

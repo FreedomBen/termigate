@@ -11,7 +11,7 @@ defmodule TmuxRm.Tmux.CommandRunner do
 
     Logger.debug("tmux command: #{tmux_path} #{Enum.join(full_args, " ")}")
 
-    case System.cmd(tmux_path, full_args, stderr_to_stdout: false) do
+    case System.cmd(tmux_path, full_args, stderr_to_stdout: true) do
       {stdout, 0} ->
         check_version_once()
         {:ok, String.trim(stdout)}
