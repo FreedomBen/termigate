@@ -109,11 +109,13 @@
   height: 100dvh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .terminal-container {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 /* === Virtual Key Toolbar === */
