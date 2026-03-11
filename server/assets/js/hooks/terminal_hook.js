@@ -2,20 +2,8 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Socket } from "phoenix";
-
-// --- Preference helpers (Phase 9) ---
-// Phase 10 replaces these with the full preference system.
-// The localStorage key ("rca-preferences") is shared so preferences carry over.
-function savePref(key, value) {
-  const prefs = JSON.parse(localStorage.getItem("rca-preferences") || "{}");
-  prefs[key] = value;
-  localStorage.setItem("rca-preferences", JSON.stringify(prefs));
-}
-
-function loadPref(key, defaultValue) {
-  const prefs = JSON.parse(localStorage.getItem("rca-preferences") || "{}");
-  return prefs[key] ?? defaultValue;
-}
+import { loadPrefs, savePref, resolveTheme } from "../preferences";
+import * as PreferencesPanel from "../preferences_panel";
 
 // --- Mobile detection ---
 function isMobile() {
@@ -56,17 +44,17 @@ const TerminalHook = {
   mounted() {
     const target = this.el.dataset.target;
 
-    // Load preferences from localStorage
-    const prefs = JSON.parse(localStorage.getItem("rca-preferences") || "{}");
+    // Load preferences from localStorage (Phase 10 full preference system)
+    const prefs = loadPrefs();
 
     // Create xterm.js terminal
     this.term = new Terminal({
-      fontSize: prefs.fontSize || 14,
-      fontFamily: prefs.fontFamily || "monospace",
-      cursorStyle: prefs.cursorStyle || "block",
-      cursorBlink: prefs.cursorBlink !== false,
-      scrollback: prefs.scrollback || 10000,
-      theme: prefs.theme || {},
+      fontSize: prefs.fontSize,
+      fontFamily: prefs.fontFamily,
+      cursorStyle: prefs.cursorStyle,
+      cursorBlink: prefs.cursorBlink,
+      scrollback: prefs.scrollback,
+      theme: resolveTheme(prefs),
     });
 
     // Addons
@@ -165,6 +153,29 @@ const TerminalHook = {
     this._setupSoftKeyboard();
     this._setupTouchGestures();
     this._setupAutoHidingHeader();
+
+    // --- Preferences panel (gear icon) ---
+    this._setupPreferencesPanel();
+  },
+
+  // --- Preferences Panel ---
+  _setupPreferencesPanel() {
+    const gearBtn = document.querySelector(".terminal-prefs-btn");
+    if (!gearBtn) return;
+
+    gearBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      PreferencesPanel.open(this.term, this.fitAddon, (showToolbar) => {
+        // Toolbar visibility toggle callback
+        if (this._toolbar) {
+          if (showToolbar) {
+            this._toolbar.classList.remove("vk-hidden");
+          } else {
+            this._toolbar.classList.add("vk-hidden");
+          }
+        }
+      });
+    });
   },
 
   // --- Virtual Key Toolbar ---
@@ -172,9 +183,13 @@ const TerminalHook = {
     // Only render on mobile/tablet
     if (!isMobile() && !isTablet()) return;
 
+    // Respect showToolbar preference
+    const prefs = loadPrefs();
+    const showToolbar = prefs.showToolbar !== false;
+
     // Create toolbar container
     this._toolbar = document.createElement("div");
-    this._toolbar.className = "virtual-toolbar";
+    this._toolbar.className = "virtual-toolbar" + (showToolbar ? "" : " vk-hidden");
     this._toolbar.innerHTML = `
       <div class="vk-main-row">
         <button class="vk-btn" data-key="Escape">Esc</button>

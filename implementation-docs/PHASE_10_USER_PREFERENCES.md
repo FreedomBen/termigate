@@ -169,11 +169,11 @@ Note: Phase 8's `server/lib/tmux_rm_web/live/settings_live.ex` is NOT modified b
 - Virtual toolbar show/hide preference works
 
 ## Checklist
-- [ ] 10.1 Preference Schema
-- [ ] 10.2 Preference Loading in TerminalHook
-- [ ] 10.3 Preferences Panel (Client-Side, Separate from Settings Page)
-- [ ] 10.4 Live Preview
-- [ ] 10.5 Theme Definitions
-- [ ] 10.6 Per-Device Behavior
-- [ ] 10.7 Pinch-to-Zoom Integration
-- [ ] 10.8 Implementation Approach
+- [x] 10.1 Preference Schema
+- [x] 10.2 Preference Loading in TerminalHook
+- [x] 10.3 Preferences Panel (Client-Side, Separate from Settings Page)
+- [x] 10.4 Live Preview
+- [x] 10.5 Theme Definitions
+- [x] 10.6 Per-Device Behavior
+- [x] 10.7 Pinch-to-Zoom Integration
+- [x] 10.8 Implementation Approach

@@ -229,6 +229,224 @@
   }
 }
 
+/* === Preferences Panel === */
+.prefs-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  z-index: 40;
+  transition: background 0.2s;
+}
+
+.prefs-backdrop-visible {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.prefs-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(360px, 90vw);
+  background: #1a1a2e;
+  color: #d1d5db;
+  z-index: 50;
+  transform: translateX(100%);
+  transition: transform 0.2s ease-out;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+}
+
+.prefs-panel-visible {
+  transform: translateX(0);
+}
+
+.prefs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+}
+
+.prefs-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.prefs-close {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.prefs-close:hover {
+  color: #fff;
+}
+
+.prefs-body {
+  padding: 16px 20px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.prefs-group {
+  margin-bottom: 20px;
+}
+
+.prefs-group > label:first-child {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #9ca3af;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.prefs-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.prefs-val {
+  font-size: 14px;
+  font-family: monospace;
+  min-width: 40px;
+  text-align: right;
+}
+
+.prefs-group input[type="range"] {
+  flex: 1;
+  accent-color: #6366f1;
+  height: 6px;
+}
+
+.prefs-group select {
+  width: 100%;
+  padding: 8px 12px;
+  background: #2a2a3e;
+  color: #d1d5db;
+  border: 1px solid #444;
+  border-radius: 6px;
+  font-size: 14px;
+  min-height: 44px;
+}
+
+.prefs-theme-preview {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 13px;
+  border: 1px solid #444;
+}
+
+.prefs-color-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.prefs-color-item label {
+  display: block;
+  font-size: 12px;
+  color: #9ca3af;
+  margin-bottom: 4px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.prefs-color-item input[type="color"] {
+  width: 100%;
+  height: 36px;
+  border: 1px solid #444;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.prefs-radio-group {
+  display: flex;
+  gap: 16px;
+}
+
+.prefs-radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.prefs-radio input[type="radio"] {
+  accent-color: #6366f1;
+}
+
+.prefs-toggle {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+  cursor: pointer;
+}
+
+.prefs-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.prefs-toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: #444;
+  border-radius: 13px;
+  transition: background 0.2s;
+}
+
+.prefs-toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.prefs-toggle input:checked + .prefs-toggle-slider {
+  background: #6366f1;
+}
+
+.prefs-toggle input:checked + .prefs-toggle-slider::before {
+  transform: translateX(22px);
+}
+
+.prefs-hint {
+  display: block;
+  font-size: 11px;
+  color: #666;
+  margin-top: 4px;
+}
+
 /* === Mobile-specific session list === */
 @media (max-width: 639px) {
   /* Larger touch targets on session cards */

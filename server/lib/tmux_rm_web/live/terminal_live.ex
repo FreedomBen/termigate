@@ -58,9 +58,9 @@ defmodule TmuxRmWeb.TerminalLive do
           <.icon name="hero-arrow-left-micro" class="size-4 inline" /> Sessions
         </.link>
         <span class="text-gray-300 text-sm font-mono">{@target}</span>
-        <.link navigate={~p"/settings"} class="text-gray-400 hover:text-white text-sm min-h-[48px] sm:min-h-0 flex items-center">
+        <button class="terminal-prefs-btn text-gray-400 hover:text-white text-sm min-h-[48px] sm:min-h-0 flex items-center" aria-label="Terminal preferences">
           <.icon name="hero-cog-6-tooth-micro" class="size-4" />
-        </.link>
+        </button>
       </header>
 
       <%!-- Quick action bar --%>
