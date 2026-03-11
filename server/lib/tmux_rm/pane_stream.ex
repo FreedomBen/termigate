@@ -410,29 +410,39 @@ defmodule TmuxRm.PaneStream do
   end
 
   defp capture_scrollback(runner, pane_id) do
-    # Query pane dimensions for buffer sizing
+    # Under memory pressure, use minimum buffer size for new streams
+    watermark = Application.get_env(:tmux_rm, :memory_high_watermark, 805_306_368)
+    memory_high? = :erlang.memory(:total) > watermark
+
     buffer =
-      case runner.run([
-             "display-message",
-             "-p",
-             "-t",
-             pane_id,
-             "\#{history_limit}\t\#{pane_width}"
-           ]) do
-        {:ok, dims} ->
-          case String.split(String.trim(dims), "\t") do
-            [hist, width] ->
-              history_limit = parse_int(hist, 2000)
-              pane_width = parse_int(width, 120)
-              capacity = history_limit * pane_width
-              RingBuffer.new(capacity)
+      if memory_high? do
+        min_size = Application.get_env(:tmux_rm, :ring_buffer_min_size, 524_288)
+        Logger.info("Memory above high watermark, using min ring buffer size (#{min_size})")
+        RingBuffer.new(min_size)
+      else
+        # Query pane dimensions for buffer sizing
+        case runner.run([
+               "display-message",
+               "-p",
+               "-t",
+               pane_id,
+               "\#{history_limit}\t\#{pane_width}"
+             ]) do
+          {:ok, dims} ->
+            case String.split(String.trim(dims), "\t") do
+              [hist, width] ->
+                history_limit = parse_int(hist, 2000)
+                pane_width = parse_int(width, 120)
+                capacity = history_limit * pane_width
+                RingBuffer.new(capacity)
 
-            _ ->
-              RingBuffer.new()
-          end
+              _ ->
+                RingBuffer.new()
+            end
 
-        _ ->
-          RingBuffer.new()
+          _ ->
+            RingBuffer.new()
+        end
       end
 
     # Capture existing scrollback with ANSI escapes
