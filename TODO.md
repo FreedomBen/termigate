@@ -2,8 +2,6 @@
 
 - Write a Makefile and include a build command, clean, and install.  The install should build and copy the server binary in place, and copy the systemd service file in place as well.
 
-- When in initial setup, populate the username with the host OS user name
-
 - Let's ensure we have full support for auth tokens, such that if the user wants to setup an auth token and disallow username/password auth, they can.  When auth token is enabled, the server should respond with a 401 or 403 to all requests that don't have the auth token included, even the home page.
 
 - Let's make sure the reset to default button in settings doesn't override the saved password info.
@@ -13,6 +11,8 @@
 - Would adding support to this server for MCP provide any value?  Can you think of any situations where an AI agent may want to use it?
 
 # Already Run
+
+- When in initial setup, populate the username with the host OS user name
 
 - Let's go through the application and ensure that we are logging any meaningful action.
 
