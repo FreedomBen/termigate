@@ -33,6 +33,13 @@ defmodule TmuxRmWeb.TerminalLive do
     config = Config.get()
     quick_actions = config["quick_actions"] || []
 
+    # Parse session:window.pane to build back link to multi-pane view
+    back_path =
+      case Regex.run(~r/^(.+):(\d+)\.\d+$/, target) do
+        [_, session, window] -> "/sessions/#{session}/windows/#{window}"
+        _ -> "/"
+      end
+
     socket =
       socket
       |> assign(:target, target)
@@ -43,6 +50,7 @@ defmodule TmuxRmWeb.TerminalLive do
       |> assign(:quick_actions, quick_actions)
       |> assign(:show_actions, true)
       |> assign(:pending_action, nil)
+      |> assign(:back_path, back_path)
 
     {:ok, socket, layout: false}
   end
@@ -55,10 +63,10 @@ defmodule TmuxRmWeb.TerminalLive do
 
       <header class="terminal-header terminal-header-bar">
         <.link
-          navigate={~p"/"}
+          navigate={@back_path}
           class="text-base-content/50 hover:text-base-content text-sm gap-1"
         >
-          <.icon name="hero-arrow-left-micro" class="size-4" /> <span class="hidden sm:inline">Sessions</span>
+          <.icon name="hero-arrow-left-micro" class="size-4" /> <span class="hidden sm:inline">Back</span>
         </.link>
         <span class="text-base-content/70 text-sm font-mono tracking-tight">{@target}</span>
         <button
