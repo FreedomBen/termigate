@@ -788,3 +788,89 @@ body {
 .status-dot-idle {
   background: oklch(from var(--color-base-content) l c h / 25%);
 }
+
+/* === Session card with overlay menu === */
+.session-card {
+  position: relative;
+}
+
+.session-menu-overlay {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 5;
+}
+
+/* === Pane overlay controls (maximize/navigate) === */
+.pane-overlay {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 5;
+}
+
+.group:hover .pane-overlay,
+.pane-maximized .pane-overlay {
+  opacity: 1;
+}
+
+/* Always show on touch devices */
+@media (hover: none) {
+  .pane-overlay {
+    opacity: 1;
+  }
+}
+
+.pane-overlay-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: oklch(10% 0.005 260 / 80%);
+  color: oklch(70% 0.01 80);
+  border: 1px solid oklch(30% 0.01 260);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+  backdrop-filter: blur(4px);
+  text-decoration: none;
+}
+
+.pane-overlay-btn:hover {
+  background: oklch(20% 0.01 260 / 90%);
+  color: oklch(92% 0.01 80);
+}
+
+.pane-overlay-btn:active {
+  background: oklch(30% 0.02 260);
+}
+
+@media (max-width: 639px) {
+  .pane-overlay-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+  }
+}
+
+/* === Pane maximized state === */
+.pane-maximized {
+  position: absolute !important;
+  inset: 0;
+  z-index: 10;
+  grid-column: unset !important;
+  grid-row: unset !important;
+  border: none;
+}
+
+/* === Mobile pane cards === */
+.mobile-pane-card {
+  border-bottom: none;
+  background: oklch(18% 0.008 260);
+  border: 1px solid oklch(25% 0.01 260);
+}

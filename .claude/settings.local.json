@@ -40,7 +40,8 @@
       "Bash(tmux list-sessions:*)",
       "Bash(git stash:*)",
       "Bash(grep -l \"async: true\" test/tmux_rm_web/live/*_test.exs test/tmux_rm_web/channels/*_test.exs test/tmux_rm_web/controllers/*_test.exs test/tmux_rm_web/plugs/*_test.exs test/tmux_rm/*_test.exs 2>/dev/null)",
-      "Bash(find /home/ben/gitclone/tmux-rm/server/lib/tmux_rm_web -name \"*.heex\" | xargs ls -la)"
+      "Bash(find /home/ben/gitclone/tmux-rm/server/lib/tmux_rm_web -name \"*.heex\" | xargs ls -la)",
+      "Bash(mix assets.build 2>&1 | tail -5 && mix test 2>&1 | grep -E \"tests.*failures\")"
     ]
   }
 }

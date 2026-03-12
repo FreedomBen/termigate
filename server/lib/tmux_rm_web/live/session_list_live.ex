@@ -20,7 +20,6 @@ defmodule TmuxRmWeb.SessionListLive do
       socket
       |> assign(:sessions, sessions)
       |> assign(:tmux_status, tmux_status)
-      |> assign(:expanded, MapSet.new())
       |> assign(:show_new_session_form, false)
       |> assign(:new_session_name, "")
       |> assign(:new_session_error, nil)
@@ -48,17 +47,6 @@ defmodule TmuxRmWeb.SessionListLive do
   # --- Event handlers ---
 
   @impl true
-  def handle_event("toggle_session", %{"name" => name}, socket) do
-    expanded =
-      if MapSet.member?(socket.assigns.expanded, name) do
-        MapSet.delete(socket.assigns.expanded, name)
-      else
-        MapSet.put(socket.assigns.expanded, name)
-      end
-
-    {:noreply, assign(socket, :expanded, expanded)}
-  end
-
   def handle_event("toggle_new_session_form", _params, socket) do
     {:noreply,
      socket
@@ -121,23 +109,6 @@ defmodule TmuxRmWeb.SessionListLive do
        :confirm_message,
        "Kill session \"#{name}\"? This will terminate all processes in the session."
      )}
-  end
-
-  def handle_event("request_kill_pane", %{"target" => target, "pane-count" => count_str}, socket) do
-    count = String.to_integer(count_str)
-
-    message =
-      if count <= 1 do
-        "This is the last pane in the session. Killing it will end the session. Continue?"
-      else
-        "Kill this pane? The process inside will be terminated."
-      end
-
-    {:noreply,
-     socket
-     |> assign(:confirm_action, :kill_pane)
-     |> assign(:confirm_target, target)
-     |> assign(:confirm_message, message)}
   end
 
   def handle_event("confirm_action", _params, socket) do
@@ -231,7 +202,7 @@ defmodule TmuxRmWeb.SessionListLive do
      |> assign(:rename_error, nil)}
   end
 
-  # --- Window and pane management ---
+  # --- Window management ---
 
   def handle_event("create_window", %{"session" => session}, socket) do
     case TmuxManager.create_window(session) do
@@ -240,18 +211,6 @@ defmodule TmuxRmWeb.SessionListLive do
 
       {:error, msg} ->
         {:noreply, put_flash(socket, :error, "Failed to create window: #{msg}")}
-    end
-  end
-
-  def handle_event("split_pane", %{"target" => target, "direction" => dir}, socket) do
-    direction = String.to_existing_atom(dir)
-
-    case TmuxManager.split_pane(target, direction) do
-      {:ok, _} ->
-        {:noreply, put_flash(socket, :info, "Pane split.")}
-
-      {:error, msg} ->
-        {:noreply, put_flash(socket, :error, "Failed to split pane: #{msg}")}
     end
   end
 
@@ -271,18 +230,7 @@ defmodule TmuxRmWeb.SessionListLive do
     end
   end
 
-  defp execute_confirmed_action(
-         %{assigns: %{confirm_action: :kill_pane, confirm_target: target}} = socket
-       ) do
-    case TmuxManager.kill_pane(target) do
-      :ok -> put_flash(socket, :info, "Pane killed.")
-      {:error, msg} -> put_flash(socket, :error, "Failed to kill pane: #{msg}")
-    end
-  end
-
   defp execute_confirmed_action(socket), do: socket
-
-  defp session_expanded?(expanded, name), do: MapSet.member?(expanded, name)
 
   defp format_created(nil), do: ""
 
@@ -294,14 +242,5 @@ defmodule TmuxRmWeb.SessionListLive do
     session
     |> Map.get(:panes, %{})
     |> Enum.reduce(0, fn {_window, panes}, acc -> acc + length(panes) end)
-  end
-
-  defp sorted_panes(session) do
-    session
-    |> Map.get(:panes, %{})
-    |> Enum.sort_by(fn {window_idx, _} -> window_idx end)
-    |> Enum.flat_map(fn {_window_idx, panes} ->
-      Enum.sort_by(panes, & &1.index)
-    end)
   end
 end

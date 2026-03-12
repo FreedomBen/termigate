@@ -2,6 +2,7 @@ defmodule TmuxRmWeb.MultiPaneLive do
   @moduledoc """
   LiveView showing all panes in a tmux window in a CSS Grid layout.
   Mirrors tmux's split-pane layout with window tabs for navigation.
+  Supports maximize/restore per pane.
   """
   use TmuxRmWeb, :live_view
 
@@ -34,6 +35,7 @@ defmodule TmuxRmWeb.MultiPaneLive do
       |> assign(:panes, layout)
       |> assign(:grid, compute_grid(layout))
       |> assign(:windows, windows)
+      |> assign(:maximized, nil)
       |> assign(:page_title, "#{session}:#{window}")
 
     {:ok, socket, layout: false}
@@ -51,13 +53,21 @@ defmodule TmuxRmWeb.MultiPaneLive do
   def render(assigns) do
     ~H"""
     <div class="flex flex-col h-dvh bg-black">
+      <%!-- Header bar --%>
+      <div class="terminal-header-bar">
+        <.link
+          navigate={~p"/"}
+          class="text-base-content/50 hover:text-base-content text-sm gap-1"
+        >
+          <.icon name="hero-arrow-left-micro" class="size-4" /> <span class="hidden sm:inline">Sessions</span>
+        </.link>
+        <span class="text-base-content/70 text-sm font-mono tracking-tight">{@session}</span>
+        <div class="w-10" />
+      </div>
+
       <%!-- Window tabs --%>
       <div class="window-tabs">
-        <.link navigate={~p"/"} class="window-tab text-base-content/40 hover:text-base-content shrink-0 px-3">
-          <.icon name="hero-arrow-left-micro" class="size-4" />
-        </.link>
-        <span class="text-base-content/30 text-xs px-2 shrink-0 font-mono">{@session}</span>
-        <div class="flex items-center gap-0.5 px-1">
+        <div class="flex items-center gap-0.5 px-2 flex-1">
           <.link
             :for={win <- @windows}
             navigate={"/sessions/#{@session}/windows/#{win.index}"}
@@ -69,7 +79,7 @@ defmodule TmuxRmWeb.MultiPaneLive do
               )
             ]}
           >
-            {win.index}{if win.name, do: ": #{win.name}", else: ""}
+            Window {win.index}{if win.name, do: ": #{win.name}", else: ""}
           </.link>
         </div>
       </div>
@@ -78,36 +88,80 @@ defmodule TmuxRmWeb.MultiPaneLive do
       <div
         :if={@panes != []}
         id="multi-pane-grid"
-        class="flex-1 min-h-0 hidden sm:grid"
+        class="flex-1 min-h-0 hidden sm:grid relative"
         style={"grid-template-columns: #{@grid.cols}; grid-template-rows: #{@grid.rows}; gap: 2px;"}
       >
-        <div
-          :for={pane <- @panes}
-          id={"pane-#{pane.target}"}
-          phx-hook="TerminalHook"
-          phx-update="ignore"
-          data-target={pane.target}
-          data-mode="multi"
-          style={"grid-column: #{pane_grid_col(pane, @grid)}; grid-row: #{pane_grid_row(pane, @grid)};"}
-          class="border border-base-content/5 min-h-0 overflow-hidden"
-        >
-        </div>
+        <%= for pane <- @panes do %>
+          <div
+            id={"pane-wrapper-#{pane.target}"}
+            class={[
+              "relative group min-h-0 overflow-hidden",
+              if(@maximized == pane.target, do: "pane-maximized", else: "border border-base-content/5")
+            ]}
+            style={if @maximized == nil or @maximized == pane.target do
+              if @maximized == pane.target do
+                ""
+              else
+                "grid-column: #{pane_grid_col(pane, @grid)}; grid-row: #{pane_grid_row(pane, @grid)};"
+              end
+            else
+              "display: none;"
+            end}
+          >
+            <div
+              id={"pane-#{pane.target}"}
+              phx-hook="TerminalHook"
+              phx-update="ignore"
+              data-target={pane.target}
+              data-mode="multi"
+              class="w-full h-full"
+            >
+            </div>
+
+            <%!-- Pane overlay controls --%>
+            <div class="pane-overlay">
+              <%= if @maximized == pane.target do %>
+                <button
+                  class="pane-overlay-btn"
+                  phx-click="restore_pane"
+                  title="Restore"
+                >
+                  <.icon name="hero-arrows-pointing-in-micro" class="size-4" />
+                </button>
+              <% else %>
+                <button
+                  class="pane-overlay-btn"
+                  phx-click="maximize_pane"
+                  phx-value-target={pane.target}
+                  title="Maximize"
+                >
+                  <.icon name="hero-arrows-pointing-out-micro" class="size-4" />
+                </button>
+              <% end %>
+              <.link
+                navigate={"/terminal/#{pane.target}"}
+                class="pane-overlay-btn"
+                title="Open in full view"
+              >
+                <.icon name="hero-arrow-top-right-on-square-micro" class="size-4" />
+              </.link>
+            </div>
+          </div>
+        <% end %>
       </div>
 
-      <%!-- Mobile pane list (instead of grid) --%>
+      <%!-- Mobile pane list — tappable cards navigate to terminal --%>
       <div :if={@panes != []} class="flex-1 overflow-y-auto sm:hidden p-3 space-y-2">
         <.link
           :for={pane <- @panes}
           navigate={"/terminal/#{pane.target}"}
-          class="pane-row rounded-xl"
-          style="border-bottom: none; background: oklch(18% 0.008 260); border: 1px solid oklch(25% 0.01 260);"
+          class="pane-row rounded-xl mobile-pane-card"
         >
           <.icon name="hero-command-line-micro" class="size-4 text-base-content/25 shrink-0" />
           <div class="flex-1 min-w-0">
-            <span class="font-mono text-sm text-base-content/70">{pane.target}</span>
-            <span class="ml-2 text-xs text-base-content/40">{pane.command}</span>
+            <div class="text-sm font-mono text-base-content/70">{pane.target}</div>
+            <div class="text-xs text-base-content/40 mt-0.5">{pane.command} &middot; {pane.width}&times;{pane.height}</div>
           </div>
-          <div class="text-xs text-base-content/25">{pane.width}&times;{pane.height}</div>
           <.icon name="hero-chevron-right-micro" class="size-4 text-base-content/20 shrink-0" />
         </.link>
       </div>
@@ -120,23 +174,6 @@ defmodule TmuxRmWeb.MultiPaneLive do
           <.link navigate={~p"/"} class="btn btn-primary btn-sm">Back to Sessions</.link>
         </div>
       </div>
-
-      <%!-- Focus buttons overlay (per pane, desktop only) --%>
-      <div id="pane-focus-buttons" class="hidden sm:block pointer-events-none fixed inset-0 z-10">
-        <div
-          :for={pane <- @panes}
-          class="pointer-events-auto"
-          style="position: absolute; display: none;"
-          id={"focus-btn-#{pane.target}"}
-        >
-          <.link
-            navigate={"/terminal/#{pane.target}"}
-            class="btn btn-xs btn-ghost text-base-content/40 hover:text-base-content opacity-0 group-hover:opacity-100"
-          >
-            <.icon name="hero-arrows-pointing-out-micro" class="size-3" /> Focus
-          </.link>
-        </div>
-      </div>
     </div>
     """
   end
@@ -146,7 +183,17 @@ defmodule TmuxRmWeb.MultiPaneLive do
   @impl true
   def handle_info({:layout_updated, panes}, socket) do
     grid = compute_grid(panes)
-    {:noreply, assign(socket, panes: panes, grid: grid)}
+
+    # If the maximized pane no longer exists, restore
+    maximized =
+      if socket.assigns.maximized &&
+           not Enum.any?(panes, &(&1.target == socket.assigns.maximized)) do
+        nil
+      else
+        socket.assigns.maximized
+      end
+
+    {:noreply, assign(socket, panes: panes, grid: grid, maximized: maximized)}
   end
 
   def handle_info({:sessions_updated, _sessions}, socket) do
@@ -162,7 +209,17 @@ defmodule TmuxRmWeb.MultiPaneLive do
   def handle_info({:tmux_status_changed, _}, socket), do: {:noreply, socket}
   def handle_info(_msg, socket), do: {:noreply, socket}
 
+  # --- Event handlers ---
+
   @impl true
+  def handle_event("maximize_pane", %{"target" => target}, socket) do
+    {:noreply, assign(socket, :maximized, target)}
+  end
+
+  def handle_event("restore_pane", _params, socket) do
+    {:noreply, assign(socket, :maximized, nil)}
+  end
+
   def handle_event("resize", _params, socket) do
     # Multi-pane view is passive — ignore resize events
     {:noreply, socket}

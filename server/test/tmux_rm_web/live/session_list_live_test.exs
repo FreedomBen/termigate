@@ -56,36 +56,9 @@ defmodule TmuxRmWeb.SessionListLiveTest do
       html = render_click(view, "cancel_confirm")
       refute html =~ "terminate all processes"
     end
-
-    test "kill pane last pane warning", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/")
-
-      html =
-        render_click(view, "request_kill_pane", %{"target" => "test:0.0", "pane-count" => "1"})
-
-      assert html =~ "last pane"
-    end
-
-    test "kill pane normal message", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/")
-
-      html =
-        render_click(view, "request_kill_pane", %{"target" => "test:0.1", "pane-count" => "3"})
-
-      assert html =~ "Kill this pane"
-    end
   end
 
   describe "event handlers - stub" do
-    test "split pane handles error gracefully", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/")
-
-      html =
-        render_click(view, "split_pane", %{"target" => "test:0.0", "direction" => "horizontal"})
-
-      assert html =~ "Sessions"
-    end
-
     test "create window handles error gracefully", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/")
       html = render_click(view, "create_window", %{"session" => "test-session"})
@@ -144,20 +117,6 @@ defmodule TmuxRmWeb.SessionListLiveTest do
       refute html =~ "Invalid name"
     end
 
-    test "split pane", %{conn: conn} do
-      name = "test-splitlv-#{:rand.uniform(100_000)}"
-      on_exit(fn -> TmuxRm.TmuxManager.kill_session(name) end)
-
-      {:ok, _} = TmuxRm.TmuxManager.create_session(name)
-
-      {:ok, view, _html} = live(conn, "/")
-
-      html =
-        render_click(view, "split_pane", %{"target" => "#{name}:0.0", "direction" => "horizontal"})
-
-      assert html =~ "Sessions"
-    end
-
     test "kill session via confirm flow", %{conn: conn} do
       name = "test-kill-#{:rand.uniform(100_000)}"
       on_exit(fn -> TmuxRm.TmuxManager.kill_session(name) end)
@@ -167,20 +126,6 @@ defmodule TmuxRmWeb.SessionListLiveTest do
       {:ok, view, _html} = live(conn, "/")
 
       render_click(view, "request_kill_session", %{"name" => name})
-      html = render_click(view, "confirm_action")
-      assert html =~ "Sessions"
-    end
-
-    test "kill pane via confirm flow", %{conn: conn} do
-      name = "test-killp-#{:rand.uniform(100_000)}"
-      on_exit(fn -> TmuxRm.TmuxManager.kill_session(name) end)
-
-      {:ok, _} = TmuxRm.TmuxManager.create_session(name)
-      TmuxRm.TmuxManager.split_pane("#{name}:0.0", :horizontal)
-
-      {:ok, view, _html} = live(conn, "/")
-
-      render_click(view, "request_kill_pane", %{"target" => "#{name}:0.1", "pane-count" => "2"})
       html = render_click(view, "confirm_action")
       assert html =~ "Sessions"
     end
