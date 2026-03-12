@@ -461,57 +461,9 @@ const TerminalHook = {
     }, { passive: true });
   },
 
-  // --- Auto-Hiding Header ---
+  // --- Auto-Hiding Header (disabled — keep header always visible) ---
   _setupAutoHidingHeader() {
-    if (!isMobile()) return;
-
-    const header = document.querySelector(".terminal-header");
-    const actionBar = document.querySelector(".terminal-action-bar");
-    if (!header) return;
-
-    this._headerHideTimer = null;
-    this._headerVisible = true;
-
-    const showHeader = () => {
-      header.classList.remove("-translate-y-full");
-      header.classList.add("translate-y-0");
-      if (actionBar) {
-        actionBar.classList.remove("-translate-y-full", "opacity-0");
-        actionBar.classList.add("translate-y-0", "opacity-100");
-      }
-      this._headerVisible = true;
-      clearTimeout(this._headerHideTimer);
-      this._headerHideTimer = setTimeout(() => hideHeader(), 3000);
-    };
-
-    const hideHeader = () => {
-      header.classList.remove("translate-y-0");
-      header.classList.add("-translate-y-full");
-      if (actionBar) {
-        actionBar.classList.remove("translate-y-0", "opacity-100");
-        actionBar.classList.add("-translate-y-full", "opacity-0");
-      }
-      this._headerVisible = false;
-    };
-
-    // Start hide timer
-    this._headerHideTimer = setTimeout(() => hideHeader(), 3000);
-
-    // Tap top edge to reveal
-    document.addEventListener("touchstart", (e) => {
-      if (e.touches[0].clientY < 20 && !this._headerVisible) {
-        showHeader();
-      }
-    }, { passive: true });
-
-    // Any interaction with header resets timer
-    header.addEventListener("touchstart", () => {
-      clearTimeout(this._headerHideTimer);
-      this._headerHideTimer = setTimeout(() => hideHeader(), 3000);
-    }, { passive: true });
-
-    this._showHeader = showHeader;
-    this._hideHeader = hideHeader;
+    // Header stays static/visible at all times so controls are always reachable.
   },
 
   _connectChannel(target) {
