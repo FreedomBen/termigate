@@ -1,5 +1,7 @@
 # Not Run Yet
 
+- Where did the quick action buttons go?  Let's also add one for Ctrl+d, Ctrl+c, 
+
 - Write a Makefile and include a build command, clean, and install.  The install should build and copy the server binary in place, and copy the systemd service file in place as well.
 
 - Let's ensure we have full support for auth tokens, such that if the user wants to setup an auth token and disallow username/password auth, they can.  When auth token is enabled, the server should respond with a 401 or 403 to all requests that don't have the auth token included, even the home page.
