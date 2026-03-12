@@ -164,9 +164,11 @@ const TerminalHook = {
       this._resizeObserver.observe(this.el);
     }
 
-    // Handle pane_resized from other viewers (via LiveView)
-    this.handleEvent("pane_resized", ({ cols, rows }) => {
-      this.term.resize(cols, rows);
+    // Handle pane_resized from other viewers or layout changes (via LiveView)
+    this.handleEvent("pane_resized", ({ target, cols, rows }) => {
+      if (!target || target === this.el.dataset.target) {
+        this.term.resize(cols, rows);
+      }
     });
 
     // Clipboard: Ctrl+Shift+V to paste

@@ -858,6 +858,11 @@ body {
   }
 }
 
+/* === Multi-pane: hide xterm scrollbar (scrollback=0, not needed) === */
+[data-mode="multi"] .xterm-viewport {
+  overflow-y: hidden !important;
+}
+
 /* === Pane maximized state === */
 .pane-maximized {
   position: absolute !important;
@@ -866,6 +871,75 @@ body {
   grid-column: unset !important;
   grid-row: unset !important;
   border: none;
+}
+
+/* === Pane resize dividers === */
+.pane-divider {
+  position: absolute;
+  pointer-events: auto;
+  z-index: 3;
+}
+
+.pane-divider-v {
+  width: 10px;
+  cursor: col-resize;
+}
+
+.pane-divider-h {
+  height: 10px;
+  cursor: row-resize;
+}
+
+/* Center-line indicator */
+.pane-divider::after {
+  content: "";
+  position: absolute;
+  border-radius: 1px;
+  opacity: 0;
+  transition: opacity 0.15s, background-color 0.15s;
+}
+
+.pane-divider-v::after {
+  left: 50%;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  transform: translateX(-50%);
+  background: oklch(65% 0.12 70);
+}
+
+.pane-divider-h::after {
+  top: 50%;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  transform: translateY(-50%);
+  background: oklch(65% 0.12 70);
+}
+
+.pane-divider:hover::after {
+  opacity: 1;
+}
+
+.pane-divider-active::after {
+  opacity: 1;
+  background: oklch(80% 0.15 70);
+  box-shadow: 0 0 6px oklch(75% 0.15 70 / 50%);
+}
+
+/* Touch devices: wider hit area, always-visible faint line */
+@media (hover: none) {
+  .pane-divider-v {
+    width: 20px;
+  }
+
+  .pane-divider-h {
+    height: 20px;
+  }
+
+  .pane-divider::after {
+    opacity: 0.35;
+  }
 }
 
 /* === Mobile pane cards === */

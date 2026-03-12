@@ -63,7 +63,8 @@ defmodule TmuxRmWeb.MultiPaneLive do
           navigate={~p"/"}
           class="text-base-content/50 hover:text-base-content text-sm gap-1"
         >
-          <.icon name="hero-arrow-left-micro" class="size-4" /> <span class="hidden sm:inline">Sessions</span>
+          <.icon name="hero-arrow-left-micro" class="size-4" />
+          <span class="hidden sm:inline">Sessions</span>
         </.link>
         <span class="text-base-content/70 text-sm font-mono tracking-tight">{@session}</span>
         <div class="w-10" />
@@ -92,25 +93,41 @@ defmodule TmuxRmWeb.MultiPaneLive do
       <div
         :if={@panes != []}
         id="multi-pane-grid"
+        phx-hook="PaneResizeHook"
         class="flex-1 min-h-0 hidden sm:grid relative"
         style={"grid-template-columns: #{@grid.cols}; grid-template-rows: #{@grid.rows}; gap: 2px;"}
+        data-panes={
+          Jason.encode!(
+            Enum.map(@panes, fn p ->
+              %{target: p.target, left: p.left, top: p.top, width: p.width, height: p.height}
+            end)
+          )
+        }
+        data-col-bounds={Jason.encode!(@grid.col_bounds)}
+        data-row-bounds={Jason.encode!(@grid.row_bounds)}
+        data-maximized={if @maximized, do: "true", else: nil}
       >
         <%= for pane <- @panes do %>
           <div
             id={"pane-wrapper-#{pane.target}"}
             class={[
               "relative group min-h-0 overflow-hidden",
-              if(@maximized == pane.target, do: "pane-maximized", else: "border border-base-content/5")
+              if(@maximized == pane.target,
+                do: "pane-maximized",
+                else: "border border-base-content/5"
+              )
             ]}
-            style={if @maximized == nil or @maximized == pane.target do
-              if @maximized == pane.target do
-                ""
+            style={
+              if @maximized == nil or @maximized == pane.target do
+                if @maximized == pane.target do
+                  ""
+                else
+                  "grid-column: #{pane_grid_col(pane, @grid)}; grid-row: #{pane_grid_row(pane, @grid)};"
+                end
               else
-                "grid-column: #{pane_grid_col(pane, @grid)}; grid-row: #{pane_grid_row(pane, @grid)};"
+                "display: none;"
               end
-            else
-              "display: none;"
-            end}
+            }
           >
             <div
               id={"pane-#{pane.target}"}
@@ -152,7 +169,7 @@ defmodule TmuxRmWeb.MultiPaneLive do
                 title="Split horizontally"
               >
                 <svg viewBox="0 0 20 20" fill="currentColor" class="size-4">
-                  <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zM9 4H4.5A.5.5 0 004 4.5v11a.5.5 0 00.5.5H9V4zm2 12h4.5a.5.5 0 00.5-.5v-11a.5.5 0 00-.5-.5H11v12z"/>
+                  <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zM9 4H4.5A.5.5 0 004 4.5v11a.5.5 0 00.5.5H9V4zm2 12h4.5a.5.5 0 00.5-.5v-11a.5.5 0 00-.5-.5H11v12z" />
                 </svg>
               </button>
               <button
@@ -163,7 +180,7 @@ defmodule TmuxRmWeb.MultiPaneLive do
                 title="Split vertically"
               >
                 <svg viewBox="0 0 20 20" fill="currentColor" class="size-4">
-                  <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zM4 9V4.5a.5.5 0 01.5-.5h11a.5.5 0 01.5.5V9H4zm0 2v4.5a.5.5 0 00.5.5h11a.5.5 0 00.5-.5V11H4z"/>
+                  <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zM4 9V4.5a.5.5 0 01.5-.5h11a.5.5 0 01.5.5V9H4zm0 2v4.5a.5.5 0 00.5.5h11a.5.5 0 00.5-.5V11H4z" />
                 </svg>
               </button>
               <.link
@@ -176,6 +193,15 @@ defmodule TmuxRmWeb.MultiPaneLive do
             </div>
           </div>
         <% end %>
+
+        <%!-- Divider overlay — children managed by PaneResizeHook JS --%>
+        <div
+          id="pane-dividers"
+          phx-update="ignore"
+          class="absolute inset-0 pointer-events-none"
+          style="z-index: 3;"
+        >
+        </div>
       </div>
 
       <%!-- Mobile pane list — tappable cards navigate to terminal --%>
@@ -188,7 +214,9 @@ defmodule TmuxRmWeb.MultiPaneLive do
           <.icon name="hero-command-line-micro" class="size-4 text-base-content/25 shrink-0" />
           <div class="flex-1 min-w-0">
             <div class="text-sm font-mono text-base-content/70">{pane.target}</div>
-            <div class="text-xs text-base-content/40 mt-0.5">{pane.command} &middot; {pane.width}&times;{pane.height}</div>
+            <div class="text-xs text-base-content/40 mt-0.5">
+              {pane.command} &middot; {pane.width}&times;{pane.height}
+            </div>
           </div>
           <.icon name="hero-chevron-right-micro" class="size-4 text-base-content/20 shrink-0" />
         </.link>
@@ -221,6 +249,24 @@ defmodule TmuxRmWeb.MultiPaneLive do
         socket.assigns.maximized
       end
 
+    # Push resize events to terminals whose dimensions changed
+    old_panes = socket.assigns.panes
+
+    socket =
+      Enum.reduce(panes, socket, fn pane, acc ->
+        old = Enum.find(old_panes, &(&1.target == pane.target))
+
+        if old && (old.width != pane.width || old.height != pane.height) do
+          push_event(acc, "pane_resized", %{
+            target: pane.target,
+            cols: pane.width,
+            rows: pane.height
+          })
+        else
+          acc
+        end
+      end)
+
     {:noreply, assign(socket, panes: panes, grid: grid, maximized: maximized)}
   end
 
@@ -251,6 +297,24 @@ defmodule TmuxRmWeb.MultiPaneLive do
   def handle_event("split_pane", %{"target" => target, "direction" => direction}, socket) do
     dir = if direction == "vertical", do: :vertical, else: :horizontal
     TmuxManager.split_pane(target, dir)
+    {:noreply, socket}
+  end
+
+  def handle_event(
+        "resize_pane_drag",
+        %{"target" => target, "axis" => axis, "delta" => delta},
+        socket
+      ) do
+    pane = Enum.find(socket.assigns.panes, &(&1.target == target))
+
+    if pane && delta != 0 do
+      case axis do
+        "x" -> TmuxManager.resize_pane(target, x: max(pane.width + delta, 2))
+        "y" -> TmuxManager.resize_pane(target, y: max(pane.height + delta, 2))
+        _ -> :ok
+      end
+    end
+
     {:noreply, socket}
   end
 

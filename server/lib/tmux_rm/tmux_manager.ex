@@ -172,6 +172,19 @@ defmodule TmuxRm.TmuxManager do
     end
   end
 
+  @doc "Resize a pane to absolute dimensions. Accepts `x:` and/or `y:` options."
+  @spec resize_pane(String.t(), keyword()) :: :ok | {:error, String.t()}
+  def resize_pane(target, opts) do
+    args = ["resize-pane", "-t", target]
+    args = if opts[:x], do: args ++ ["-x", to_string(opts[:x])], else: args
+    args = if opts[:y], do: args ++ ["-y", to_string(opts[:y])], else: args
+
+    case command_runner().run(args) do
+      {:ok, _} -> :ok
+      {:error, {msg, _code}} -> {:error, msg}
+    end
+  end
+
   @doc "Kill a pane."
   @spec kill_pane(String.t()) :: :ok | {:error, String.t()}
   def kill_pane(target) do

@@ -14,6 +14,8 @@
 
 # Already Run
 
+- Let's add a control for creating a new window in a session.
+
 - Would adding support to this server for MCP provide any value?  Can you think of any situations where an AI agent may want to use it?
 
 - When split in the UI, Let's make the panes resizable by click and dragging on the divider.  This should also work on mobile.
