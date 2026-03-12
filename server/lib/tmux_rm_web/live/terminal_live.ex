@@ -1,7 +1,7 @@
 defmodule TmuxRmWeb.TerminalLive do
   use TmuxRmWeb, :live_view
 
-  alias TmuxRm.{Config, PaneStream}
+  alias TmuxRm.{Config, PaneStream, TmuxManager}
 
   require Logger
 
@@ -69,12 +69,36 @@ defmodule TmuxRmWeb.TerminalLive do
           <.icon name="hero-arrow-left-micro" class="size-4" /> <span class="hidden sm:inline">Back</span>
         </.link>
         <span class="text-base-content/70 text-sm font-mono tracking-tight">{@target}</span>
-        <button
-          class="terminal-prefs-btn text-base-content/50 hover:text-base-content text-sm"
-          aria-label="Terminal preferences"
-        >
-          <.icon name="hero-cog-6-tooth-micro" class="size-5" />
-        </button>
+        <div class="flex items-center gap-0.5">
+          <button
+            class="split-btn text-base-content/40 hover:text-base-content text-sm"
+            phx-click="split_pane"
+            phx-value-direction="horizontal"
+            title="Split horizontally"
+            aria-label="Split pane horizontally"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" class="size-5">
+              <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zM9 4H4.5A.5.5 0 004 4.5v11a.5.5 0 00.5.5H9V4zm2 12h4.5a.5.5 0 00.5-.5v-11a.5.5 0 00-.5-.5H11v12z"/>
+            </svg>
+          </button>
+          <button
+            class="split-btn text-base-content/40 hover:text-base-content text-sm"
+            phx-click="split_pane"
+            phx-value-direction="vertical"
+            title="Split vertically"
+            aria-label="Split pane vertically"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" class="size-5">
+              <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zM4 9V4.5a.5.5 0 01.5-.5h11a.5.5 0 01.5.5V9H4zm0 2v4.5a.5.5 0 00.5.5h11a.5.5 0 00.5-.5V11H4z"/>
+            </svg>
+          </button>
+          <button
+            class="terminal-prefs-btn text-base-content/50 hover:text-base-content text-sm"
+            aria-label="Terminal preferences"
+          >
+            <.icon name="hero-cog-6-tooth-micro" class="size-5" />
+          </button>
+        </div>
       </header>
 
       <%!-- Quick action bar --%>
@@ -170,6 +194,18 @@ defmodule TmuxRmWeb.TerminalLive do
   # --- Event handlers ---
 
   @impl true
+  def handle_event("split_pane", %{"direction" => direction}, socket) do
+    dir = if direction == "vertical", do: :vertical, else: :horizontal
+
+    case TmuxManager.split_pane(socket.assigns.target, dir) do
+      {:ok, _} ->
+        {:noreply, push_navigate(socket, to: socket.assigns.back_path)}
+
+      {:error, _reason} ->
+        {:noreply, socket}
+    end
+  end
+
   def handle_event("resize", %{"cols" => cols, "rows" => rows}, socket) do
     cols = to_integer(cols)
     rows = to_integer(rows)

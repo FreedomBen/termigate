@@ -142,6 +142,28 @@ defmodule TmuxRmWeb.MultiPaneLive do
                   <.icon name="hero-arrows-pointing-out-micro" class="size-4" />
                 </button>
               <% end %>
+              <button
+                class="pane-overlay-btn"
+                phx-click="split_pane"
+                phx-value-target={pane.target}
+                phx-value-direction="horizontal"
+                title="Split horizontally"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" class="size-4">
+                  <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zM9 4H4.5A.5.5 0 004 4.5v11a.5.5 0 00.5.5H9V4zm2 12h4.5a.5.5 0 00.5-.5v-11a.5.5 0 00-.5-.5H11v12z"/>
+                </svg>
+              </button>
+              <button
+                class="pane-overlay-btn"
+                phx-click="split_pane"
+                phx-value-target={pane.target}
+                phx-value-direction="vertical"
+                title="Split vertically"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" class="size-4">
+                  <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zM4 9V4.5a.5.5 0 01.5-.5h11a.5.5 0 01.5.5V9H4zm0 2v4.5a.5.5 0 00.5.5h11a.5.5 0 00.5-.5V11H4z"/>
+                </svg>
+              </button>
               <.link
                 navigate={"/terminal/#{pane.target}"}
                 class="pane-overlay-btn"
@@ -222,6 +244,12 @@ defmodule TmuxRmWeb.MultiPaneLive do
 
   def handle_event("restore_pane", _params, socket) do
     {:noreply, assign(socket, :maximized, nil)}
+  end
+
+  def handle_event("split_pane", %{"target" => target, "direction" => direction}, socket) do
+    dir = if direction == "vertical", do: :vertical, else: :horizontal
+    TmuxManager.split_pane(target, dir)
+    {:noreply, socket}
   end
 
   def handle_event("resize", _params, socket) do
