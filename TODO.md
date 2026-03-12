@@ -1,7 +1,5 @@
 # Not Run Yet
 
-- When split in the UI, Let's make the panes resizable by click and dragging on the divider.  This should also work on mobile.
-
 - Where did the quick action buttons go?  Let's also add one for Ctrl+d, Ctrl+c, 
 
 - Write a Makefile and include a build command, clean, and install.  The install should build and copy the server binary in place, and copy the systemd service file in place as well.
@@ -15,6 +13,8 @@
 - Would adding support to this server for MCP provide any value?  Can you think of any situations where an AI agent may want to use it?
 
 # Already Run
+
+- When split in the UI, Let's make the panes resizable by click and dragging on the divider.  This should also work on mobile.
 
 - When in initial setup, populate the username with the host OS user name
 
