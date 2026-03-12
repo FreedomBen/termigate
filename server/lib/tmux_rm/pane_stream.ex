@@ -238,16 +238,23 @@ defmodule TmuxRm.PaneStream do
   def handle_call({:resize_and_capture, cols, rows}, _from, state) do
     case do_resize(state, cols, rows) do
       {:ok, state} ->
+        # Give tmux a moment to reflow content at the new dimensions
+        Process.sleep(50)
         runner = command_runner()
 
-        case runner.run(["capture-pane", "-p", "-e", "-S", "-32768", "-t", state.pane_id]) do
-          {:ok, scrollback} ->
+        # Only capture the visible screen (no -S flag) — old scrollback
+        # contains content formatted at the previous width that won't
+        # reflow cleanly with embedded ANSI escape sequences.
+        case runner.run(["capture-pane", "-p", "-e", "-t", state.pane_id]) do
+          {:ok, screen} ->
+            Logger.debug("resize_and_capture: #{cols}x#{rows}, got #{byte_size(screen)} bytes")
+
             buffer =
               state.buffer
               |> RingBuffer.clear()
-              |> RingBuffer.append(scrollback)
+              |> RingBuffer.append(screen)
 
-            {:reply, {:ok, scrollback}, %{state | buffer: buffer}}
+            {:reply, {:ok, screen}, %{state | buffer: buffer}}
 
           {:error, _} ->
             {:reply, {:ok, RingBuffer.read(state.buffer)}, state}
@@ -491,13 +498,15 @@ defmodule TmuxRm.PaneStream do
         end
       end
 
-    # Capture existing scrollback with ANSI escapes
+    # Capture visible screen only (no -S flag). Full scrollback history
+    # contains content formatted at previous pane dimensions which renders
+    # incorrectly when the browser terminal has different dimensions.
     buffer =
-      case runner.run(["capture-pane", "-p", "-e", "-S", "-32768", "-t", pane_id]) do
-        {:ok, scrollback} ->
+      case runner.run(["capture-pane", "-p", "-e", "-t", pane_id]) do
+        {:ok, screen} ->
           buffer
           |> RingBuffer.clear()
-          |> RingBuffer.append(scrollback)
+          |> RingBuffer.append(screen)
 
         {:error, _} ->
           buffer

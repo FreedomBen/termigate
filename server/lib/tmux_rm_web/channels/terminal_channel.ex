@@ -163,16 +163,27 @@ defmodule TmuxRmWeb.TerminalChannel do
     if cols && rows &&
          cols >= @min_cols && cols <= @max_cols &&
          rows >= @min_rows && rows <= @max_rows do
+      Logger.info("Resizing pane on join: #{target} to #{cols}x#{rows}")
+
       case PaneStream.resize_and_capture(target, cols, rows) do
-        {:ok, history} -> history
-        {:error, _} -> _old_history
+        {:ok, history} ->
+          Logger.info("resize_and_capture succeeded, #{byte_size(history)} bytes")
+          history
+
+        {:error, reason} ->
+          Logger.warning("resize_and_capture failed: #{inspect(reason)}")
+          _old_history
       end
     else
+      Logger.warning("Invalid join dimensions: cols=#{inspect(cols)} rows=#{inspect(rows)}")
       _old_history
     end
   end
 
-  defp maybe_resize_and_recapture(_target, _params, history), do: history
+  defp maybe_resize_and_recapture(_target, params, history) do
+    Logger.info("No cols/rows in join params: #{inspect(Map.keys(params))}")
+    history
+  end
 
   # "session:window:pane" -> "session:window.pane"
   defp parse_target(raw) do

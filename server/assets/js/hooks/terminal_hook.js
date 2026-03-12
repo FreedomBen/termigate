@@ -47,15 +47,43 @@ const TerminalHook = {
     // Load preferences from localStorage (Phase 10 full preference system)
     const prefs = loadPrefs();
 
-    // Create xterm.js terminal
-    this.term = new Terminal({
+    // Track mobile state and multi-pane mode early (needed for terminal setup)
+    this._isMobile = isMobile();
+    this._isMultiPane = this.el.dataset.mode === "multi";
+
+    console.log("[TerminalHook] mounted", {
+      target,
+      isMultiPane: this._isMultiPane,
+      isMobile: this._isMobile,
+      dataMode: this.el.dataset.mode,
+      dataCols: this.el.dataset.cols,
+      dataRows: this.el.dataset.rows,
+      elWidth: this.el.offsetWidth,
+      elHeight: this.el.offsetHeight,
+    });
+
+    // In multi-pane mode, use the tmux pane's actual dimensions so that
+    // captured scrollback renders correctly. Otherwise let FitAddon decide.
+    const termOpts = {
       fontSize: prefs.fontSize,
       fontFamily: prefs.fontFamily,
       cursorStyle: prefs.cursorStyle,
       cursorBlink: prefs.cursorBlink,
       scrollback: 0,
       theme: resolveTheme(prefs),
-    });
+    };
+
+    if (this._isMultiPane) {
+      const tmuxCols = parseInt(this.el.dataset.cols, 10);
+      const tmuxRows = parseInt(this.el.dataset.rows, 10);
+      if (tmuxCols && tmuxRows) {
+        termOpts.cols = tmuxCols;
+        termOpts.rows = tmuxRows;
+      }
+    }
+
+    // Create xterm.js terminal
+    this.term = new Terminal(termOpts);
 
     // Addons
     this.fitAddon = new FitAddon();
@@ -64,17 +92,20 @@ const TerminalHook = {
 
     // Open terminal in container
     this.term.open(this.el);
-    this.fitAddon.fit();
 
-    // Track mobile state and multi-pane mode
-    this._isMobile = isMobile();
-    this._isMultiPane = this.el.dataset.mode === "multi";
+    // Only use FitAddon for single-pane mode — multi-pane uses exact tmux dims
+    if (!this._isMultiPane) {
+      this.fitAddon.fit();
+    }
+
+    console.log("[TerminalHook] after setup", {
+      target,
+      termCols: this.term.cols,
+      termRows: this.term.rows,
+    });
 
     // Connect companion Channel for binary I/O
     this._connectChannel(target);
-
-    // Note: initial resize is sent via channel join params so the pane is
-    // resized before history is captured, avoiding wonky formatting.
 
     // Input handling: buffer keystrokes and flush periodically
     this._inputBuffer = [];
@@ -115,21 +146,23 @@ const TerminalHook = {
       }
     });
 
-    // Resize handling with debounce
+    // Resize handling with debounce (skip entirely for multi-pane — fixed tmux dims)
     this._resizeTimer = null;
-    this._resizeObserver = new ResizeObserver(() => {
-      clearTimeout(this._resizeTimer);
-      this._resizeTimer = setTimeout(() => {
-        this.fitAddon.fit();
-        if (!this._isMobile && !this._isMultiPane) {
-          this.pushEvent("resize", {
-            cols: this.term.cols,
-            rows: this.term.rows,
-          });
-        }
-      }, 300);
-    });
-    this._resizeObserver.observe(this.el);
+    if (!this._isMultiPane) {
+      this._resizeObserver = new ResizeObserver(() => {
+        clearTimeout(this._resizeTimer);
+        this._resizeTimer = setTimeout(() => {
+          this.fitAddon.fit();
+          if (!this._isMobile) {
+            this.pushEvent("resize", {
+              cols: this.term.cols,
+              rows: this.term.rows,
+            });
+          }
+        }, 300);
+      });
+      this._resizeObserver.observe(this.el);
+    }
 
     // Handle pane_resized from other viewers (via LiveView)
     this.handleEvent("pane_resized", ({ cols, rows }) => {
@@ -494,6 +527,8 @@ const TerminalHook = {
       window.userSocket.connect();
     }
 
+    // Single-pane: send browser dims so tmux is resized before history capture.
+    // Multi-pane: no resize — xterm.js already matches tmux dims.
     const joinParams = {};
     if (!this._isMobile && !this._isMultiPane) {
       joinParams.cols = this.term.cols;
@@ -508,6 +543,11 @@ const TerminalHook = {
           const historyBytes = Uint8Array.from(atob(reply.history), (c) =>
             c.charCodeAt(0)
           );
+          console.log("[TerminalHook] received history", {
+            bytes: historyBytes.length,
+            termCols: this.term.cols,
+            termRows: this.term.rows,
+          });
           this.term.write(historyBytes);
         }
       })

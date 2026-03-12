@@ -118,6 +118,8 @@ defmodule TmuxRmWeb.MultiPaneLive do
               phx-update="ignore"
               data-target={pane.target}
               data-mode="multi"
+              data-cols={to_string(pane.width)}
+              data-rows={to_string(pane.height)}
               class="w-full h-full"
             >
             </div>
