@@ -6,7 +6,7 @@ defmodule TmuxRmWeb.AuthLiveTest do
   describe "login page" do
     test "renders login form", %{conn: conn} do
       {:ok, _view, html} = live(conn, "/login")
-      assert html =~ "Log in to tmux-rm"
+      assert html =~ "tmux-rm"
       assert html =~ "Username"
       assert html =~ "Password"
     end

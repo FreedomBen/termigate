@@ -12,13 +12,13 @@
 
 - Let's add an direct edit for the settings config file to the settings page so users can optionally open the file in a text editor (inside the application's UI) and make direct changes to the file.
 
-- What are our distribution options for the web app?  can we compile to a static binary for linux?
-
 - Let's go through the application and ensure that we are logging any meaningful action.
 
 - Would adding support to this server for MCP provide any value?  Can you think of any situations where an AI agent may want to use it?
 
 # Already Run
+
+- What are our distribution options for the web app?  can we compile to a static binary for linux?
 
 - How can we make our test suite run faster?  Right now it's pretty slow
 

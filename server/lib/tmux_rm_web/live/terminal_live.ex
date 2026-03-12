@@ -53,49 +53,47 @@ defmodule TmuxRmWeb.TerminalLive do
     <div class="terminal-page flex flex-col h-dvh bg-black">
       <meta name="channel-token" content={@channel_token} />
 
-      <header class="terminal-header flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-700 shrink-0 transition-transform duration-300 sm:translate-y-0 z-30">
+      <header class="terminal-header terminal-header-bar">
         <.link
           navigate={~p"/"}
-          class="text-gray-400 hover:text-white text-sm min-h-[48px] sm:min-h-0 flex items-center"
+          class="text-base-content/50 hover:text-base-content text-sm gap-1"
         >
-          <.icon name="hero-arrow-left-micro" class="size-4 inline" /> Sessions
+          <.icon name="hero-arrow-left-micro" class="size-4" /> <span class="hidden sm:inline">Sessions</span>
         </.link>
-        <span class="text-gray-300 text-sm font-mono">{@target}</span>
+        <span class="text-base-content/70 text-sm font-mono tracking-tight">{@target}</span>
         <button
-          class="terminal-prefs-btn text-gray-400 hover:text-white text-sm min-h-[48px] sm:min-h-0 flex items-center"
+          class="terminal-prefs-btn text-base-content/50 hover:text-base-content text-sm"
           aria-label="Terminal preferences"
         >
-          <.icon name="hero-cog-6-tooth-micro" class="size-4" />
+          <.icon name="hero-cog-6-tooth-micro" class="size-5" />
         </button>
       </header>
 
       <%!-- Quick action bar --%>
       <div
         :if={@quick_actions != [] and @show_actions}
-        class="terminal-action-bar flex items-center gap-2 px-3 py-1.5 bg-gray-900/80 border-b border-gray-700/50 overflow-x-auto shrink-0 transition-all duration-300 sm:translate-y-0 sm:opacity-100 z-20"
-        style="scroll-snap-type: x mandatory;"
+        class="terminal-action-bar quick-action-bar"
       >
         <button
           :for={action <- @quick_actions}
           class={"btn btn-xs sm:btn-xs btn-sm #{action_color_class(action)}"}
-          style="scroll-snap-align: start;"
           phx-click="quick_action"
           phx-value-id={action["id"]}
         >
           <.icon :if={action_icon(action)} name={action_icon(action)} class="size-3" />
           {action["label"]}
-          <span :if={action["confirm"]} class="text-warning text-[10px]">⚠</span>
+          <span :if={action["confirm"]} class="text-warning text-[10px] opacity-70">!</span>
         </button>
-        <button class="btn btn-ghost btn-xs ml-auto" phx-click="toggle_actions">
+        <button class="btn btn-ghost btn-xs ml-auto shrink-0" phx-click="toggle_actions">
           <.icon name="hero-chevron-up-micro" class="size-3" />
         </button>
       </div>
 
       <div
         :if={@quick_actions != [] and not @show_actions}
-        class="terminal-action-bar flex items-center px-3 py-0.5 bg-gray-900/80 border-b border-gray-700/50 shrink-0 transition-all duration-300 sm:translate-y-0 sm:opacity-100 z-20"
+        class="terminal-action-bar quick-action-bar py-0.5"
       >
-        <button class="btn btn-ghost btn-xs text-gray-500" phx-click="toggle_actions">
+        <button class="btn btn-ghost btn-xs text-base-content/40" phx-click="toggle_actions">
           <.icon name="hero-chevron-down-micro" class="size-3" />
           <span class="text-xs">{length(@quick_actions)} actions</span>
         </button>
@@ -111,10 +109,10 @@ defmodule TmuxRmWeb.TerminalLive do
       </div>
 
       <%!-- Pane dead overlay --%>
-      <div :if={@pane_dead} class="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-        <div class="text-center text-white">
-          <.icon name="hero-x-circle" class="size-12 mx-auto mb-4 text-gray-400" />
-          <p class="text-xl mb-4">Session ended</p>
+      <div :if={@pane_dead} class="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+        <div class="text-center text-base-content">
+          <.icon name="hero-x-circle" class="size-12 mx-auto mb-4 text-base-content/30" />
+          <p class="text-lg font-semibold mb-4">Session ended</p>
           <.link navigate={~p"/"} class="btn btn-primary">
             Back to Sessions
           </.link>
@@ -130,7 +128,7 @@ defmodule TmuxRmWeb.TerminalLive do
         confirm_variant="btn-primary"
       >
         <:title>Run command?</:title>
-        <pre class="bg-gray-800 text-gray-200 p-3 rounded text-sm font-mono overflow-x-auto">{@pending_action["command"]}</pre>
+        <pre class="bg-base-300 text-base-content p-3 rounded-lg text-sm font-mono overflow-x-auto">{@pending_action["command"]}</pre>
         <:confirm>Run</:confirm>
         <:cancel>Cancel</:cancel>
       </.modal>

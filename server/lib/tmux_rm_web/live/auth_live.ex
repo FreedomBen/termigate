@@ -27,15 +27,18 @@ defmodule TmuxRmWeb.AuthLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="flex items-center justify-center min-h-[60vh]">
-      <div class="card bg-base-200 shadow-lg w-full max-w-sm">
-        <div class="card-body">
-          <h2 class="card-title text-center mb-4">Log in to tmux-rm</h2>
+    <div class="flex items-center justify-center min-h-screen px-4 py-8">
+      <div class="card auth-card shadow-xl w-full max-w-sm rounded-2xl">
+        <div class="card-body gap-6">
+          <div class="text-center">
+            <div class="auth-logo mb-2">tmux-rm</div>
+            <p class="text-xs text-base-content/40">Sign in to access your sessions</p>
+          </div>
 
           <form action="/login" method="post" class="space-y-4">
             <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
             <div>
-              <label class="label" for="username">Username</label>
+              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="username">Username</label>
               <input
                 type="text"
                 id="username"
@@ -47,7 +50,7 @@ defmodule TmuxRmWeb.AuthLive do
               />
             </div>
             <div>
-              <label class="label" for="password">Password</label>
+              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="password">Password</label>
               <input
                 type="password"
                 id="password"
@@ -56,7 +59,7 @@ defmodule TmuxRmWeb.AuthLive do
                 autocomplete="current-password"
               />
             </div>
-            <button type="submit" class="btn btn-primary w-full">Log in</button>
+            <button type="submit" class="btn btn-primary w-full">Sign in</button>
           </form>
         </div>
       </div>

@@ -52,20 +52,20 @@ defmodule TmuxRmWeb.MultiPaneLive do
     ~H"""
     <div class="flex flex-col h-dvh bg-black">
       <%!-- Window tabs --%>
-      <div class="flex items-center bg-gray-900 border-b border-gray-700 shrink-0 overflow-x-auto">
-        <.link navigate={~p"/"} class="px-3 py-2 text-gray-400 hover:text-white text-sm shrink-0">
+      <div class="window-tabs">
+        <.link navigate={~p"/"} class="window-tab text-base-content/40 hover:text-base-content shrink-0 px-3">
           <.icon name="hero-arrow-left-micro" class="size-4" />
         </.link>
-        <span class="text-gray-500 text-xs px-2 shrink-0">{@session}</span>
+        <span class="text-base-content/30 text-xs px-2 shrink-0 font-mono">{@session}</span>
         <div class="flex items-center gap-0.5 px-1">
           <.link
             :for={win <- @windows}
             navigate={"/sessions/#{@session}/windows/#{win.index}"}
             class={[
-              "px-3 py-2 text-sm rounded-t transition-colors shrink-0",
+              "window-tab",
               if(to_string(win.index) == @window,
-                do: "bg-gray-800 text-white border-t border-x border-gray-600",
-                else: "text-gray-400 hover:text-white hover:bg-gray-800/50"
+                do: "window-tab-active",
+                else: "window-tab-inactive"
               )
             ]}
           >
@@ -89,7 +89,7 @@ defmodule TmuxRmWeb.MultiPaneLive do
           data-target={pane.target}
           data-mode="multi"
           style={"grid-column: #{pane_grid_col(pane, @grid)}; grid-row: #{pane_grid_row(pane, @grid)};"}
-          class="border border-gray-700/50 min-h-0 overflow-hidden"
+          class="border border-base-content/5 min-h-0 overflow-hidden"
         >
         </div>
       </div>
@@ -99,23 +99,24 @@ defmodule TmuxRmWeb.MultiPaneLive do
         <.link
           :for={pane <- @panes}
           navigate={"/terminal/#{pane.target}"}
-          class="block p-4 bg-gray-800 rounded-lg border border-gray-700 hover:border-gray-500 transition-colors"
+          class="pane-row rounded-xl"
+          style="border-bottom: none; background: oklch(18% 0.008 260); border: 1px solid oklch(25% 0.01 260);"
         >
-          <div class="flex items-center justify-between">
-            <div>
-              <span class="font-mono text-sm text-gray-300">{pane.target}</span>
-              <span class="ml-2 text-xs text-gray-500">{pane.command}</span>
-            </div>
-            <div class="text-xs text-gray-500">{pane.width}x{pane.height}</div>
+          <.icon name="hero-command-line-micro" class="size-4 text-base-content/25 shrink-0" />
+          <div class="flex-1 min-w-0">
+            <span class="font-mono text-sm text-base-content/70">{pane.target}</span>
+            <span class="ml-2 text-xs text-base-content/40">{pane.command}</span>
           </div>
+          <div class="text-xs text-base-content/25">{pane.width}&times;{pane.height}</div>
+          <.icon name="hero-chevron-right-micro" class="size-4 text-base-content/20 shrink-0" />
         </.link>
       </div>
 
       <%!-- Empty state --%>
-      <div :if={@panes == []} class="flex-1 flex items-center justify-center text-gray-500">
-        <div class="text-center">
-          <.icon name="hero-rectangle-group" class="size-12 mx-auto mb-4 text-gray-600" />
-          <p class="text-lg mb-2">No panes in this window</p>
+      <div :if={@panes == []} class="flex-1 flex items-center justify-center">
+        <div class="empty-state">
+          <.icon name="hero-rectangle-group" class="empty-state-icon" />
+          <p class="text-lg font-semibold mb-2">No panes in this window</p>
           <.link navigate={~p"/"} class="btn btn-primary btn-sm">Back to Sessions</.link>
         </div>
       </div>
@@ -130,7 +131,7 @@ defmodule TmuxRmWeb.MultiPaneLive do
         >
           <.link
             navigate={"/terminal/#{pane.target}"}
-            class="btn btn-xs btn-ghost text-gray-400 hover:text-white opacity-0 group-hover:opacity-100"
+            class="btn btn-xs btn-ghost text-base-content/40 hover:text-base-content opacity-0 group-hover:opacity-100"
           >
             <.icon name="hero-arrows-pointing-out-micro" class="size-3" /> Focus
           </.link>

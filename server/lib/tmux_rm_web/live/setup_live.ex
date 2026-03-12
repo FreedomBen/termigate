@@ -25,17 +25,17 @@ defmodule TmuxRmWeb.SetupLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="flex items-center justify-center min-h-[60vh]">
-      <div class="card bg-base-200 shadow-lg w-full max-w-sm">
-        <div class="card-body">
-          <h2 class="card-title text-center mb-2">Welcome to tmux-rm</h2>
-          <p class="text-sm text-base-content/60 text-center mb-4">
-            Create an account to secure your terminal access.
-          </p>
+    <div class="flex items-center justify-center min-h-screen px-4 py-8">
+      <div class="card auth-card shadow-xl w-full max-w-sm rounded-2xl">
+        <div class="card-body gap-5">
+          <div class="text-center">
+            <div class="auth-logo mb-2">tmux-rm</div>
+            <p class="text-xs text-base-content/40">Create an account to secure your terminal access</p>
+          </div>
 
           <form phx-submit="setup" class="space-y-4">
             <div>
-              <label class="label" for="username">Username</label>
+              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="username">Username</label>
               <input
                 type="text"
                 id="username"
@@ -47,7 +47,7 @@ defmodule TmuxRmWeb.SetupLive do
               />
             </div>
             <div>
-              <label class="label" for="password">Password</label>
+              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="password">Password</label>
               <input
                 type="password"
                 id="password"
@@ -57,7 +57,7 @@ defmodule TmuxRmWeb.SetupLive do
               />
             </div>
             <div>
-              <label class="label" for="password_confirm">Confirm Password</label>
+              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="password_confirm">Confirm Password</label>
               <input
                 type="password"
                 id="password_confirm"
@@ -67,7 +67,7 @@ defmodule TmuxRmWeb.SetupLive do
               />
             </div>
             <div>
-              <label class="label" for="session_ttl_hours">Session Duration</label>
+              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="session_ttl_hours">Session Duration</label>
               <select
                 id="session_ttl_hours"
                 name="session_ttl_hours"
@@ -81,7 +81,7 @@ defmodule TmuxRmWeb.SetupLive do
                 <option value="720">30 days</option>
                 <option value="8760">1 year</option>
               </select>
-              <p class="text-xs text-base-content/60 mt-1">
+              <p class="text-xs text-base-content/40 mt-1">
                 How long before you need to log in again.
               </p>
             </div>
