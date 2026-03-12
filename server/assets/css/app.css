@@ -744,6 +744,34 @@ body {
   background: oklch(16% 0.005 260);
 }
 
+/* New window button in tab bar */
+.new-window-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-left: 0.25rem;
+  flex-shrink: 0;
+  border-radius: 6px;
+  color: oklch(50% 0.01 260);
+  border: 1px dashed oklch(30% 0.01 260);
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.new-window-btn:hover {
+  color: var(--color-primary);
+  border-color: oklch(from var(--color-primary) l c h / 50%);
+  background: oklch(from var(--color-primary) l c h / 8%);
+}
+
+.new-window-btn:active {
+  background: oklch(from var(--color-primary) l c h / 15%);
+  transform: scale(0.93);
+}
+
 /* === Empty state === */
 .empty-state {
   display: flex;

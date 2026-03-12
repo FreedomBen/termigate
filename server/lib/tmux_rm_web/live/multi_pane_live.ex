@@ -86,6 +86,13 @@ defmodule TmuxRmWeb.MultiPaneLive do
           >
             Window {win.index}{if win.name, do: ": #{win.name}", else: ""}
           </.link>
+          <button
+            class="new-window-btn"
+            phx-click="create_window"
+            title="New window"
+          >
+            <.icon name="hero-plus-micro" class="size-3.5" />
+          </button>
         </div>
       </div>
 
@@ -292,6 +299,27 @@ defmodule TmuxRmWeb.MultiPaneLive do
 
   def handle_event("restore_pane", _params, socket) do
     {:noreply, assign(socket, :maximized, nil)}
+  end
+
+  def handle_event("create_window", _params, socket) do
+    session = socket.assigns.session
+
+    case TmuxManager.create_window(session) do
+      :ok ->
+        # Fetch updated window list and navigate to the new (last) window
+        windows = fetch_windows(session)
+        new_window = windows |> List.last()
+
+        socket =
+          socket
+          |> assign(:windows, windows)
+          |> push_navigate(to: "/sessions/#{session}/windows/#{new_window.index}")
+
+        {:noreply, socket}
+
+      {:error, _msg} ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event("split_pane", %{"target" => target, "direction" => direction}, socket) do
