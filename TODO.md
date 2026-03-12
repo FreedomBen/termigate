@@ -1,5 +1,7 @@
 # Not Run Yet
 
+- Let's add a notification feature.  This is intended for long-running commands.  When a command finishes, pop up a notification informing the user.  Clicking on the notification should take you to the browser tab and put focus on the pane that triggered the notification.
+
 - Where did the quick action buttons go?  Let's also add one for Ctrl+d, Ctrl+c, 
 
 - Write a Makefile and include a build command, clean, and install.  The install should build and copy the server binary in place, and copy the systemd service file in place as well.
