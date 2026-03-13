@@ -1,5 +1,5 @@
 defmodule TermigateWeb.MultiPaneLiveTest do
-  use TermigateWeb.ConnCase, async: true
+  use TermigateWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
 

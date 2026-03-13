@@ -10,6 +10,11 @@ defmodule Termigate.TmuxManagerTest do
     # Swap in MockCommandRunner for these tests
     original = Application.get_env(:termigate, :command_runner)
     Application.put_env(:termigate, :command_runner, Termigate.MockCommandRunner)
+
+    # Stub all commands by default so background processes (SessionPoller, LayoutPoller)
+    # don't crash with Mox.UnexpectedCallError when they poll
+    Mox.stub_with(Termigate.MockCommandRunner, Termigate.StubCommandRunner)
+
     on_exit(fn -> Application.put_env(:termigate, :command_runner, original) end)
     :ok
   end

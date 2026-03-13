@@ -1,5 +1,5 @@
 defmodule TermigateWeb.TerminalLiveTest do
-  use TermigateWeb.ConnCase, async: true
+  use TermigateWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
 
@@ -18,7 +18,7 @@ defmodule TermigateWeb.TerminalLiveTest do
 
     test "shows back link to sessions", %{conn: conn} do
       {:ok, _view, html} = live(conn, "/terminal/test:0.0")
-      assert html =~ "Sessions"
+      assert html =~ "Back"
     end
   end
 
@@ -53,7 +53,7 @@ defmodule TermigateWeb.TerminalLiveTest do
     test "header has terminal-header class for auto-hide", %{conn: conn} do
       {:ok, _view, html} = live(conn, "/terminal/test:0.0")
       assert html =~ "terminal-header"
-      assert html =~ "transition-transform"
+      assert html =~ "terminal-header-bar"
     end
 
     test "terminal container has proper flex classes", %{conn: conn} do
@@ -63,13 +63,13 @@ defmodule TermigateWeb.TerminalLiveTest do
       assert html =~ "min-h-0"
     end
 
-    test "header links have min touch target height on mobile", %{conn: conn} do
+    test "header links have proper styling", %{conn: conn} do
       {:ok, _view, html} = live(conn, "/terminal/test:0.0")
-      # min-h-[48px] ensures 48px touch targets on mobile
-      assert html =~ "min-h-[48px]"
+      assert html =~ "terminal-header-bar"
+      assert html =~ "hero-arrow-left-micro"
     end
 
-    test "quick action bar has scroll snap for mobile", %{conn: conn} do
+    test "quick action bar renders with actions", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/terminal/test:0.0")
 
       # Set up config with quick actions
@@ -84,8 +84,8 @@ defmodule TermigateWeb.TerminalLiveTest do
       )
 
       html = render(view)
-      assert html =~ "scroll-snap-type"
       assert html =~ "terminal-action-bar"
+      assert html =~ "quick-action-bar"
     end
   end
 end

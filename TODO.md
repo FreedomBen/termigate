@@ -1,5 +1,7 @@
 # Not Run Yet
 
+- Write out the details of our major infrastructure issue into INFRA_ISSUE.md
+
 - when we renamed the application from tmux-rm to termigate, we missed some spots. For example, deploy/tmux-rm.service .  Let's do a search and make sure to update the name everywhere.
 
 - write up a README.md file for this repo

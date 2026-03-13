@@ -31,7 +31,31 @@ defmodule TermigateWeb.ConnCase do
     end
   end
 
-  setup _tags do
-    {:ok, conn: Phoenix.ConnTest.build_conn()}
+  setup tags do
+    # Enable auth with a test token so RequireAuth doesn't redirect to /setup.
+    # Tests that need to test auth behavior directly can use @tag :skip_auth.
+    if tags[:skip_auth] do
+      Application.delete_env(:termigate, :auth_token)
+    else
+      Application.put_env(:termigate, :auth_token, "test-token")
+    end
+
+    # Ensure the application is running (may have been restarted by supervisor)
+    Application.ensure_all_started(:termigate)
+
+    session =
+      if tags[:skip_auth],
+        do: %{},
+        else: %{"authenticated_at" => System.system_time(:second)}
+
+    # Sign an API bearer token for controller/API tests
+    api_token = Phoenix.Token.sign(TermigateWeb.Endpoint, "api_token", %{})
+
+    conn =
+      Phoenix.ConnTest.build_conn()
+      |> Plug.Test.init_test_session(session)
+      |> Plug.Conn.put_req_header("authorization", "Bearer #{api_token}")
+
+    {:ok, conn: conn}
   end
 end

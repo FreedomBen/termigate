@@ -28,13 +28,19 @@ defmodule Termigate.PaneStream do
 
     case ensure_started(target) do
       {:ok, pid} ->
-        case GenServer.call(pid, {:subscribe, self()}) do
-          {:ok, history} ->
-            {:ok, history, pid}
+        try do
+          case GenServer.call(pid, {:subscribe, self()}) do
+            {:ok, history} ->
+              {:ok, history, pid}
 
-          {:error, reason} ->
+            {:error, reason} ->
+              Phoenix.PubSub.unsubscribe(Termigate.PubSub, pubsub_topic)
+              {:error, reason}
+          end
+        catch
+          :exit, _ ->
             Phoenix.PubSub.unsubscribe(Termigate.PubSub, pubsub_topic)
-            {:error, reason}
+            {:error, :not_ready}
         end
 
       {:error, reason} ->

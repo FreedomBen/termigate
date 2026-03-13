@@ -1,14 +1,14 @@
 defmodule TermigateWeb.TerminalChannelTest do
-  use TermigateWeb.ChannelCase, async: true
+  use TermigateWeb.ChannelCase, async: false
 
   describe "join" do
-    test "returns error when pane not found" do
-      {:ok, socket} = connect(TermigateWeb.UserSocket, %{})
+    test "returns error when pane not found", %{channel_token: token} do
+      {:ok, socket} = connect(TermigateWeb.UserSocket, %{"token" => token})
       assert {:error, %{reason: _}} = subscribe_and_join(socket, "terminal:nonexistent:0:0")
     end
 
-    test "parses topic into correct target format" do
-      {:ok, socket} = connect(TermigateWeb.UserSocket, %{})
+    test "parses topic into correct target format", %{channel_token: token} do
+      {:ok, socket} = connect(TermigateWeb.UserSocket, %{"token" => token})
       # Will fail because no tmux, but should not crash
       result = subscribe_and_join(socket, "terminal:my-session:1:2")
       assert {:error, %{reason: _}} = result

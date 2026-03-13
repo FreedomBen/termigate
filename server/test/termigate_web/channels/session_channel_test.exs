@@ -1,9 +1,9 @@
 defmodule TermigateWeb.SessionChannelTest do
-  use TermigateWeb.ChannelCase, async: true
+  use TermigateWeb.ChannelCase, async: false
 
   describe "join" do
-    test "returns current session list on join" do
-      {:ok, socket} = connect(TermigateWeb.UserSocket, %{})
+    test "returns current session list on join", %{channel_token: token} do
+      {:ok, socket} = connect(TermigateWeb.UserSocket, %{"token" => token})
       {:ok, reply, _socket} = subscribe_and_join(socket, "sessions")
 
       assert %{sessions: sessions} = reply
@@ -12,8 +12,8 @@ defmodule TermigateWeb.SessionChannelTest do
   end
 
   describe "handle_info" do
-    test "sessions_updated pushes when list changes" do
-      {:ok, socket} = connect(TermigateWeb.UserSocket, %{})
+    test "sessions_updated pushes when list changes", %{channel_token: token} do
+      {:ok, socket} = connect(TermigateWeb.UserSocket, %{"token" => token})
       {:ok, _reply, socket} = subscribe_and_join(socket, "sessions")
 
       # Simulate a session update via PubSub
@@ -32,8 +32,8 @@ defmodule TermigateWeb.SessionChannelTest do
       assert [%{name: "test-session", windows: 1}] = sessions
     end
 
-    test "sessions_updated does not push when list unchanged" do
-      {:ok, socket} = connect(TermigateWeb.UserSocket, %{})
+    test "sessions_updated does not push when list unchanged", %{channel_token: token} do
+      {:ok, socket} = connect(TermigateWeb.UserSocket, %{"token" => token})
       {:ok, _reply, socket} = subscribe_and_join(socket, "sessions")
 
       # Send the same empty list (matching initial state)
@@ -42,8 +42,8 @@ defmodule TermigateWeb.SessionChannelTest do
       refute_push "sessions_updated", _
     end
 
-    test "tmux_status_changed pushes status" do
-      {:ok, socket} = connect(TermigateWeb.UserSocket, %{})
+    test "tmux_status_changed pushes status", %{channel_token: token} do
+      {:ok, socket} = connect(TermigateWeb.UserSocket, %{"token" => token})
       {:ok, _reply, socket} = subscribe_and_join(socket, "sessions")
 
       send(socket.channel_pid, {:tmux_status_changed, :not_found})
@@ -51,8 +51,8 @@ defmodule TermigateWeb.SessionChannelTest do
       assert_push "tmux_status", %{status: "not_found"}
     end
 
-    test "tmux_status_changed handles error tuple" do
-      {:ok, socket} = connect(TermigateWeb.UserSocket, %{})
+    test "tmux_status_changed handles error tuple", %{channel_token: token} do
+      {:ok, socket} = connect(TermigateWeb.UserSocket, %{"token" => token})
       {:ok, _reply, socket} = subscribe_and_join(socket, "sessions")
 
       send(socket.channel_pid, {:tmux_status_changed, {:error, "connection refused"}})

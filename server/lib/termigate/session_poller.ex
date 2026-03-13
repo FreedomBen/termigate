@@ -95,24 +95,30 @@ defmodule Termigate.SessionPoller do
     start_time = System.monotonic_time(:millisecond)
 
     result =
-      case Termigate.TmuxManager.list_sessions() do
-        {:ok, sessions} ->
-          sessions_with_panes = fetch_panes(sessions)
-          new_tmux_status = :ok
+      try do
+        case Termigate.TmuxManager.list_sessions() do
+          {:ok, sessions} ->
+            sessions_with_panes = fetch_panes(sessions)
+            new_tmux_status = :ok
 
-          state = maybe_broadcast_tmux_status(state, new_tmux_status)
-          state = maybe_broadcast_sessions(state, sessions_with_panes)
+            state = maybe_broadcast_tmux_status(state, new_tmux_status)
+            state = maybe_broadcast_sessions(state, sessions_with_panes)
 
-          %{state | sessions: sessions_with_panes, tmux_status: new_tmux_status}
+            %{state | sessions: sessions_with_panes, tmux_status: new_tmux_status}
 
-        {:error, :tmux_not_found} ->
-          state = maybe_broadcast_tmux_status(state, :not_found)
-          %{state | tmux_status: :not_found}
+          {:error, :tmux_not_found} ->
+            state = maybe_broadcast_tmux_status(state, :not_found)
+            %{state | tmux_status: :not_found}
 
-        {:error, reason} ->
-          new_status = {:error, to_string(reason)}
-          state = maybe_broadcast_tmux_status(state, new_status)
-          %{state | tmux_status: new_status}
+          {:error, reason} ->
+            new_status = {:error, to_string(reason)}
+            state = maybe_broadcast_tmux_status(state, new_status)
+            %{state | tmux_status: new_status}
+        end
+      rescue
+        e ->
+          Logger.warning("SessionPoller poll error: #{inspect(e)}")
+          state
       end
 
     duration = System.monotonic_time(:millisecond) - start_time
