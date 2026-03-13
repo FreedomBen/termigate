@@ -187,6 +187,19 @@ const TerminalHook = {
       this._setupAutoHidingHeader();
       this._setupPreferencesPanel();
     }
+
+    // --- Multi-pane: notify LiveView when this pane gets focus ---
+    if (this._isMultiPane) {
+      this.term.textarea?.addEventListener("focus", () => {
+        this.pushEvent("pane_focused", { target: this.el.dataset.target });
+      });
+      this.el.addEventListener("mousedown", () => {
+        this.pushEvent("pane_focused", { target: this.el.dataset.target });
+      });
+      this.el.addEventListener("touchstart", () => {
+        this.pushEvent("pane_focused", { target: this.el.dataset.target });
+      }, { passive: true });
+    }
   },
 
   // --- Preferences Panel ---

@@ -836,21 +836,8 @@ body {
   right: 0.5rem;
   display: flex;
   gap: 4px;
-  opacity: 0;
-  transition: opacity 0.15s;
-  z-index: 5;
-}
-
-.group:hover .pane-overlay,
-.pane-maximized .pane-overlay {
   opacity: 1;
-}
-
-/* Always show on touch devices */
-@media (hover: none) {
-  .pane-overlay {
-    opacity: 1;
-  }
+  z-index: 5;
 }
 
 .pane-overlay-btn {

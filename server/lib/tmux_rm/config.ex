@@ -136,12 +136,14 @@ defmodule TmuxRm.Config do
   @doc "Reset config to defaults (preserves auth section)."
   def reset do
     update(fn config ->
+      defaults = ensure_action_ids(@default_config)
+
       case config["auth"] do
         auth when is_map(auth) and map_size(auth) > 0 ->
-          Map.put(@default_config, "auth", auth)
+          Map.put(defaults, "auth", auth)
 
         _ ->
-          @default_config
+          defaults
       end
     end)
   end
@@ -230,15 +232,16 @@ defmodule TmuxRm.Config do
 
       {:error, :enoent} ->
         Logger.info("Config file not found, creating defaults at #{state.path}")
+        defaults = ensure_action_ids(@default_config)
 
-        case write_config(state.path, @default_config) do
-          {:ok, mtime} -> %{state | config: @default_config, mtime: mtime}
-          {:error, _} -> %{state | config: @default_config}
+        case write_config(state.path, defaults) do
+          {:ok, mtime} -> %{state | config: defaults, mtime: mtime}
+          {:error, _} -> %{state | config: defaults}
         end
 
       {:error, reason} ->
         Logger.warning("Failed to read config: #{inspect(reason)}, using defaults")
-        %{state | config: @default_config}
+        %{state | config: ensure_action_ids(@default_config)}
     end
   end
 

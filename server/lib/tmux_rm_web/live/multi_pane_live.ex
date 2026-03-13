@@ -6,9 +6,26 @@ defmodule TmuxRmWeb.MultiPaneLive do
   """
   use TmuxRmWeb, :live_view
 
-  alias TmuxRm.{LayoutPoller, TmuxManager}
+  alias TmuxRm.{Config, LayoutPoller, PaneStream, TmuxManager}
 
   require Logger
+
+  @color_classes %{
+    "default" => "btn-ghost",
+    "green" => "btn-success",
+    "red" => "btn-error",
+    "yellow" => "btn-warning",
+    "blue" => "btn-info"
+  }
+
+  @icon_map %{
+    "rocket" => "hero-rocket-launch-micro",
+    "play" => "hero-play-micro",
+    "stop" => "hero-stop-micro",
+    "trash" => "hero-trash-micro",
+    "arrow-up" => "hero-arrow-up-micro",
+    "terminal" => "hero-command-line-micro"
+  }
 
   @impl true
   def mount(%{"session" => session, "window" => window}, _session, socket) do
@@ -17,6 +34,7 @@ defmodule TmuxRmWeb.MultiPaneLive do
     if connected?(socket) do
       LayoutPoller.subscribe(session, window)
       Phoenix.PubSub.subscribe(TmuxRm.PubSub, "sessions:state")
+      Phoenix.PubSub.subscribe(TmuxRm.PubSub, "config")
     end
 
     # Fetch layout and window list
@@ -28,6 +46,8 @@ defmodule TmuxRmWeb.MultiPaneLive do
 
     windows = fetch_windows(session)
     channel_token = Phoenix.Token.sign(socket, "channel", %{session: session})
+    config = Config.get()
+    quick_actions = config["quick_actions"] || []
 
     socket =
       socket
@@ -39,6 +59,10 @@ defmodule TmuxRmWeb.MultiPaneLive do
       |> assign(:maximized, nil)
       |> assign(:channel_token, channel_token)
       |> assign(:page_title, "#{session}:#{window}")
+      |> assign(:active_pane, nil)
+      |> assign(:quick_actions, quick_actions)
+      |> assign(:show_actions, true)
+      |> assign(:pending_action, nil)
 
     {:ok, socket, layout: false}
   end
@@ -96,6 +120,63 @@ defmodule TmuxRmWeb.MultiPaneLive do
         </div>
       </div>
 
+      <%!-- Quick action bar --%>
+      <div
+        :if={@quick_actions != [] and @show_actions}
+        class="quick-action-bar"
+      >
+        <button
+          :for={action <- @quick_actions}
+          class={"btn btn-xs #{action_color_class(action)} #{if @active_pane == nil, do: "btn-disabled opacity-40"}"}
+          disabled={@active_pane == nil}
+          phx-click="quick_action"
+          phx-value-id={action["id"]}
+        >
+          <.icon :if={action_icon(action)} name={action_icon(action)} class="size-3" />
+          {action["label"]}
+          <span :if={action["confirm"]} class="text-warning text-[10px] opacity-70">!</span>
+        </button>
+        <span
+          :if={@active_pane == nil}
+          class="text-xs text-base-content/30 ml-1 hidden sm:inline"
+        >
+          click a pane to activate
+        </span>
+        <span
+          :if={@active_pane}
+          class="text-xs text-base-content/30 ml-1 hidden sm:inline font-mono"
+        >
+          {String.split(@active_pane, ".") |> List.last() |> then(&"pane #{&1}")}
+        </span>
+        <button class="btn btn-ghost btn-xs ml-auto shrink-0" phx-click="toggle_actions">
+          <.icon name="hero-chevron-up-micro" class="size-3" />
+        </button>
+      </div>
+
+      <div
+        :if={@quick_actions != [] and not @show_actions}
+        class="quick-action-bar py-0.5"
+      >
+        <button class="btn btn-ghost btn-xs text-base-content/40" phx-click="toggle_actions">
+          <.icon name="hero-chevron-down-micro" class="size-3" />
+          <span class="text-xs">{length(@quick_actions)} actions</span>
+        </button>
+      </div>
+
+      <%!-- Confirm dialog for actions that require confirmation --%>
+      <div
+        :if={@pending_action}
+        class="quick-action-bar items-center justify-between border-b border-warning/20 bg-warning/5"
+      >
+        <span class="text-xs text-warning">
+          Run "<strong>{@pending_action["label"]}</strong>" on pane?
+        </span>
+        <div class="flex gap-1">
+          <button class="btn btn-warning btn-xs" phx-click="confirm_action">Confirm</button>
+          <button class="btn btn-ghost btn-xs" phx-click="cancel_action">Cancel</button>
+        </div>
+      </div>
+
       <%!-- Multi-pane grid (desktop/tablet) --%>
       <div
         :if={@panes != []}
@@ -121,7 +202,11 @@ defmodule TmuxRmWeb.MultiPaneLive do
               "relative group min-h-0 overflow-hidden",
               if(@maximized == pane.target,
                 do: "pane-maximized",
-                else: "border border-base-content/5"
+                else:
+                  if(@active_pane == pane.target,
+                    do: "border border-primary/40",
+                    else: "border border-base-content/5"
+                  )
               )
             ]}
             style={
@@ -274,12 +359,25 @@ defmodule TmuxRmWeb.MultiPaneLive do
         end
       end)
 
-    {:noreply, assign(socket, panes: panes, grid: grid, maximized: maximized)}
+    # If the active pane no longer exists, clear it
+    active_pane =
+      if socket.assigns.active_pane &&
+           not Enum.any?(panes, &(&1.target == socket.assigns.active_pane)) do
+        nil
+      else
+        socket.assigns.active_pane
+      end
+
+    {:noreply, assign(socket, panes: panes, grid: grid, maximized: maximized, active_pane: active_pane)}
   end
 
   def handle_info({:sessions_updated, _sessions}, socket) do
     windows = fetch_windows(socket.assigns.session)
     {:noreply, assign(socket, :windows, windows)}
+  end
+
+  def handle_info({:config_changed, config}, socket) do
+    {:noreply, assign(socket, :quick_actions, config["quick_actions"] || [])}
   end
 
   # Ignore pane output/control events — each TerminalHook handles its own via Channel
@@ -299,6 +397,45 @@ defmodule TmuxRmWeb.MultiPaneLive do
 
   def handle_event("restore_pane", _params, socket) do
     {:noreply, assign(socket, :maximized, nil)}
+  end
+
+  def handle_event("pane_focused", %{"target" => target}, socket) do
+    {:noreply, assign(socket, :active_pane, target)}
+  end
+
+  def handle_event("quick_action", params, socket) do
+    id = params["id"] || params["value"]
+    action = if id, do: Enum.find(socket.assigns.quick_actions, &(&1["id"] == id))
+
+    cond do
+      is_nil(action) || is_nil(socket.assigns.active_pane) ->
+        {:noreply, socket}
+
+      action["confirm"] ->
+        {:noreply, assign(socket, :pending_action, action)}
+
+      true ->
+        send_quick_action(socket, action)
+    end
+  end
+
+  def handle_event("confirm_action", _params, socket) do
+    case socket.assigns.pending_action do
+      nil ->
+        {:noreply, socket}
+
+      action ->
+        socket = assign(socket, :pending_action, nil)
+        send_quick_action(socket, action)
+    end
+  end
+
+  def handle_event("cancel_action", _params, socket) do
+    {:noreply, assign(socket, :pending_action, nil)}
+  end
+
+  def handle_event("toggle_actions", _params, socket) do
+    {:noreply, assign(socket, :show_actions, !socket.assigns.show_actions)}
   end
 
   def handle_event("create_window", _params, socket) do
@@ -436,4 +573,26 @@ defmodule TmuxRmWeb.MultiPaneLive do
   end
 
   defp command_runner, do: Application.get_env(:tmux_rm, :command_runner)
+
+  defp send_quick_action(socket, action) do
+    command = action["command"] <> "\n"
+    target = socket.assigns.active_pane
+
+    case PaneStream.send_keys(target, command) do
+      :ok ->
+        {:noreply, socket}
+
+      {:error, reason} ->
+        Logger.warning("Quick action failed: #{inspect(reason)}")
+        {:noreply, socket}
+    end
+  end
+
+  defp action_color_class(action) do
+    Map.get(@color_classes, action["color"], "btn-ghost")
+  end
+
+  defp action_icon(action) do
+    Map.get(@icon_map, action["icon"])
+  end
 end
