@@ -247,7 +247,7 @@ defmodule Termigate.Config do
   defp load_config(state) do
     case read_config(state.path) do
       {:ok, config, mtime} ->
-        config = ensure_action_ids(config)
+        config = ensure_action_ids(config, true)
 
         Logger.info(
           "Config loaded from #{state.path} (#{length(config["quick_actions"] || [])} quick actions)"
@@ -275,13 +275,13 @@ defmodule Termigate.Config do
       {:ok, %{mtime: mtime}} when mtime != state.mtime ->
         case read_config(state.path) do
           {:ok, config, ^mtime} ->
-            config = ensure_action_ids(config)
+            config = ensure_action_ids(config, true)
             Logger.info("Config file changed, reloading")
             broadcast_change(config)
             %{state | config: config, mtime: mtime}
 
           {:ok, config, new_mtime} ->
-            config = ensure_action_ids(config)
+            config = ensure_action_ids(config, true)
             Logger.info("Config file changed, reloading")
             broadcast_change(config)
             %{state | config: config, mtime: new_mtime}
@@ -483,18 +483,22 @@ defmodule Termigate.Config do
   defp validate_icon(icon) when icon in @valid_icons, do: icon
   defp validate_icon(_), do: nil
 
-  defp ensure_action_ids(config) do
+  defp ensure_action_ids(config, write_back \\ false) do
     actions = config["quick_actions"] || []
     needs_ids? = Enum.any?(actions, fn a -> is_nil(a["id"]) or a["id"] == "" end)
 
     if needs_ids? do
       updated = Enum.map(actions, &ensure_id/1)
       config = Map.put(config, "quick_actions", updated)
-      # Rewrite file with generated IDs
-      spawn(fn ->
-        path = config_path()
-        write_config(path, config)
-      end)
+
+      # Only write back when explicitly requested and config has auth
+      # to avoid overwriting the config file without the auth section
+      if write_back do
+        spawn(fn ->
+          path = config_path()
+          write_config(path, config)
+        end)
+      end
 
       config
     else

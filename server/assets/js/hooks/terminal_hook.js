@@ -146,23 +146,12 @@ const TerminalHook = {
       }
     });
 
-    // Resize handling with debounce — track last pushed dims to avoid feedback loops
+    // Resize handling with debounce
     this._resizeTimer = null;
-    this._lastPushedCols = 0;
-    this._lastPushedRows = 0;
     this._resizeObserver = new ResizeObserver(() => {
       clearTimeout(this._resizeTimer);
       this._resizeTimer = setTimeout(() => {
         this.fitAddon.fit();
-        const cols = this.term.cols;
-        const rows = this.term.rows;
-        // Only push if dimensions actually changed
-        if (this.channel && cols > 0 && rows > 0 &&
-            (cols !== this._lastPushedCols || rows !== this._lastPushedRows)) {
-          this._lastPushedCols = cols;
-          this._lastPushedRows = rows;
-          this.channel.push("resize", { cols, rows });
-        }
       }, 300);
     });
     this._resizeObserver.observe(this.el);
@@ -170,9 +159,6 @@ const TerminalHook = {
     // Handle pane_resized from other viewers or layout changes (via LiveView)
     this.handleEvent("pane_resized", ({ target, cols, rows }) => {
       if (!target || target === this.el.dataset.target) {
-        // Update tracking to prevent feedback loop with ResizeObserver
-        this._lastPushedCols = cols;
-        this._lastPushedRows = rows;
         this.term.resize(cols, rows);
       }
     });
@@ -527,10 +513,9 @@ const TerminalHook = {
       window.userSocket.connect();
     }
 
-    // Single-pane: send browser dims so tmux is resized before history capture.
-    // Multi-pane: no resize — xterm.js already matches tmux dims.
+    // Send browser dims so tmux pane is resized to match on join
     const joinParams = {};
-    if (!this._isMobile && !this._isMultiPane) {
+    if (this.term.cols > 0 && this.term.rows > 0) {
       joinParams.cols = this.term.cols;
       joinParams.rows = this.term.rows;
     }
