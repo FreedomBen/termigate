@@ -116,6 +116,9 @@ defmodule Termigate.Config do
 
   # --- Public API ---
 
+  @doc "Returns the default config map."
+  def defaults, do: @default_config
+
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
@@ -383,7 +386,8 @@ defmodule Termigate.Config do
           Enum.map(list, &normalize_action/1)
 
         _ ->
-          []
+          # Use default quick actions when the key is missing (e.g., fresh config with only auth)
+          @default_config["quick_actions"]
       end
 
     config =

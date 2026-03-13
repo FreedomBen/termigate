@@ -213,11 +213,11 @@ defmodule Termigate.Auth do
         {:ok, content} ->
           case YamlElixir.read_from_string(content) do
             {:ok, parsed} when is_map(parsed) -> parsed
-            _ -> %{}
+            _ -> Termigate.Config.defaults()
           end
 
         _ ->
-          %{}
+          Termigate.Config.defaults()
       end
 
     updated = Map.put(existing, "auth", auth_data)
