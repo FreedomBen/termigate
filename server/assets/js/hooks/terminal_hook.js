@@ -95,10 +95,8 @@ const TerminalHook = {
     // Open terminal in container
     this.term.open(this.el);
 
-    // Only use FitAddon for single-pane mode — multi-pane uses exact tmux dims
-    if (!this._isMultiPane) {
-      this.fitAddon.fit();
-    }
+    // Fit terminal to container
+    this.fitAddon.fit();
 
     console.log("[TerminalHook] after setup", {
       target,
@@ -148,23 +146,22 @@ const TerminalHook = {
       }
     });
 
-    // Resize handling with debounce (skip entirely for multi-pane — fixed tmux dims)
+    // Resize handling with debounce
     this._resizeTimer = null;
-    if (!this._isMultiPane) {
-      this._resizeObserver = new ResizeObserver(() => {
-        clearTimeout(this._resizeTimer);
-        this._resizeTimer = setTimeout(() => {
-          this.fitAddon.fit();
-          if (!this._isMobile) {
-            this.pushEvent("resize", {
-              cols: this.term.cols,
-              rows: this.term.rows,
-            });
-          }
-        }, 300);
-      });
-      this._resizeObserver.observe(this.el);
-    }
+    this._resizeObserver = new ResizeObserver(() => {
+      clearTimeout(this._resizeTimer);
+      this._resizeTimer = setTimeout(() => {
+        this.fitAddon.fit();
+        // Push resize to sync tmux pane dimensions
+        if (this.channel && this.term.cols > 0 && this.term.rows > 0) {
+          this.channel.push("resize", {
+            cols: this.term.cols,
+            rows: this.term.rows,
+          });
+        }
+      }, 300);
+    });
+    this._resizeObserver.observe(this.el);
 
     // Handle pane_resized from other viewers or layout changes (via LiveView)
     this.handleEvent("pane_resized", ({ target, cols, rows }) => {
@@ -223,9 +220,7 @@ const TerminalHook = {
     this.term.options.theme = resolveTheme(local);
     this.term.options.cursorStyle = local.cursorStyle;
     this.term.options.cursorBlink = local.cursorBlink;
-    if (!this._isMultiPane) {
-      this.fitAddon?.fit();
-    }
+    this.fitAddon?.fit();
     if (this._toolbar) {
       this._toolbar.classList.toggle("vk-hidden", !local.showToolbar);
     }

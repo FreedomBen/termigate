@@ -954,9 +954,9 @@ body {
   }
 }
 
-/* === Multi-pane: hide xterm scrollbar (scrollback=0, not needed) === */
+/* === Multi-pane: scrollbar thin to save space === */
 [data-mode="multi"] .xterm-viewport {
-  overflow-y: hidden !important;
+  scrollbar-width: thin;
 }
 
 /* === Pane maximized state === */
