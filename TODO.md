@@ -1,5 +1,9 @@
 # Not Run Yet
 
+- Let's add support for Cloudflare and Tailscale, so if an API key is present and the setting is enabled, we can update DNS and/or enable a tunnel.
+
+- Let's add support for getting a TLS certificate from Let's Encrypt.  For this the user needs to enter the domain name or select to get an IP address certificate.
+
 - Write a Makefile and include a build command, clean, and install.  The install should build and copy the server binary in place, and copy the systemd service file in place as well.
 
 - Let's ensure we have full support for auth tokens, such that if the user wants to setup an auth token and disallow username/password auth, they can.  When auth token is enabled, the server should respond with a 401 or 403 to all requests that don't have the auth token included, even the home page.
