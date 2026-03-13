@@ -1,12 +1,12 @@
 [Unit]
-Description=tmux-rm — Remote terminal manager
+Description=termigate — Remote terminal manager
 After=network.target
 
 [Service]
 Type=exec
 User=ben
 Group=ben
-WorkingDirectory=/opt/tmux_rm
+WorkingDirectory=/opt/termigate
 Environment=HOME=/home/ben
 Environment=PORT=4000
 Environment=PHX_HOST=localhost
@@ -14,15 +14,15 @@ Environment=PHX_SERVER=true
 Environment=SECRET_KEY_BASE=generate-a-secret-key-base-here
 # Uncomment for remote access:
 # Environment=PHX_BIND=0.0.0.0
-# Environment=RCA_AUTH_TOKEN=your-secure-token
-ExecStart=/opt/tmux_rm/bin/tmux_rm start
-ExecStop=/opt/tmux_rm/bin/tmux_rm stop
+# Environment=TERMIGATE_AUTH_TOKEN=your-secure-token
+ExecStart=/opt/termigate/bin/termigate start
+ExecStop=/opt/termigate/bin/termigate stop
 Restart=on-failure
 RestartSec=5
 # Security hardening
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/tmp/tmux-rm /home/ben/.config/tmux_rm
+ReadWritePaths=/tmp/termigate /home/ben/.config/termigate
 ProtectHome=read-only
 
 [Install]

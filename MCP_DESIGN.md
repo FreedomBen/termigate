@@ -1,20 +1,20 @@
-# MCP Server Design for tmux-rm
+# MCP Server Design for termigate
 
 ## Overview
 
-tmux-rm exposes an MCP (Model Context Protocol) server that gives AI agents structured access to tmux sessions. Agents can manage sessions, execute commands, read terminal output, and monitor long-running processes — all through persistent, multiplexed terminal sessions with full auth.
+termigate exposes an MCP (Model Context Protocol) server that gives AI agents structured access to tmux sessions. Agents can manage sessions, execute commands, read terminal output, and monitor long-running processes — all through persistent, multiplexed terminal sessions with full auth.
 
-The MCP server is a **separate transport layer** built on top of tmux-rm's existing OTP infrastructure. It reuses TmuxManager, PaneStream, Config, and Auth directly — no new business logic is needed.
+The MCP server is a **separate transport layer** built on top of termigate's existing OTP infrastructure. It reuses TmuxManager, PaneStream, Config, and Auth directly — no new business logic is needed.
 
-## Why MCP + tmux-rm
+## Why MCP + termigate
 
-Most AI agents get stateless shell access: run a command, get output, done. tmux-rm via MCP provides **stateful, multiplexed terminal access**:
+Most AI agents get stateless shell access: run a command, get output, done. termigate via MCP provides **stateful, multiplexed terminal access**:
 
 - **Session persistence** — processes survive between tool calls. Start a server, come back later, it's still running.
 - **Multiplexing** — work in multiple panes simultaneously. Tail logs in one, run commands in another.
 - **Bidirectional I/O** — not just command → output. Agents can interact with REPLs, respond to prompts, navigate TUIs.
 - **Observability** — read what's on screen right now, including output from processes the agent didn't start.
-- **Remote access** — tmux-rm already handles auth and HTTP transport, so agents can reach machines behind firewalls.
+- **Remote access** — termigate already handles auth and HTTP transport, so agents can reach machines behind firewalls.
 
 ## Design Principles
 
@@ -26,7 +26,7 @@ Most AI agents get stateless shell access: run a command, get output, done. tmux
 
 ## Transport
 
-MCP supports multiple transports. tmux-rm will implement **Streamable HTTP** (the current MCP standard), served from the existing Phoenix endpoint:
+MCP supports multiple transports. termigate will implement **Streamable HTTP** (the current MCP standard), served from the existing Phoenix endpoint:
 
 ```
 POST /mcp  — MCP JSON-RPC messages (request/response + notifications)
@@ -47,7 +47,7 @@ Token is obtained via `POST /api/login` (existing endpoint). The MCP endpoint ru
 ### Why not SSE or stdio?
 
 - **SSE** is the legacy MCP transport. Streamable HTTP supersedes it and supports the same capabilities with a simpler connection model.
-- **stdio** requires the MCP server to run as a local subprocess. tmux-rm is a networked service — HTTP is the natural fit. Agents on other machines need network access anyway.
+- **stdio** requires the MCP server to run as a local subprocess. termigate is a networked service — HTTP is the natural fit. Agents on other machines need network access anyway.
 
 ## Tool Design
 
@@ -424,7 +424,7 @@ Send input to a pane and read the screen content after a short delay. Simpler th
 
 ## Resources
 
-MCP resources provide read-only data that agents can pull into their context. tmux-rm exposes:
+MCP resources provide read-only data that agents can pull into their context. termigate exposes:
 
 #### `tmux://sessions`
 
@@ -445,7 +445,7 @@ These are simple read-only mirrors of the tool equivalents. Their value is in MC
 ### Module Structure
 
 ```
-lib/tmux_rm_web/mcp/
+lib/termigate_web/mcp/
 ├── mcp_controller.ex        # HTTP endpoint, JSON-RPC dispatch
 ├── mcp_auth.ex              # Token verification (delegates to RequireAuthToken logic)
 ├── mcp_tools.ex             # Tool definitions (name, schema, descriptions)
@@ -458,7 +458,7 @@ lib/tmux_rm_web/mcp/
 
 ```elixir
 # router.ex
-scope "/mcp", TmuxRmWeb.MCP do
+scope "/mcp", TermigateWeb.MCP do
   pipe_through [:api, :require_auth_token]
   post "/", MCPController, :handle
 end
@@ -466,7 +466,7 @@ end
 
 ### Dependencies
 
-**Option A: Build from scratch.** MCP over Streamable HTTP is a thin JSON-RPC layer. The protocol is small enough that a purpose-built handler in `mcp_controller.ex` is reasonable. tmux-rm already handles WebSocket streaming; HTTP SSE for notifications is similar.
+**Option A: Build from scratch.** MCP over Streamable HTTP is a thin JSON-RPC layer. The protocol is small enough that a purpose-built handler in `mcp_controller.ex` is reasonable. termigate already handles WebSocket streaming; HTTP SSE for notifications is similar.
 
 **Option B: Use an Elixir MCP library.** If a mature library exists at implementation time (e.g., `mcp_ex`, `ex_mcp`), use it for protocol handling and provide tool/resource implementations as callbacks. This is preferred if the library is stable — protocol details (JSON-RPC framing, capability negotiation, error codes) are tedious to get right.
 
@@ -508,7 +508,7 @@ MCP requests go through the existing `RateLimitStore`. Same limits as the REST A
 ← {target: "dev-server:0.0"}
 → tmux_send_keys(target: "dev-server:0.0", data: "cd server && mix phx.server\n")
 → tmux_wait_for_output(target: "dev-server:0.0", pattern: "Running.*endpoint", timeout_ms: 30000)
-← {matched: true, match: "Running TmuxRmWeb.Endpoint with Bandit at http://localhost:4000"}
+← {matched: true, match: "Running TermigateWeb.Endpoint with Bandit at http://localhost:4000"}
 → tmux_run_command_in_new_session(command: "curl -s localhost:4000/healthz")
 ← {output: "ok", exit_code: 0}
 → tmux_kill_session(name: "dev-server")
@@ -521,8 +521,8 @@ MCP requests go through the existing `RateLimitStore`. Same limits as the REST A
 ← {target: "debug:0.0"}
 → tmux_wait_for_output(target: "debug:0.0", pattern: "iex\\(1\\)>", timeout_ms: 15000)
 ← {matched: true}
-→ tmux_send_and_read(target: "debug:0.0", data: "TmuxRm.TmuxManager.list_sessions()\n", delay_ms: 1000)
-← {content: "iex(1)> TmuxRm.TmuxManager.list_sessions()\n{:ok, [%TmuxRm.Tmux.Session{name: \"debug\", ...}]}\niex(2)> "}
+→ tmux_send_and_read(target: "debug:0.0", data: "Termigate.TmuxManager.list_sessions()\n", delay_ms: 1000)
+← {content: "iex(1)> Termigate.TmuxManager.list_sessions()\n{:ok, [%Termigate.Tmux.Session{name: \"debug\", ...}]}\niex(2)> "}
 → tmux_kill_session(name: "debug")
 ```
 
@@ -548,6 +548,6 @@ MCP requests go through the existing `RateLimitStore`. Same limits as the REST A
 
 **Tool annotations.** MCP tool annotations (`readOnlyHint`, `destructiveHint`, `openWorldHint`) should be set accurately. All Tier 1 read tools get `readOnlyHint: true`. Kill operations get `destructiveHint: true`. This helps agents make safer autonomous decisions.
 
-**Prompt templates.** MCP supports server-provided prompt templates. tmux-rm could offer prompts like "debug this failing command" or "set up a dev environment" that guide agents through multi-step workflows. Low priority — agents generally bring their own prompting.
+**Prompt templates.** MCP supports server-provided prompt templates. termigate could offer prompts like "debug this failing command" or "set up a dev environment" that guide agents through multi-step workflows. Low priority — agents generally bring their own prompting.
 
 **Quick actions via MCP.** Expose quick actions as tools: `tmux_list_quick_actions`, `tmux_run_quick_action(id, target)`. Lets agents trigger the same one-click actions humans use in the UI. Simple to implement — delegates to Config + PaneStream.

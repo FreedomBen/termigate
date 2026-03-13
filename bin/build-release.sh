@@ -18,4 +18,4 @@ mix assets.deploy
 echo "==> Building release"
 mix release
 
-echo "==> Release built at server/_build/prod/rel/tmux_rm/"
+echo "==> Release built at server/_build/prod/rel/termigate/"
