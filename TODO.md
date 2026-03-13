@@ -1,7 +1,5 @@
 # Not Run Yet
 
-- write up a README.md file for this repo
-
 - Let's add an actions button row for sending control signals, especially Ctrl+C and Ctrl+D
 
 - Let's add support for Cloudflare and Tailscale, so if an API key is present and the setting is enabled, we can update DNS and/or enable a tunnel.
@@ -15,6 +13,8 @@
 - We're ready to begin implementing the MCP server as described in MCP_DESIGN.md.
 
 # Already Run
+
+- write up a README.md file for this repo
 
 - I'm thinking about adding a notification feature.  This is intended for long-running commands.  When a command finishes, pop up a notification informing the user.  Clicking on the notification should take you to the browser tab and put focus on the pane that triggered the notification.  What are your thoughts on this?  would it be complex and difficult to do in a portable way?
 
