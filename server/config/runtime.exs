@@ -6,27 +6,27 @@ import Config
 # and secrets from environment variables or elsewhere.
 
 if System.get_env("PHX_SERVER") do
-  config :tmux_rm, TmuxRmWeb.Endpoint, server: true
+  config :termigate, TermigateWeb.Endpoint, server: true
 end
 
 # Auth token from environment
-if auth_token = System.get_env("RCA_AUTH_TOKEN") do
-  config :tmux_rm, auth_token: auth_token
+if auth_token = System.get_env("TERMIGATE_AUTH_TOKEN") do
+  config :termigate, auth_token: auth_token
 end
 
 # Optional tmux socket path
-if socket = System.get_env("RCA_TMUX_SOCKET") do
-  config :tmux_rm, tmux_socket: socket
+if socket = System.get_env("TERMIGATE_TMUX_SOCKET") do
+  config :termigate, tmux_socket: socket
 end
 
 # Optional CORS origin
-if cors_origin = System.get_env("RCA_CORS_ORIGIN") do
-  config :tmux_rm, cors_origin: cors_origin
+if cors_origin = System.get_env("TERMIGATE_CORS_ORIGIN") do
+  config :termigate, cors_origin: cors_origin
 end
 
 # Optional metrics endpoint token
-if metrics_token = System.get_env("RCA_METRICS_TOKEN") do
-  config :tmux_rm, metrics_token: metrics_token
+if metrics_token = System.get_env("TERMIGATE_METRICS_TOKEN") do
+  config :termigate, metrics_token: metrics_token
 end
 
 # Configurable log level (default: :info in prod, :debug in dev)
@@ -46,9 +46,9 @@ if config_env() == :prod do
   port = String.to_integer(System.get_env("PORT") || "4000")
   bind_ip = if System.get_env("PHX_BIND") == "0.0.0.0", do: {0, 0, 0, 0}, else: {127, 0, 0, 1}
 
-  config :tmux_rm, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
+  config :termigate, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
-  config :tmux_rm, TmuxRmWeb.Endpoint,
+  config :termigate, TermigateWeb.Endpoint,
     url: [host: host, port: port],
     http: [ip: bind_ip, port: port],
     secret_key_base: secret_key_base,

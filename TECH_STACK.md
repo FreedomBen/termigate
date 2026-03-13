@@ -1,4 +1,4 @@
-# tmux-rm — Tech Stack
+# termigate — Tech Stack
 
 ## Server / Web App
 
@@ -14,7 +14,7 @@
 | UI components | Tailwind Plus (application-ui) | Shells, navigation, forms, overlays, feedback, data-display, lists, headings, layout, page-examples |
 | JS bundler | esbuild | Phoenix default, fast, zero-config. Sufficient for xterm.js |
 | JS package manager | npm | Standard `server/assets/package.json` for xterm.js and addons |
-| Auth | bcrypt_elixir 3.x | Password hashing (+ optional `RCA_AUTH_TOKEN` env var) |
+| Auth | bcrypt_elixir 3.x | Password hashing (+ optional `TERMIGATE_AUTH_TOKEN` env var) |
 | Config format | YAML | Human-editable. `yaml_elixir` (read) + `ymlr` (write) |
 | Process management | DynamicSupervisor + Registry | Built-in Elixir — one PaneStream per active pane |
 | Pub/Sub | Phoenix.PubSub | Connects PaneStreams to viewers, config change broadcast |
@@ -45,6 +45,6 @@
 - **Termux library**: Fork `terminal-emulator` and `terminal-view` modules into a standalone library. Publish to GitHub Packages.
 - **Phoenix Channel client**: Custom minimal Kotlin implementation (~200 lines) on top of OkHttp WebSocket.
 - **Hardware keyboard**: Use Termux's built-in handling (Ctrl+key, function keys, Alt combos). Custom mappings deferred.
-- **App name**: tmux-rm
+- **App name**: termigate
 - **Package ID**: `org.tamx.tmuxrm`
 - **Domain**: `tmuxrm.tamx.org` (temporary)

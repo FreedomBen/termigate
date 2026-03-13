@@ -1,5 +1,5 @@
 services:
-  tmux-rm:
+  termigate:
     build: .
     ports:
       - "4000:4000"
@@ -8,7 +8,7 @@ services:
       - PORT=4000
       - PHX_HOST=localhost
       # Uncomment for host tmux access:
-      # - RCA_TMUX_SOCKET=/tmp/tmux-host/default
+      # - TERMIGATE_TMUX_SOCKET=/tmp/tmux-host/default
     # user: "1000:1000"  # Must match host UID:GID for tmux socket access
     # volumes:
       # Uncomment for host tmux access (replace 1000 with your UID):

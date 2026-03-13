@@ -1,9 +1,9 @@
-defmodule TmuxRm.MixProject do
+defmodule Termigate.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :tmux_rm,
+      app: :termigate,
       version: "0.1.0",
       elixir: "~> 1.15",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -13,7 +13,7 @@ defmodule TmuxRm.MixProject do
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader],
       releases: [
-        tmux_rm: [
+        termigate: [
           include_erts: true
         ]
       ]
@@ -25,7 +25,7 @@ defmodule TmuxRm.MixProject do
   # Type `mix help compile.app` for more information.
   def application do
     [
-      mod: {TmuxRm.Application, []},
+      mod: {Termigate.Application, []},
       extra_applications: [:logger, :runtime_tools]
     ]
   end
@@ -82,16 +82,16 @@ defmodule TmuxRm.MixProject do
     [
       setup: ["deps.get", "assets.setup", "assets.build"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["compile", "tailwind tmux_rm", "esbuild tmux_rm"],
+      "assets.build": ["compile", "tailwind termigate", "esbuild termigate"],
       "assets.deploy": [
-        "tailwind tmux_rm --minify",
-        "esbuild tmux_rm --minify",
+        "tailwind termigate --minify",
+        "esbuild termigate --minify",
         "phx.digest"
       ],
       precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"],
-      "rca.setup": ["rca.setup"],
-      "rca.reset": ["rca.reset"],
-      "rca.passwd": ["rca.change_password"]
+      "termigate.setup": ["termigate.setup"],
+      "termigate.reset": ["termigate.reset"],
+      "termigate.passwd": ["termigate.change_password"]
     ]
   end
 end

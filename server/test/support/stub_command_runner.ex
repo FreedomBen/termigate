@@ -1,6 +1,6 @@
-defmodule TmuxRm.StubCommandRunner do
+defmodule Termigate.StubCommandRunner do
   @moduledoc "Default stub for CommandRunnerBehaviour used during test app boot."
-  @behaviour TmuxRm.Tmux.CommandRunnerBehaviour
+  @behaviour Termigate.Tmux.CommandRunnerBehaviour
 
   @impl true
   def run(["list-sessions" | _]),

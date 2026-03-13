@@ -37,7 +37,7 @@ The 14 phases are thorough, well-structured, and show clear architectural thinki
 ### Phase 6 - Credential File Permissions
 - The credentials file stores a bcrypt hash but there's no mention of file permissions (should be 0600). A world-readable credentials file is a security issue.
 
-### Phase 6 - `mix rca.setup` Not Fully Specified
+### Phase 6 - `mix termigate.setup` Not Fully Specified
 - Step 6.2 mentions Mix tasks for setup and password change, but doesn't specify what happens if the credentials file already exists (overwrite? error? prompt?), or how the username is chosen.
 
 ### Phase 8 - Config File Schema

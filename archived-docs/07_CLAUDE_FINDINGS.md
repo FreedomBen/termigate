@@ -13,7 +13,7 @@
 
 ### ~~1. Auth token storage — two locations~~ RESOLVED
 
-Replaced token-based auth with username+password authentication. Credentials (username + bcrypt hash) stored in `~/.config/tmux_rm/credentials`. `RCA_AUTH_TOKEN` env var retained as fallback for headless/automated setups. `mix rca.setup` handles initial credential creation; `mix rca.change_password` for updates. Added `bcrypt_elixir` dependency. Updated: auth section, storage table, runtime.exs snippet, technology choices table.
+Replaced token-based auth with username+password authentication. Credentials (username + bcrypt hash) stored in `~/.config/termigate/credentials`. `TERMIGATE_AUTH_TOKEN` env var retained as fallback for headless/automated setups. `mix termigate.setup` handles initial credential creation; `mix termigate.change_password` for updates. Added `bcrypt_elixir` dependency. Updated: auth section, storage table, runtime.exs snippet, technology choices table.
 
 ### ~~2. Grace period duration~~ RESOLVED
 
@@ -21,7 +21,7 @@ Changed default from 5s to 30s. Updated in both the PaneStream lifecycle descrip
 
 ### ~~3. `max_pane_streams` — where configured, what default?~~ RESOLVED
 
-Already fully specified in the doc: DynamicSupervisor `max_children: 100`, configurable via `config :tmux_rm, max_pane_streams: 100`. `subscribe/1` returns `{:error, :max_pane_streams}` when the limit is hit. No changes needed.
+Already fully specified in the doc: DynamicSupervisor `max_children: 100`, configurable via `config :termigate, max_pane_streams: 100`. `subscribe/1` returns `{:error, :max_pane_streams}` when the limit is hit. No changes needed.
 
 ### ~~4. CSRF protection for REST API~~ RESOLVED
 

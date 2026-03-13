@@ -11,9 +11,9 @@ Set up the Elixir/Phoenix project with all dependencies, configuration, and the 
 ## Steps
 
 ### 1.1 Generate Phoenix Project
-- `mix phx.new tmux_rm --no-ecto --no-mailer --no-dashboard`
+- `mix phx.new termigate --no-ecto --no-mailer --no-dashboard`
 - No Ecto (no database), no mailer, no LiveDashboard
-- Verify `server/mix.exs` has `tmux_rm` as the project name
+- Verify `server/mix.exs` has `termigate` as the project name
 
 ### 1.2 Add Dependencies to `server/mix.exs`
 ```elixir
@@ -51,7 +51,7 @@ end
 
 **server/config/config.exs** — all application-level defaults:
 ```elixir
-config :tmux_rm,
+config :termigate,
   session_poll_interval: 3_000,
   pane_stream_grace_period: 30_000,
   ring_buffer_min_size: 524_288,
@@ -62,7 +62,7 @@ config :tmux_rm,
   default_cols: 120,
   default_rows: 40,
   config_poll_interval: 2_000,
-  fifo_dir: "/tmp/tmux-rm",
+  fifo_dir: "/tmp/termigate",
   tmux_path: nil,
   tmux_socket: nil,
   output_coalesce_ms: 3,
@@ -73,31 +73,31 @@ config :tmux_rm,
 
 **server/config/dev.exs** — bind to localhost:4000
 **server/config/test.exs** — shorter grace period, test FIFO dir
-**server/config/runtime.exs** — `RCA_AUTH_TOKEN` env var, endpoint config
+**server/config/runtime.exs** — `TERMIGATE_AUTH_TOKEN` env var, endpoint config
 
 ### 1.6 Supervision Tree (`application.ex`)
 
 Set up `Application.start/2`:
 1. FIFO directory cleanup on boot: `File.rm_rf(fifo_dir)` then `File.mkdir_p(fifo_dir)`
 2. Start children in order:
-   - `TmuxRm.Telemetry` (Supervisor — wraps `telemetry_poller`; started first so metrics are available from boot. See Phase 15 for full implementation, but the supervisor shell is created here.)
-   - `TmuxRm.PaneRegistry` (Registry, keys: :unique)
-   - `TmuxRm.PaneStreamSupervisor` (DynamicSupervisor, `max_children` from config)
-   - `Phoenix.PubSub` (name: `TmuxRm.PubSub`)
-   - `TmuxRm.SessionPoller` (GenServer — stub for now)
-   - `TmuxRm.Config` (GenServer — stub for now)
-   - `TmuxRmWeb.RateLimitStore` (GenServer — stub for now)
-   - `TmuxRm.LayoutPollerSupervisor` (DynamicSupervisor — used by Phase 12 for layout pollers, started early so the supervision tree doesn't need modification later)
-   - `TmuxRmWeb.Endpoint`
+   - `Termigate.Telemetry` (Supervisor — wraps `telemetry_poller`; started first so metrics are available from boot. See Phase 15 for full implementation, but the supervisor shell is created here.)
+   - `Termigate.PaneRegistry` (Registry, keys: :unique)
+   - `Termigate.PaneStreamSupervisor` (DynamicSupervisor, `max_children` from config)
+   - `Phoenix.PubSub` (name: `Termigate.PubSub`)
+   - `Termigate.SessionPoller` (GenServer — stub for now)
+   - `Termigate.Config` (GenServer — stub for now)
+   - `TermigateWeb.RateLimitStore` (GenServer — stub for now)
+   - `Termigate.LayoutPollerSupervisor` (DynamicSupervisor — used by Phase 12 for layout pollers, started early so the supervision tree doesn't need modification later)
+   - `TermigateWeb.Endpoint`
 
 ### 1.7 Endpoint Configuration
 
-**`server/lib/tmux_rm_web/endpoint.ex`**:
+**`server/lib/termigate_web/endpoint.ex`**:
 ```elixir
 socket "/live", Phoenix.LiveView.Socket,
   websocket: [compress: true]
 
-socket "/socket", TmuxRmWeb.UserSocket,
+socket "/socket", TermigateWeb.UserSocket,
   websocket: [compress: true, connect_info: [:peer_data, :x_headers]]
 ```
 
@@ -119,9 +119,9 @@ Set up route structure with pipeline stubs:
 
 ### 1.10 CommandRunner Behaviour & Implementation
 
-**`server/lib/tmux_rm/tmux/command_runner_behaviour.ex`** — behaviour for testability:
+**`server/lib/termigate/tmux/command_runner_behaviour.ex`** — behaviour for testability:
 ```elixir
-defmodule TmuxRm.Tmux.CommandRunnerBehaviour do
+defmodule Termigate.Tmux.CommandRunnerBehaviour do
   @doc "Run a tmux command with the given arguments. Returns stdout on success."
   @callback run(args :: [String.t()]) :: {:ok, String.t()} | {:error, {String.t(), non_neg_integer()}}
 
@@ -130,7 +130,7 @@ defmodule TmuxRm.Tmux.CommandRunnerBehaviour do
 end
 ```
 
-**`server/lib/tmux_rm/tmux/command_runner.ex`** — real implementation:
+**`server/lib/termigate/tmux/command_runner.ex`** — real implementation:
 - Implements `CommandRunnerBehaviour`
 - `run/1` — builds full command with socket args, calls `System.cmd/3`, returns `{:ok, stdout}` or `{:error, {stderr, exit_code}}`
 - `run!/1` — calls `run/1`, raises on error
@@ -141,15 +141,15 @@ end
 **Application config** — allow swapping the implementation for tests:
 ```elixir
 # server/config/config.exs
-config :tmux_rm, :command_runner, TmuxRm.Tmux.CommandRunner
+config :termigate, :command_runner, Termigate.Tmux.CommandRunner
 
 # server/config/test.exs
-config :tmux_rm, :command_runner, TmuxRm.MockCommandRunner
+config :termigate, :command_runner, Termigate.MockCommandRunner
 ```
 
 All modules that call CommandRunner should use:
 ```elixir
-defp command_runner, do: Application.get_env(:tmux_rm, :command_runner)
+defp command_runner, do: Application.get_env(:termigate, :command_runner)
 ```
 
 ### 1.11 Test Infrastructure
@@ -168,12 +168,12 @@ end
 
 **`server/test/support/mocks.ex`**:
 ```elixir
-Mox.defmock(TmuxRm.MockCommandRunner, for: TmuxRm.Tmux.CommandRunnerBehaviour)
+Mox.defmock(Termigate.MockCommandRunner, for: Termigate.Tmux.CommandRunnerBehaviour)
 ```
 
 **`server/test/support/tmux_helpers.ex`**:
 ```elixir
-defmodule TmuxRm.TmuxHelpers do
+defmodule Termigate.TmuxHelpers do
   def create_test_session(name \\ nil) do
     name = name || "test-#{:rand.uniform(100_000)}"
     {_, 0} = System.cmd("tmux", ["new-session", "-d", "-s", name])
@@ -225,13 +225,13 @@ Add `require Logger` to all modules. Key log events for this phase:
 
 ## Files Created/Modified
 ```
-server/lib/tmux_rm/application.ex
-server/lib/tmux_rm/tmux/command_runner_behaviour.ex
-server/lib/tmux_rm/tmux/command_runner.ex
-server/lib/tmux_rm_web/endpoint.ex
-server/lib/tmux_rm_web/router.ex
-server/lib/tmux_rm_web/components/layouts.ex
-server/lib/tmux_rm_web/components/core_components.ex
+server/lib/termigate/application.ex
+server/lib/termigate/tmux/command_runner_behaviour.ex
+server/lib/termigate/tmux/command_runner.ex
+server/lib/termigate_web/endpoint.ex
+server/lib/termigate_web/router.ex
+server/lib/termigate_web/components/layouts.ex
+server/lib/termigate_web/components/core_components.ex
 server/config/config.exs
 server/config/dev.exs
 server/config/test.exs

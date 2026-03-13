@@ -6,7 +6,7 @@ import Config
 # The watchers configuration can be used to run external
 # watchers to your application. For example, we can use it
 # to bundle .js and .css sources.
-config :tmux_rm, TmuxRmWeb.Endpoint,
+config :termigate, TermigateWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
   http: [ip: {0, 0, 0, 0}],
@@ -15,8 +15,8 @@ config :tmux_rm, TmuxRmWeb.Endpoint,
   debug_errors: true,
   secret_key_base: "VgZ66tsppbIegGAnm7mGp6SgLBVfgZFe8uLQL1T0Z5lF3PVMHmcDo08ymnIxvQdq",
   watchers: [
-    esbuild: {Esbuild, :install_and_run, [:tmux_rm, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:tmux_rm, ~w(--watch)]}
+    esbuild: {Esbuild, :install_and_run, [:termigate, ~w(--sourcemap=inline --watch)]},
+    tailwind: {Tailwind, :install_and_run, [:termigate, ~w(--watch)]}
   ]
 
 # ## SSL Support
@@ -43,7 +43,7 @@ config :tmux_rm, TmuxRmWeb.Endpoint,
 # different ports.
 
 # Reload browser tabs when matching files change.
-config :tmux_rm, TmuxRmWeb.Endpoint,
+config :termigate, TermigateWeb.Endpoint,
   live_reload: [
     web_console_logger: true,
     patterns: [
@@ -52,13 +52,13 @@ config :tmux_rm, TmuxRmWeb.Endpoint,
       # Gettext translations
       ~r"priv/gettext/.*\.po$"E,
       # Router, Controllers, LiveViews and LiveComponents
-      ~r"lib/tmux_rm_web/router\.ex$"E,
-      ~r"lib/tmux_rm_web/(controllers|live|components)/.*\.(ex|heex)$"E
+      ~r"lib/termigate_web/router\.ex$"E,
+      ~r"lib/termigate_web/(controllers|live|components)/.*\.(ex|heex)$"E
     ]
   ]
 
 # Enable dev routes for dashboard and mailbox
-config :tmux_rm, dev_routes: true
+config :termigate, dev_routes: true
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"

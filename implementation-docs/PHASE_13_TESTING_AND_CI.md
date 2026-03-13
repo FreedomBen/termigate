@@ -14,9 +14,9 @@ Set up CI/CD via GitHub Actions and consolidate test coverage across all layers.
 
 **Test configuration** (`server/config/test.exs`) — extend what Phase 1 set up:
 ```elixir
-config :tmux_rm,
+config :termigate,
   pane_stream_grace_period: 100,    # Short for fast tests
-  fifo_dir: "/tmp/tmux-rm-test",
+  fifo_dir: "/tmp/termigate-test",
   session_poll_interval: 500,       # Faster polling in tests
   config_poll_interval: 500,
   output_coalesce_ms: 0             # Disable coalescing in tests for determinism
@@ -204,28 +204,28 @@ end
 server/test/test_helper.exs
 server/test/support/tmux_helpers.ex
 server/test/support/mocks.ex
-server/test/tmux_rm/ring_buffer_test.exs
-server/test/tmux_rm/tmux_manager_test.exs
-server/test/tmux_rm/tmux_manager_integration_test.exs
-server/test/tmux_rm/pane_stream_test.exs
-server/test/tmux_rm/auth_test.exs
-server/test/tmux_rm/config_test.exs
-server/test/tmux_rm/session_poller_test.exs
-server/test/tmux_rm_web/live/session_list_live_test.exs
-server/test/tmux_rm_web/live/terminal_live_test.exs
-server/test/tmux_rm_web/live/auth_live_test.exs
-server/test/tmux_rm_web/live/settings_live_test.exs
-server/test/tmux_rm_web/live/multi_pane_live_test.exs
-server/test/tmux_rm_web/channels/terminal_channel_test.exs
-server/test/tmux_rm_web/channels/session_channel_test.exs
-server/test/tmux_rm_web/controllers/auth_controller_test.exs
-server/test/tmux_rm_web/controllers/health_controller_test.exs
-server/test/tmux_rm_web/controllers/session_controller_test.exs
-server/test/tmux_rm_web/controllers/pane_controller_test.exs
-server/test/tmux_rm_web/controllers/quick_action_controller_test.exs
-server/test/tmux_rm_web/plugs/require_auth_test.exs
-server/test/tmux_rm_web/plugs/require_auth_token_test.exs
-server/test/tmux_rm_web/plugs/rate_limit_test.exs
+server/test/termigate/ring_buffer_test.exs
+server/test/termigate/tmux_manager_test.exs
+server/test/termigate/tmux_manager_integration_test.exs
+server/test/termigate/pane_stream_test.exs
+server/test/termigate/auth_test.exs
+server/test/termigate/config_test.exs
+server/test/termigate/session_poller_test.exs
+server/test/termigate_web/live/session_list_live_test.exs
+server/test/termigate_web/live/terminal_live_test.exs
+server/test/termigate_web/live/auth_live_test.exs
+server/test/termigate_web/live/settings_live_test.exs
+server/test/termigate_web/live/multi_pane_live_test.exs
+server/test/termigate_web/channels/terminal_channel_test.exs
+server/test/termigate_web/channels/session_channel_test.exs
+server/test/termigate_web/controllers/auth_controller_test.exs
+server/test/termigate_web/controllers/health_controller_test.exs
+server/test/termigate_web/controllers/session_controller_test.exs
+server/test/termigate_web/controllers/pane_controller_test.exs
+server/test/termigate_web/controllers/quick_action_controller_test.exs
+server/test/termigate_web/plugs/require_auth_test.exs
+server/test/termigate_web/plugs/require_auth_token_test.exs
+server/test/termigate_web/plugs/rate_limit_test.exs
 ```
 
 ## Exit Criteria

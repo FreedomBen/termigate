@@ -1,0 +1,213 @@
+
+<div class="page-container">
+  <div class="flex items-center gap-3 pb-4">
+    <.link navigate={~p"/"} class="btn btn-ghost btn-sm" aria-label="Back">
+      <.icon name="hero-arrow-left-micro" class="size-5" />
+    </.link>
+    <h1 class="text-xl font-bold tracking-tight">Settings</h1>
+  </div>
+
+  <%!-- Quick Actions --%>
+  <div class="settings-section">
+    <div class="flex items-center justify-between mb-4">
+      <div class="settings-section-title mb-0">Quick Actions</div>
+      <button
+        :if={@editing == nil}
+        class="btn btn-primary btn-xs"
+        phx-click="new_action"
+      >
+        <.icon name="hero-plus-micro" class="size-3.5" /> Add
+      </button>
+    </div>
+
+    <%!-- Action form --%>
+    <div :if={@editing != nil} class="inline-form-card mb-4">
+      <h3 class="font-medium text-sm mb-3">
+        {if @editing == :new, do: "New Quick Action", else: "Edit Quick Action"}
+      </h3>
+      <form phx-submit="save_action" phx-change="validate_action" class="space-y-3">
+        <div>
+          <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="action-label">Label</label>
+          <input
+            type="text"
+            id="action-label"
+            name="action[label]"
+            value={@form_data["label"]}
+            placeholder="e.g., Deploy"
+            class={["input input-bordered w-full", @form_errors["label"] && "input-error"]}
+            autocomplete="off"
+            autofocus
+            phx-debounce="300"
+          />
+          <p :if={@form_errors["label"]} class="text-error text-xs mt-1">{@form_errors["label"]}</p>
+        </div>
+
+        <div>
+          <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="action-command">Command</label>
+          <textarea
+            id="action-command"
+            name="action[command]"
+            placeholder="e.g., git push origin main"
+            class={[
+              "textarea textarea-bordered w-full font-mono text-sm",
+              @form_errors["command"] && "textarea-error"
+            ]}
+            rows="2"
+            phx-debounce="300"
+          >{@form_data["command"]}</textarea>
+          <p :if={@form_errors["command"]} class="text-error text-xs mt-1">
+            {@form_errors["command"]}
+          </p>
+        </div>
+
+        <div class="flex gap-4 flex-wrap">
+          <div>
+            <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="action-color">Color</label>
+            <select id="action-color" name="action[color]" class="select select-bordered select-sm">
+              <option value="default" selected={@form_data["color"] == "default"}>Default</option>
+              <option value="green" selected={@form_data["color"] == "green"}>Green</option>
+              <option value="red" selected={@form_data["color"] == "red"}>Red</option>
+              <option value="yellow" selected={@form_data["color"] == "yellow"}>Yellow</option>
+              <option value="blue" selected={@form_data["color"] == "blue"}>Blue</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="action-icon">Icon</label>
+            <select id="action-icon" name="action[icon]" class="select select-bordered select-sm">
+              <option value="" selected={@form_data["icon"] in [nil, ""]}>None</option>
+              <option value="rocket" selected={@form_data["icon"] == "rocket"}>Rocket</option>
+              <option value="play" selected={@form_data["icon"] == "play"}>Play</option>
+              <option value="stop" selected={@form_data["icon"] == "stop"}>Stop</option>
+              <option value="trash" selected={@form_data["icon"] == "trash"}>Trash</option>
+              <option value="arrow-up" selected={@form_data["icon"] == "arrow-up"}>Arrow Up</option>
+              <option value="terminal" selected={@form_data["icon"] == "terminal"}>Terminal</option>
+            </select>
+          </div>
+
+          <div class="flex items-end">
+            <label class="label cursor-pointer gap-2">
+              <input
+                type="checkbox"
+                name="action[confirm]"
+                value="true"
+                checked={@form_data["confirm"] in [true, "true", "on"]}
+                class="checkbox checkbox-sm"
+              />
+              <span class="text-sm">Require confirmation</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button type="submit" class="btn btn-primary btn-sm">Save</button>
+          <button type="button" class="btn btn-ghost btn-sm" phx-click="cancel_edit">Cancel</button>
+        </div>
+      </form>
+    </div>
+
+    <%!-- Empty action list --%>
+    <div
+      :if={@quick_actions == [] and @editing == nil}
+      class="text-base-content/40 text-center py-6"
+    >
+      <.icon name="hero-bolt" class="size-6 mx-auto mb-2 opacity-50" />
+      <p class="text-sm">No quick actions configured</p>
+      <p class="text-xs mt-1 opacity-70">
+        Add buttons that appear above the terminal for one-tap commands.
+      </p>
+    </div>
+
+    <%!-- Action list --%>
+    <div :if={@quick_actions != []} class="space-y-2">
+      <div
+        :for={action <- @quick_actions}
+        class="action-item"
+      >
+        <div class="flex flex-col gap-0.5">
+          <button class="btn btn-ghost btn-xs px-0" phx-click="move_up" phx-value-id={action["id"]}>
+            <.icon name="hero-chevron-up-micro" class="size-3" />
+          </button>
+          <button
+            class="btn btn-ghost btn-xs px-0"
+            phx-click="move_down"
+            phx-value-id={action["id"]}
+          >
+            <.icon name="hero-chevron-down-micro" class="size-3" />
+          </button>
+        </div>
+
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class={"badge badge-sm #{action_badge_class(action["color"])}"}>
+              {action["label"]}
+            </span>
+            <span :if={action["confirm"]} class="text-warning text-xs opacity-70">confirm</span>
+          </div>
+          <code class="text-xs text-base-content/40 block truncate mt-0.5">
+            {action["command"]}
+          </code>
+        </div>
+
+        <div class="flex gap-1">
+          <button class="btn btn-ghost btn-xs" phx-click="edit_action" phx-value-id={action["id"]}>
+            <.icon name="hero-pencil-micro" class="size-4" />
+          </button>
+          <button
+            class="btn btn-ghost btn-xs text-error"
+            phx-click="delete_action"
+            phx-value-id={action["id"]}
+            data-confirm="Delete this quick action?"
+          >
+            <.icon name="hero-trash-micro" class="size-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <%!-- Authentication --%>
+  <div class="settings-section">
+    <div class="settings-section-title">Authentication</div>
+    <form phx-submit="update_ttl" class="flex items-end gap-3">
+      <div class="flex-1">
+        <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="session-ttl">Session Duration</label>
+        <select id="session-ttl" name="session_ttl_hours" class="select select-bordered select-sm w-full">
+          <option value="1" selected={@session_ttl_hours == 1}>1 hour</option>
+          <option value="8" selected={@session_ttl_hours == 8}>8 hours</option>
+          <option value="24" selected={@session_ttl_hours == 24}>1 day</option>
+          <option value="72" selected={@session_ttl_hours == 72}>3 days</option>
+          <option value="168" selected={@session_ttl_hours == 168}>1 week</option>
+          <option value="720" selected={@session_ttl_hours == 720}>30 days</option>
+          <option value="8760" selected={@session_ttl_hours == 8760}>1 year</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+    </form>
+    <p class="text-xs text-base-content/40 mt-2">
+      How long sessions remain valid before requiring re-authentication.
+    </p>
+  </div>
+
+  <%!-- Config File --%>
+  <div class="settings-section">
+    <div class="settings-section-title">Config File</div>
+    <p class="text-xs text-base-content/50 mb-3">
+      Stored at <code class="bg-base-300/50 px-1.5 py-0.5 rounded text-xs">~/.config/termigate/config.yaml</code>.
+      Changes are picked up automatically within 2 seconds.
+    </p>
+    <button
+      class="btn btn-outline btn-warning btn-sm"
+      phx-click={TermigateWeb.CoreComponents.show_modal("reset-confirm-modal")}
+    >
+      <.icon name="hero-arrow-path-micro" class="size-4" /> Reset to Defaults
+    </button>
+  </div>
+</div>
+
+<.modal id="reset-confirm-modal" on_confirm={JS.push("reset_config")} confirm_variant="btn-warning">
+  <:title>Reset configuration?</:title>
+  This will replace all your quick actions with the defaults. This cannot be undone.
+  <:confirm>Reset</:confirm>
+  <:cancel>Cancel</:cancel>
+</.modal>

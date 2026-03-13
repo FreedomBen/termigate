@@ -16,7 +16,7 @@ def project do
   [
     # ...
     releases: [
-      tmux_rm: [
+      termigate: [
         include_erts: true  # Bundle Erlang runtime
         # Cookie is set via RELEASE_COOKIE env var at runtime, not hardcoded
       ]
@@ -40,19 +40,19 @@ if config_env() == :prod do
   port = String.to_integer(System.get_env("PORT") || "4000")
   bind_ip = if System.get_env("PHX_BIND") == "0.0.0.0", do: {0, 0, 0, 0}, else: {127, 0, 0, 1}
 
-  config :tmux_rm, TmuxRmWeb.Endpoint,
+  config :termigate, TermigateWeb.Endpoint,
     url: [host: host, port: port],
     http: [ip: bind_ip, port: port],
     secret_key_base: secret_key_base,
     server: true
 
   # Optional auth token for headless setups
-  config :tmux_rm,
-    auth_token: System.get_env("RCA_AUTH_TOKEN")
+  config :termigate,
+    auth_token: System.get_env("TERMIGATE_AUTH_TOKEN")
 
   # Optional tmux socket
-  if socket = System.get_env("RCA_TMUX_SOCKET") do
-    config :tmux_rm, tmux_socket: socket
+  if socket = System.get_env("TERMIGATE_TMUX_SOCKET") do
+    config :termigate, tmux_socket: socket
   end
 end
 ```
@@ -94,37 +94,37 @@ mix assets.deploy
 echo "==> Building release"
 mix release
 
-echo "==> Release built at server/_build/prod/rel/tmux_rm/"
+echo "==> Release built at server/_build/prod/rel/termigate/"
 ```
 
 ### 14.5 Systemd Service
 
-**`deploy/tmux-rm.service`**:
+**`deploy/termigate.service`**:
 ```ini
 [Unit]
-Description=tmux-rm — Remote terminal manager
+Description=termigate — Remote terminal manager
 After=network.target
 
 [Service]
 Type=exec
 User=ben
 Group=ben
-WorkingDirectory=/opt/tmux_rm
+WorkingDirectory=/opt/termigate
 Environment=HOME=/home/ben
 Environment=PORT=4000
 Environment=PHX_HOST=localhost
 Environment=SECRET_KEY_BASE=generate-a-secret-key-base-here
 # Uncomment for remote access:
 # Environment=PHX_BIND=0.0.0.0
-# Environment=RCA_AUTH_TOKEN=your-secure-token
-ExecStart=/opt/tmux_rm/bin/tmux_rm start
-ExecStop=/opt/tmux_rm/bin/tmux_rm stop
+# Environment=TERMIGATE_AUTH_TOKEN=your-secure-token
+ExecStart=/opt/termigate/bin/termigate start
+ExecStop=/opt/termigate/bin/termigate stop
 Restart=on-failure
 RestartSec=5
 # Security hardening
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/tmp/tmux-rm /home/ben/.config/tmux_rm
+ReadWritePaths=/tmp/termigate /home/ben/.config/termigate
 ProtectHome=read-only
 
 [Install]
@@ -133,10 +133,10 @@ WantedBy=multi-user.target
 
 Installation:
 ```bash
-sudo cp deploy/tmux-rm.service /etc/systemd/system/
+sudo cp deploy/termigate.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable tmux-rm
-sudo systemctl start tmux-rm
+sudo systemctl enable termigate
+sudo systemctl start termigate
 ```
 
 ### 14.6 Docker Support
@@ -173,23 +173,23 @@ ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 
-COPY --from=build /app/server/_build/prod/rel/tmux_rm /app
+COPY --from=build /app/server/_build/prod/rel/termigate /app
 
 EXPOSE 4000
 
-CMD ["/app/bin/tmux_rm", "start"]
+CMD ["/app/bin/termigate", "start"]
 ```
 
 **Docker deployment modes**:
 
-The Dockerfile installs tmux inside the container, so the default mode runs tmux sessions *inside* the container. To connect to **host** tmux sessions instead, mount the host's tmux socket and set `RCA_TMUX_SOCKET`.
+The Dockerfile installs tmux inside the container, so the default mode runs tmux sessions *inside* the container. To connect to **host** tmux sessions instead, mount the host's tmux socket and set `TERMIGATE_TMUX_SOCKET`.
 
 **UID/GID mapping for host tmux access**: The container must run as the same UID as the host user who owns the tmux socket. Use `--user $(id -u):$(id -g)` when running the container, or set `user:` in docker-compose. The tmux socket is typically at `/tmp/tmux-{UID}/default` and is only readable by the owning user.
 
 **`docker-compose.yml`** (optional, for easy testing):
 ```yaml
 services:
-  tmux-rm:
+  termigate:
     build: .
     ports:
       - "4000:4000"
@@ -198,7 +198,7 @@ services:
       - PORT=4000
       - PHX_HOST=localhost
       # Uncomment for host tmux access:
-      # - RCA_TMUX_SOCKET=/tmp/tmux-host/default
+      # - TERMIGATE_TMUX_SOCKET=/tmp/tmux-host/default
     # user: "1000:1000"  # Must match host UID:GID for tmux socket access
     # volumes:
       # Uncomment for host tmux access (replace 1000 with your UID):
@@ -209,8 +209,8 @@ services:
 
 When the same setting can be specified in multiple places, the precedence order is:
 
-1. **Environment variables** (highest priority) — e.g., `RCA_AUTH_TOKEN`, `PORT`, `PHX_HOST`
-2. **YAML config file** (`~/.config/tmux_rm/config.yaml`) — quick actions, app settings
+1. **Environment variables** (highest priority) — e.g., `TERMIGATE_AUTH_TOKEN`, `PORT`, `PHX_HOST`
+2. **YAML config file** (`~/.config/termigate/config.yaml`) — quick actions, app settings
 3. **`server/config/runtime.exs`** compile-time defaults (lowest priority)
 
 This is enforced in `server/config/runtime.exs` by only reading env vars with `||` fallbacks, and in the `Config` GenServer by merging YAML values over defaults. Environment variables always win because they're read in `runtime.exs` before the Config GenServer starts.
@@ -220,15 +220,15 @@ This is enforced in `server/config/runtime.exs` by only reading env vars with `|
 For deployments where native clients or external tools access the REST API from a different origin:
 
 - By default, no CORS headers are set (same-origin only)
-- If `RCA_CORS_ORIGIN` env var is set, add CORS headers via a Plug:
+- If `TERMIGATE_CORS_ORIGIN` env var is set, add CORS headers via a Plug:
   ```elixir
   # In endpoint.ex or a dedicated plug:
-  if origin = Application.get_env(:tmux_rm, :cors_origin) do
+  if origin = Application.get_env(:termigate, :cors_origin) do
     plug Corsica, origins: origin, allow_headers: ["authorization", "content-type"]
   end
   ```
-- For single-origin deployments: `RCA_CORS_ORIGIN=https://my-app.example.com`
-- For development: `RCA_CORS_ORIGIN=*`
+- For single-origin deployments: `TERMIGATE_CORS_ORIGIN=https://my-app.example.com`
+- For development: `TERMIGATE_CORS_ORIGIN=*`
 - Add `{:corsica, "~> 2.0"}` to deps in `server/mix.exs` (Phase 1)
 
 Note: WebSocket connections (LiveView and Channels) are not affected by CORS — they use the `check_origin` setting on the endpoint, which is already configured by Phoenix.
@@ -261,7 +261,7 @@ Example configs for option 1:
 
 **Caddy** (recommended — automatic HTTPS via Let's Encrypt):
 ```
-tmux-rm.example.com {
+termigate.example.com {
   reverse_proxy localhost:4000
 }
 ```
@@ -270,10 +270,10 @@ tmux-rm.example.com {
 ```nginx
 server {
     listen 443 ssl;
-    server_name tmux-rm.example.com;
+    server_name termigate.example.com;
 
-    ssl_certificate /etc/letsencrypt/live/tmux-rm.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/tmux-rm.example.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/termigate.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/termigate.example.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:4000;
@@ -315,7 +315,7 @@ Note: WebSocket support (`Upgrade`/`Connection` headers) is critical — both Li
 server/mix.exs (release config)
 server/config/runtime.exs (production config)
 bin/build-release.sh
-deploy/tmux-rm.service
+deploy/termigate.service
 Dockerfile
 docker-compose.yml (optional)
 .dockerignore
@@ -323,7 +323,7 @@ docker-compose.yml (optional)
 
 ## Exit Criteria
 - `cd server && MIX_ENV=prod mix release` builds a self-contained release
-- Release starts with `bin/tmux_rm start` — serves the app
+- Release starts with `bin/termigate start` — serves the app
 - systemd service file installs and works
 - Docker image builds and runs (with tmux inside container)
 - Health check endpoint responds correctly in production

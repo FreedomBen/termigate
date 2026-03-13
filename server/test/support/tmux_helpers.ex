@@ -1,4 +1,4 @@
-defmodule TmuxRm.TmuxHelpers do
+defmodule Termigate.TmuxHelpers do
   @moduledoc "Helpers for tmux integration tests."
   import ExUnit.Callbacks, only: [on_exit: 1]
 

@@ -151,10 +151,10 @@ server/assets/js/hooks/terminal_hook.js (update — preference loading/saving)
 server/assets/js/preferences.js (new — preference management, theme definitions)
 server/assets/js/preferences_panel.js (new — settings panel UI)
 server/assets/css/app.css (update — preferences panel styles)
-server/lib/tmux_rm_web/live/terminal_live.html.heex (update — gear icon triggers JS panel, NOT navigate to /settings)
+server/lib/termigate_web/live/terminal_live.html.heex (update — gear icon triggers JS panel, NOT navigate to /settings)
 ```
 
-Note: Phase 8's `server/lib/tmux_rm_web/live/settings_live.ex` is NOT modified by this phase. The gear icon in the terminal header opens the client-side preferences panel, not the `/settings` page. A separate link to `/settings` (for quick action management) remains in the app navigation.
+Note: Phase 8's `server/lib/termigate_web/live/settings_live.ex` is NOT modified by this phase. The gear icon in the terminal header opens the client-side preferences panel, not the `/settings` page. A separate link to `/settings` (for quick action management) remains in the app navigation.
 
 ## Exit Criteria
 - Terminal loads with user's saved preferences (font, theme, cursor)

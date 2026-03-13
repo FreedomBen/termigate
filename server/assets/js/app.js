@@ -22,7 +22,7 @@ import "phoenix_html"
 // Establish Phoenix Socket and LiveView configuration.
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
-import {hooks as colocatedHooks} from "phoenix-colocated/tmux_rm"
+import {hooks as colocatedHooks} from "phoenix-colocated/termigate"
 import {TerminalHook} from "./hooks/terminal_hook"
 import {PaneResizeHook} from "./hooks/pane_resize_hook"
 import topbar from "../vendor/topbar"

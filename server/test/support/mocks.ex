@@ -1,1 +1,1 @@
-Mox.defmock(TmuxRm.MockCommandRunner, for: TmuxRm.Tmux.CommandRunnerBehaviour)
+Mox.defmock(Termigate.MockCommandRunner, for: Termigate.Tmux.CommandRunnerBehaviour)

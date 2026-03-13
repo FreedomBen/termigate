@@ -44,7 +44,7 @@ The following issues were identified and fixed in the phase documents:
 
 ### 9. Telemetry Wiring Gap ✅
 **Was**: Telemetry deps in Phase 1, not wired until Phase 15.
-**Fixed**: Phase 1 now starts `TmuxRm.Telemetry` supervisor in supervision tree. Phase 15 adds implementation note to instrument incrementally per phase.
+**Fixed**: Phase 1 now starts `Termigate.Telemetry` supervisor in supervision tree. Phase 15 adds implementation note to instrument incrementally per phase.
 
 ### 10. LayoutPollerSupervisor in Phase 1 ✅
 **Was**: Noted as missing from supervision tree.

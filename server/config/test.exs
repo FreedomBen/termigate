@@ -2,15 +2,15 @@ import Config
 
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
-config :tmux_rm, TmuxRmWeb.Endpoint,
+config :termigate, TermigateWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
   secret_key_base: "ipqUh7eVOZMj4LbuWMqTqKKWmbG9PpRGSfhrzg9CXyys/V5DzdM6ICJkr1aT1xEG",
   server: false
 
-config :tmux_rm,
-  command_runner: TmuxRm.StubCommandRunner,
+config :termigate,
+  command_runner: Termigate.StubCommandRunner,
   pane_stream_grace_period: 100,
-  fifo_dir: "/tmp/tmux-rm-test",
+  fifo_dir: "/tmp/termigate-test",
   session_poll_interval: 500,
   config_poll_interval: 500,
   output_coalesce_ms: 0

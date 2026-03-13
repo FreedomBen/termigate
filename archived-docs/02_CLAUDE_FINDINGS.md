@@ -21,7 +21,7 @@ Quick action code passes a charlist (`bytes = :binary.bin_to_list(command_with_e
 ## Missing Details
 
 ### 5. No ring buffer module specified
-The design references a ring buffer extensively but never specifies its module name or API. Need to define `TmuxRm.RingBuffer` with `new/1`, `append/2`, `read/1`, `size/1` and add it to the project structure.
+The design references a ring buffer extensively but never specifies its module name or API. Need to define `Termigate.RingBuffer` with `new/1`, `append/2`, `read/1`, `size/1` and add it to the project structure.
 
 ### 6. PaneStream `get_or_start` not defined
 **Location**: Line 587 vs lines 101–104

@@ -48,7 +48,7 @@ LiveView modal component for destructive actions:
 ### 7.5 Session List Event Handlers
 
 ```elixir
-# server/lib/tmux_rm_web/live/session_list_live.ex additions:
+# server/lib/termigate_web/live/session_list_live.ex additions:
 
 def handle_event("kill_session", %{"name" => name}, socket) do
   TmuxManager.kill_session(name)
@@ -91,7 +91,7 @@ end
 
 ### 7.8 REST API for Session Management
 
-**`server/lib/tmux_rm_web/controllers/session_controller.ex`**:
+**`server/lib/termigate_web/controllers/session_controller.ex`**:
 ```
 GET    /api/sessions             — list sessions with panes (from SessionPoller.get/0)
 POST   /api/sessions             — create session (rate limited)
@@ -138,7 +138,7 @@ POST   /api/sessions/:name/windows — create window
 - 422: `{"error": "validation_failed", "message": "..."}`
 - 429: `{"error": "rate_limited", "retry_after": 45}`
 
-**`server/lib/tmux_rm_web/controllers/pane_controller.ex`**:
+**`server/lib/termigate_web/controllers/pane_controller.ex`**:
 ```
 POST   /api/panes/:target/split  — split pane (body: {"direction": "horizontal"|"vertical"})
 DELETE /api/panes/:target        — kill pane
@@ -158,14 +158,14 @@ DELETE /api/panes/:target        — kill pane
 
 ## Files Created/Modified
 ```
-server/lib/tmux_rm_web/live/session_list_live.ex (update)
-server/lib/tmux_rm_web/live/session_list_live.html.heex (update)
-server/lib/tmux_rm_web/controllers/session_controller.ex
-server/lib/tmux_rm_web/controllers/pane_controller.ex
-server/lib/tmux_rm_web/router.ex (add API routes)
-server/test/tmux_rm_web/live/session_list_live_test.exs (extend)
-server/test/tmux_rm_web/controllers/session_controller_test.exs
-server/test/tmux_rm_web/controllers/pane_controller_test.exs
+server/lib/termigate_web/live/session_list_live.ex (update)
+server/lib/termigate_web/live/session_list_live.html.heex (update)
+server/lib/termigate_web/controllers/session_controller.ex
+server/lib/termigate_web/controllers/pane_controller.ex
+server/lib/termigate_web/router.ex (add API routes)
+server/test/termigate_web/live/session_list_live_test.exs (extend)
+server/test/termigate_web/controllers/session_controller_test.exs
+server/test/termigate_web/controllers/pane_controller_test.exs
 ```
 
 ## Exit Criteria

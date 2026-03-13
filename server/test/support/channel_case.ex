@@ -1,4 +1,4 @@
-defmodule TmuxRmWeb.ChannelCase do
+defmodule TermigateWeb.ChannelCase do
   @moduledoc """
   This module defines the test case to be used by channel tests.
   """
@@ -7,9 +7,9 @@ defmodule TmuxRmWeb.ChannelCase do
   using do
     quote do
       import Phoenix.ChannelTest
-      import TmuxRmWeb.ChannelCase
+      import TermigateWeb.ChannelCase
 
-      @endpoint TmuxRmWeb.Endpoint
+      @endpoint TermigateWeb.Endpoint
     end
   end
 end

@@ -1,4 +1,4 @@
-# TmuxRm
+# Termigate
 
 To start your Phoenix server:
 

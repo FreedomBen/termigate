@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-tmux-rm is a Phoenix LiveView web app that provides browser-based access to tmux sessions with real-time terminal streaming. The Elixir server lives in `server/`.
+termigate is a Phoenix LiveView web app that provides browser-based access to tmux sessions with real-time terminal streaming. The Elixir server lives in `server/`.
 
 ## Common Commands
 
@@ -48,7 +48,7 @@ Frontend assets use npm (`server/assets/package.json`).
 - **Config** (GenServer) — reads/watches YAML config file, broadcasts changes
 - **SessionPoller / LayoutPoller** — poll tmux state for changes
 
-### Web Layer (`lib/tmux_rm_web/`)
+### Web Layer (`lib/termigate_web/`)
 
 - **LiveViews:** `auth_live`, `session_list_live`, `terminal_live`, `multi_pane_live`, `settings_live`, `setup_live`
 - **Channels:** `terminal_channel`, `session_channel` (for native app support)
@@ -62,12 +62,12 @@ Frontend assets use npm (`server/assets/package.json`).
 
 ### Auth
 
-Dual auth: username/password (bcrypt) and token-based (`RCA_AUTH_TOKEN` env var).
+Dual auth: username/password (bcrypt) and token-based (`TERMIGATE_AUTH_TOKEN` env var).
 
 ## Naming
 
-- User-facing: `tmux-rm`
-- Elixir module/mix: `TmuxRm` / `tmux_rm`
+- User-facing: `termigate`
+- Elixir module/mix: `Termigate` / `termigate`
 - Session names must match `^[a-zA-Z0-9_-]+$`
 
 ## Key Documentation

@@ -7,9 +7,9 @@
 # General application configuration
 import Config
 
-config :tmux_rm,
+config :termigate,
   generators: [timestamp_type: :utc_datetime],
-  command_runner: TmuxRm.Tmux.CommandRunner,
+  command_runner: Termigate.Tmux.CommandRunner,
   session_poll_interval: 3_000,
   pane_stream_grace_period: 30_000,
   ring_buffer_min_size: 524_288,
@@ -21,7 +21,7 @@ config :tmux_rm,
   default_cols: 120,
   default_rows: 40,
   config_poll_interval: 2_000,
-  fifo_dir: "/tmp/tmux-rm",
+  fifo_dir: "/tmp/termigate",
   tmux_path: nil,
   tmux_socket: nil,
   output_coalesce_ms: 3,
@@ -31,20 +31,20 @@ config :tmux_rm,
   rate_limits: %{login: {5, 60}, session_create: {10, 60}, websocket: {10, 60}}
 
 # Configure the endpoint
-config :tmux_rm, TmuxRmWeb.Endpoint,
+config :termigate, TermigateWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
-    formats: [html: TmuxRmWeb.ErrorHTML, json: TmuxRmWeb.ErrorJSON],
+    formats: [html: TermigateWeb.ErrorHTML, json: TermigateWeb.ErrorJSON],
     layout: false
   ],
-  pubsub_server: TmuxRm.PubSub,
+  pubsub_server: Termigate.PubSub,
   live_view: [signing_salt: "rGgw7trH"]
 
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.25.4",
-  tmux_rm: [
+  termigate: [
     args:
       ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
     cd: Path.expand("../assets", __DIR__),
@@ -54,7 +54,7 @@ config :esbuild,
 # Configure tailwind (the version is required)
 config :tailwind,
   version: "4.1.12",
-  tmux_rm: [
+  termigate: [
     args: ~w(
       --input=assets/css/app.css
       --output=priv/static/assets/css/app.css
