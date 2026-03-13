@@ -2,7 +2,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Socket } from "phoenix";
-import { loadPrefs, savePref, resolveTheme } from "../preferences";
+import { serverToLocal, localToServer, resolveTheme } from "../preferences";
 import * as PreferencesPanel from "../preferences_panel";
 
 // --- Mobile detection ---
@@ -44,8 +44,10 @@ const TerminalHook = {
   mounted() {
     const target = this.el.dataset.target;
 
-    // Load preferences from localStorage (Phase 10 full preference system)
-    const prefs = loadPrefs();
+    // Load preferences from server config (passed via data attribute)
+    const serverPrefs = JSON.parse(this.el.dataset.terminalPrefs || "{}");
+    this._serverPrefs = serverPrefs;
+    const prefs = serverToLocal(serverPrefs);
 
     // Track mobile state and multi-pane mode early (needed for terminal setup)
     this._isMobile = isMobile();
@@ -188,6 +190,11 @@ const TerminalHook = {
       this._setupPreferencesPanel();
     }
 
+    // --- Live config updates from server ---
+    this.handleEvent("terminal_prefs", (serverPrefs) => {
+      this._applyTerminalPrefs(serverPrefs);
+    });
+
     // --- Multi-pane: notify LiveView when this pane gets focus ---
     if (this._isMultiPane) {
       this.term.textarea?.addEventListener("focus", () => {
@@ -199,6 +206,28 @@ const TerminalHook = {
       this.el.addEventListener("touchstart", () => {
         this.pushEvent("pane_focused", { target: this.el.dataset.target });
       }, { passive: true });
+    }
+  },
+
+  // Returns current prefs in camelCase (for preferences panel)
+  getLocalPrefs() {
+    return serverToLocal(this._serverPrefs || {});
+  },
+
+  _applyTerminalPrefs(serverPrefs) {
+    this._serverPrefs = serverPrefs;
+    if (!this.term) return;
+    const local = serverToLocal(serverPrefs);
+    this.term.options.fontSize = local.fontSize;
+    this.term.options.fontFamily = local.fontFamily;
+    this.term.options.theme = resolveTheme(local);
+    this.term.options.cursorStyle = local.cursorStyle;
+    this.term.options.cursorBlink = local.cursorBlink;
+    if (!this._isMultiPane) {
+      this.fitAddon?.fit();
+    }
+    if (this._toolbar) {
+      this._toolbar.classList.toggle("vk-hidden", !local.showToolbar);
     }
   },
 
@@ -218,7 +247,7 @@ const TerminalHook = {
             this._toolbar.classList.add("vk-hidden");
           }
         }
-      });
+      }, this);
     });
   },
 
@@ -228,8 +257,8 @@ const TerminalHook = {
     if (!isMobile() && !isTablet()) return;
 
     // Respect showToolbar preference
-    const prefs = loadPrefs();
-    const showToolbar = prefs.showToolbar !== false;
+    const localPrefs = this.getLocalPrefs();
+    const showToolbar = localPrefs.showToolbar !== false;
 
     // Create toolbar container
     this._toolbar = document.createElement("div");
@@ -440,9 +469,11 @@ const TerminalHook = {
 
     this.el.addEventListener("touchend", (e) => {
       if (this._initialPinchDistance && e.touches.length < 2) {
-        // Save final font size preference
+        // Save final font size to server
         if (this.term) {
-          savePref("fontSize", this.term.options.fontSize);
+          const updated = this.getLocalPrefs();
+          updated.fontSize = this.term.options.fontSize;
+          this.pushEvent("update_terminal_prefs", localToServer(updated));
         }
         this._initialPinchDistance = null;
         this._initialFontSize = null;

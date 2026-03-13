@@ -1,12 +1,11 @@
 // Client-side preferences slide-out panel.
 // Triggered by gear icon in terminal header.
-// Applies changes live to the terminal — no server interaction.
+// Applies changes live to the terminal, persists via server config.
 
 import {
   THEMES,
   FONT_FAMILIES,
-  loadPrefs,
-  savePrefs,
+  localToServer,
   resolveTheme,
 } from "./preferences";
 
@@ -15,14 +14,16 @@ let backdropEl = null;
 let currentTerminal = null;
 let currentFitAddon = null;
 let onToolbarToggle = null;
+let currentHook = null;
 
-function open(term, fitAddon, toolbarCallback) {
+function open(term, fitAddon, toolbarCallback, hook) {
   if (panelEl) return; // already open
   currentTerminal = term;
   currentFitAddon = fitAddon;
   onToolbarToggle = toolbarCallback;
+  currentHook = hook;
 
-  const prefs = loadPrefs();
+  const prefs = hook.getLocalPrefs();
 
   // Backdrop
   backdropEl = document.createElement("div");
@@ -57,6 +58,7 @@ function close() {
     currentTerminal = null;
     currentFitAddon = null;
     onToolbarToggle = null;
+    currentHook = null;
   }, 200);
 }
 
@@ -214,14 +216,14 @@ function bindEvents(prefs) {
   const toolbarCb = panelEl.querySelector("#pref-show-toolbar");
   toolbarCb.addEventListener("change", () => {
     current.showToolbar = toolbarCb.checked;
-    savePrefs(current);
+    saveToServer(current);
     if (onToolbarToggle) onToolbarToggle(current.showToolbar);
   });
 }
 
 function applyAndSave(prefs, changedKey) {
   if (!currentTerminal) return;
-  savePrefs(prefs);
+  saveToServer(prefs);
 
   if (changedKey === "fontSize") {
     currentTerminal.options.fontSize = prefs.fontSize;
@@ -236,6 +238,11 @@ function applyAndSave(prefs, changedKey) {
   } else if (changedKey === "cursorBlink") {
     currentTerminal.options.cursorBlink = prefs.cursorBlink;
   }
+}
+
+function saveToServer(prefs) {
+  if (!currentHook) return;
+  currentHook.pushEvent("update_terminal_prefs", localToServer(prefs));
 }
 
 function updateThemePreview(prefs) {

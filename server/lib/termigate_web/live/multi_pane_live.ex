@@ -48,6 +48,7 @@ defmodule TermigateWeb.MultiPaneLive do
     channel_token = Phoenix.Token.sign(socket, "channel", %{session: session})
     config = Config.get()
     quick_actions = config["quick_actions"] || []
+    terminal_prefs = config["terminal"] || %{}
 
     socket =
       socket
@@ -63,6 +64,7 @@ defmodule TermigateWeb.MultiPaneLive do
       |> assign(:quick_actions, quick_actions)
       |> assign(:show_actions, true)
       |> assign(:pending_action, nil)
+      |> assign(:terminal_prefs, terminal_prefs)
 
     {:ok, socket, layout: false}
   end
@@ -229,6 +231,7 @@ defmodule TermigateWeb.MultiPaneLive do
               data-mode="multi"
               data-cols={to_string(pane.width)}
               data-rows={to_string(pane.height)}
+              data-terminal-prefs={Jason.encode!(@terminal_prefs)}
               class="w-full h-full"
             >
             </div>
@@ -377,7 +380,15 @@ defmodule TermigateWeb.MultiPaneLive do
   end
 
   def handle_info({:config_changed, config}, socket) do
-    {:noreply, assign(socket, :quick_actions, config["quick_actions"] || [])}
+    terminal_prefs = config["terminal"] || %{}
+
+    socket =
+      socket
+      |> assign(:quick_actions, config["quick_actions"] || [])
+      |> assign(:terminal_prefs, terminal_prefs)
+      |> push_event("terminal_prefs", terminal_prefs)
+
+    {:noreply, socket}
   end
 
   # Ignore pane output/control events — each TerminalHook handles its own via Channel
@@ -485,6 +496,14 @@ defmodule TermigateWeb.MultiPaneLive do
 
   def handle_event("resize", _params, socket) do
     # Multi-pane view is passive — ignore resize events
+    {:noreply, socket}
+  end
+
+  def handle_event("update_terminal_prefs", prefs, socket) when is_map(prefs) do
+    Config.update(fn config ->
+      Map.put(config, "terminal", prefs)
+    end)
+
     {:noreply, socket}
   end
 

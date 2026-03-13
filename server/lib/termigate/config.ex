@@ -42,7 +42,16 @@ defmodule Termigate.Config do
         "icon" => "terminal",
         "confirm" => false
       }
-    ]
+    ],
+    "terminal" => %{
+      "font_size" => 14,
+      "font_family" => "monospace",
+      "theme" => "dark",
+      "custom_theme" => %{},
+      "cursor_style" => "block",
+      "cursor_blink" => true,
+      "show_toolbar" => true
+    }
   }
   @header_comment """
   # termigate configuration
@@ -90,6 +99,19 @@ defmodule Termigate.Config do
   #     command: "tail -f /var/log/myapp.log"
   #     color: blue
   #     icon: terminal
+  #
+  # --- terminal ---
+  # Terminal display preferences. Synced to all connected browsers.
+  #
+  # Fields:
+  #   font_size:     Font size in pixels (8–32, default: 14)
+  #   font_family:   CSS font-family string (default: "monospace")
+  #   theme:         Color theme: dark, light, solarizedDark, solarizedLight, custom
+  #   custom_theme:  Custom color overrides (when theme is "custom")
+  #                  Keys: foreground, background, cursor, selectionBackground
+  #   cursor_style:  block, underline, or bar (default: "block")
+  #   cursor_blink:  true/false (default: true)
+  #   show_toolbar:  Show virtual toolbar on mobile (default: true)
   """
 
   # --- Public API ---
@@ -196,7 +218,7 @@ defmodule Termigate.Config do
   end
 
   def handle_call({:update, fun}, _from, state) do
-    new_config = fun.(state.config)
+    new_config = fun.(state.config) |> normalize_config()
 
     case write_config(state.path, new_config) do
       {:ok, mtime} ->
@@ -331,6 +353,10 @@ defmodule Termigate.Config do
 
     clean_config = %{"quick_actions" => clean_actions}
 
+    # Include terminal section
+    clean_config =
+      Map.put(clean_config, "terminal", config["terminal"] || @default_config["terminal"])
+
     # Include auth section if present
     clean_config =
       case config["auth"] do
@@ -360,7 +386,10 @@ defmodule Termigate.Config do
           []
       end
 
-    config = %{"quick_actions" => actions}
+    config =
+      %{"quick_actions" => actions}
+      |> Map.put("terminal", parsed["terminal"])
+      |> normalize_terminal_section()
 
     case parsed["auth"] do
       auth when is_map(auth) and map_size(auth) > 0 ->
@@ -372,6 +401,41 @@ defmodule Termigate.Config do
   end
 
   defp normalize_config(_), do: @default_config
+
+  @valid_themes ~w(dark light solarizedDark solarizedLight custom)
+  @valid_cursor_styles ~w(block underline bar)
+
+  defp normalize_terminal_section(config) do
+    defaults = @default_config["terminal"]
+    terminal = Map.merge(defaults, config["terminal"] || %{})
+
+    terminal = %{
+      "font_size" => clamp(terminal["font_size"], 8, 32),
+      "font_family" =>
+        if(is_binary(terminal["font_family"]) and terminal["font_family"] != "",
+          do: terminal["font_family"],
+          else: "monospace"
+        ),
+      "theme" =>
+        if(terminal["theme"] in @valid_themes, do: terminal["theme"], else: "dark"),
+      "custom_theme" =>
+        if(is_map(terminal["custom_theme"]), do: terminal["custom_theme"], else: %{}),
+      "cursor_style" =>
+        if(terminal["cursor_style"] in @valid_cursor_styles,
+          do: terminal["cursor_style"],
+          else: "block"
+        ),
+      "cursor_blink" => terminal["cursor_blink"] == true,
+      "show_toolbar" => terminal["show_toolbar"] != false
+    }
+
+    Map.put(config, "terminal", terminal)
+  end
+
+  defp clamp(value, min_val, max_val) when is_number(value),
+    do: max(min_val, min(max_val, value))
+
+  defp clamp(_value, min_val, _max_val), do: min_val
 
   defp normalize_auth_section(auth) do
     result = %{}

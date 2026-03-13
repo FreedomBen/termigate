@@ -1,8 +1,5 @@
-// Preference management for terminal display settings.
-// All settings stored in localStorage — no server involvement.
-// Replaces the minimal savePref/loadPref from Phase 9.
-
-const STORAGE_KEY = "rca-preferences";
+// Terminal display preference definitions and theme data.
+// Settings are stored server-side in config.yaml, not localStorage.
 
 const DEFAULTS = {
   fontSize: 14,
@@ -98,23 +95,30 @@ const FONT_FAMILIES = [
   { label: "Courier New", value: "'Courier New', monospace" },
 ];
 
-function loadPrefs() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    return { ...DEFAULTS, ...saved };
-  } catch {
-    return { ...DEFAULTS };
-  }
+// Convert server config (snake_case) to local camelCase prefs
+function serverToLocal(serverPrefs) {
+  return {
+    fontSize: serverPrefs.font_size ?? DEFAULTS.fontSize,
+    fontFamily: serverPrefs.font_family ?? DEFAULTS.fontFamily,
+    theme: serverPrefs.theme ?? DEFAULTS.theme,
+    customTheme: serverPrefs.custom_theme ?? DEFAULTS.customTheme,
+    cursorStyle: serverPrefs.cursor_style ?? DEFAULTS.cursorStyle,
+    cursorBlink: serverPrefs.cursor_blink ?? DEFAULTS.cursorBlink,
+    showToolbar: serverPrefs.show_toolbar ?? DEFAULTS.showToolbar,
+  };
 }
 
-function savePrefs(prefs) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-}
-
-function savePref(key, value) {
-  const prefs = loadPrefs();
-  prefs[key] = value;
-  savePrefs(prefs);
+// Convert local camelCase prefs to server config (snake_case)
+function localToServer(prefs) {
+  return {
+    font_size: prefs.fontSize,
+    font_family: prefs.fontFamily,
+    theme: prefs.theme,
+    custom_theme: prefs.customTheme || {},
+    cursor_style: prefs.cursorStyle,
+    cursor_blink: prefs.cursorBlink,
+    show_toolbar: prefs.showToolbar,
+  };
 }
 
 function resolveTheme(prefs) {
@@ -129,8 +133,7 @@ export {
   DEFAULTS,
   THEMES,
   FONT_FAMILIES,
-  loadPrefs,
-  savePrefs,
-  savePref,
+  serverToLocal,
+  localToServer,
   resolveTheme,
 };

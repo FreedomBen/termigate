@@ -32,6 +32,7 @@ defmodule TermigateWeb.TerminalLive do
     channel_token = Phoenix.Token.sign(socket, "channel", %{target: target})
     config = Config.get()
     quick_actions = config["quick_actions"] || []
+    terminal_prefs = config["terminal"] || %{}
 
     # Parse session:window.pane to build back link to multi-pane view
     back_path =
@@ -51,6 +52,7 @@ defmodule TermigateWeb.TerminalLive do
       |> assign(:show_actions, true)
       |> assign(:pending_action, nil)
       |> assign(:back_path, back_path)
+      |> assign(:terminal_prefs, terminal_prefs)
 
     {:ok, socket, layout: false}
   end
@@ -136,6 +138,7 @@ defmodule TermigateWeb.TerminalLive do
         phx-hook="TerminalHook"
         phx-update="ignore"
         data-target={@target}
+        data-terminal-prefs={Jason.encode!(@terminal_prefs)}
         class="terminal-container flex-1 min-h-0"
       >
       </div>
@@ -184,7 +187,15 @@ defmodule TermigateWeb.TerminalLive do
   end
 
   def handle_info({:config_changed, config}, socket) do
-    {:noreply, assign(socket, :quick_actions, config["quick_actions"] || [])}
+    terminal_prefs = config["terminal"] || %{}
+
+    socket =
+      socket
+      |> assign(:quick_actions, config["quick_actions"] || [])
+      |> assign(:terminal_prefs, terminal_prefs)
+      |> push_event("terminal_prefs", terminal_prefs)
+
+    {:noreply, socket}
   end
 
   # Ignore output events — Channel handles these
@@ -253,6 +264,14 @@ defmodule TermigateWeb.TerminalLive do
 
   def handle_event("toggle_actions", _params, socket) do
     {:noreply, assign(socket, :show_actions, !socket.assigns.show_actions)}
+  end
+
+  def handle_event("update_terminal_prefs", prefs, socket) when is_map(prefs) do
+    Config.update(fn config ->
+      Map.put(config, "terminal", prefs)
+    end)
+
+    {:noreply, socket}
   end
 
   # --- Private ---
