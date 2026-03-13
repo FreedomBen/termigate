@@ -382,7 +382,7 @@ defmodule TermigateWeb.MultiPaneLive do
 
   # Ignore pane output/control events — each TerminalHook handles its own via Channel
   def handle_info({:pane_output, _, _}, socket), do: {:noreply, socket}
-  def handle_info({:pane_dead, _, _}, socket), do: {:noreply, socket}
+  def handle_info({:pane_dead, _}, socket), do: {:noreply, socket}
   def handle_info({:pane_reconnected, _, _}, socket), do: {:noreply, socket}
   def handle_info({:pane_resized, _, _}, socket), do: {:noreply, socket}
   def handle_info({:tmux_status_changed, _}, socket), do: {:noreply, socket}

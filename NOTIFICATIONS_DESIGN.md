@@ -199,21 +199,73 @@ end
 
 The return value is `{stripped_data, marker_partial}`. `stripped_data` is safe to buffer/broadcast. `marker_partial` is stored in state and prepended to the next chunk to handle markers split across chunks (see Edge Cases).
 
-## Settings UI
+## Settings
 
-### Preferences (localStorage)
+### Config file (YAML)
 
-Add to `DEFAULTS` in `preferences.js`:
+Notification settings are stored in the YAML config file (`~/.config/termigate/config.yaml`), not in localStorage. This ensures settings survive browser changes and are consistent across tabs/devices.
 
-```javascript
-const DEFAULTS = {
-  // ...existing...
-  notifications: "disabled",     // "disabled" | "activity" | "shell"
-  notifyIdleThreshold: 10,       // seconds (only for activity mode)
-  notifyMinDuration: 5,          // seconds — suppress notifications for fast commands (shell mode)
-  notifySound: false,            // play a sound with the notification
-};
+Add a top-level `notifications` section to the config schema:
+
+```yaml
+notifications:
+  mode: "disabled"          # "disabled" | "activity" | "shell"
+  idle_threshold: 10        # seconds (activity mode) — range: 3–120
+  min_duration: 5           # seconds (shell mode) — suppress fast commands
+  sound: false              # play a sound with the notification
 ```
+
+**Default config** (added to `@default_config` in `config.ex`):
+
+```elixir
+@default_config %{
+  # ...existing...
+  "notifications" => %{
+    "mode" => "disabled",
+    "idle_threshold" => 10,
+    "min_duration" => 5,
+    "sound" => false
+  }
+}
+```
+
+**Validation** (in `config.ex`):
+
+```elixir
+defp normalize_notifications_section(config) do
+  defaults = @default_config["notifications"]
+  notif = Map.merge(defaults, config["notifications"] || %{})
+
+  notif = %{
+    "mode" => if(notif["mode"] in ~w(disabled activity shell), do: notif["mode"], else: "disabled"),
+    "idle_threshold" => notif["idle_threshold"] |> clamp(3, 120),
+    "min_duration" => notif["min_duration"] |> clamp(0, 600),
+    "sound" => notif["sound"] == true
+  }
+
+  Map.put(config, "notifications", notif)
+end
+```
+
+### Config → LiveView → JS flow
+
+The LiveView reads notification config on mount and pushes it to the JS hook. When the user changes settings, the LiveView writes to Config, which broadcasts `{:config_changed, config}` — all connected LiveViews pick up the change.
+
+```elixir
+# In mount, after Config.get():
+notification_config = config["notifications"] || %{}
+socket = assign(socket, notification_config: notification_config)
+```
+
+The LiveView pushes notification config to the JS hook on mount and on config change:
+
+```elixir
+defp push_notification_config(socket) do
+  push_event(socket, "notification_config", %{config: socket.assigns.notification_config})
+end
+```
+
+The JS hook receives this and uses it for notification decisions (instead of reading localStorage).
 
 ### Settings page section
 
@@ -237,9 +289,22 @@ Add a "Notifications" section to `settings_live.ex` with:
    - "Request permission" button (calls `Notification.requestPermission()`). Note: modern browsers require permission requests to originate from a user gesture (e.g., button click). The button satisfies this requirement. Do not call `requestPermission()` programmatically on page load — it will be silently blocked.
    - Permission status indicator
 
+**Settings save handler:**
+
+```elixir
+def handle_event("update_notification_setting", %{"key" => key, "value" => value}, socket) do
+  Config.update(fn config ->
+    notif = Map.get(config, "notifications", %{})
+    Map.put(config, "notifications", Map.put(notif, key, value))
+  end)
+
+  {:noreply, socket}
+end
+```
+
 ### Bash version detection
 
-When shell integration is selected, the settings page should display a note about bash compatibility. Detection happens client-side via a LiveView event that asks the server to check:
+When shell integration is selected, the settings page should display a note about bash compatibility. Detection happens via a LiveView event that asks the server to check:
 
 ```elixir
 def handle_event("check_bash_version", _, socket) do
@@ -276,16 +341,21 @@ const IDLE_COOLDOWN_MS = 30_000; // 30 seconds per-pane cooldown for activity mo
 const NotificationHook = {
   mounted() {
     this._idleCooldowns = {}; // pane -> last notification timestamp
+    this._config = {};         // populated by server push
+
+    // Receive notification config from server (on mount and on config change)
+    this.handleEvent("notification_config", ({ config }) => {
+      this._config = config;
+    });
+
     this.handleEvent("notify_command_done", (data) => {
-      const prefs = loadPrefs();
-      if (prefs.notifications !== "shell") return;
-      if (data.duration_seconds < prefs.notifyMinDuration) return;
+      if (this._config.mode !== "shell") return;
+      if (data.duration_seconds < (this._config.min_duration || 5)) return;
       this.showNotification(data);
     });
 
     this.handleEvent("notify_pane_idle", (data) => {
-      const prefs = loadPrefs();
-      if (prefs.notifications !== "activity") return;
+      if (this._config.mode !== "activity") return;
       // Per-pane cooldown to prevent spam with low idle thresholds
       const now = Date.now();
       const lastNotify = this._idleCooldowns[data.pane] || 0;
@@ -311,7 +381,7 @@ const NotificationHook = {
       body: body,
       tag: `termigate-${data.pane}`, // Replace previous notification for same pane
       icon: "/favicon.ico",
-      silent: !loadPrefs().notifySound,
+      silent: !(this._config.sound),
     });
 
     notification.onclick = () => {
@@ -377,27 +447,22 @@ Shell hook (printf OSC sequence)
   → JS NotificationHook.showNotification()
 ```
 
-### Notification preference sync
+### Notification config sync
 
-Notification mode is stored in localStorage (client-side). Idle tracking always runs in PaneStream (it's cheap — just a timer reset and a `Process.send_after`). The LiveView decides whether to turn idle events into push_events based on the user's preference. This avoids complex bidirectional preference sync between PaneStream and the client.
+Notification settings are stored server-side in the config file. The LiveView reads them on mount from `Config.get()` and subscribes to the `"config"` PubSub topic. When settings change (via the settings page or config file edit), the `{:config_changed, config}` broadcast updates all connected LiveViews, which push the new config to the JS hook via `push_event("notification_config", ...)`.
 
-On mount and on preference change, the JS hook pushes the notification mode to the LiveView. The NotificationHook's `mounted()` callback should include:
-
-```javascript
-// Sync preferences to server on mount
-const prefs = loadPrefs();
-this.pushEvent("notification_pref", { mode: prefs.notifications, threshold: prefs.notifyIdleThreshold });
-```
-
-And should listen for preference changes (e.g., via a `storage` event listener or a custom event from the settings page) to re-push when the user changes settings.
+Idle tracking always runs in PaneStream (it's cheap — just a timer reset and a `Process.send_after`). The LiveView decides whether to turn idle events into push_events based on the config. This avoids complex bidirectional preference sync between PaneStream and the client.
 
 ```elixir
-def handle_event("notification_pref", %{"mode" => mode, "threshold" => threshold}, socket) do
-  {:noreply, assign(socket, notification_mode: mode, notify_idle_threshold: threshold)}
+# In handle_info for {:config_changed, config}
+def handle_info({:config_changed, config}, socket) do
+  notification_config = config["notifications"] || %{}
+  socket = assign(socket, notification_config: notification_config)
+  {:noreply, push_notification_config(socket)}
 end
 ```
 
-The LiveView's `handle_info` for `{:pane_idle, ...}` checks `socket.assigns.notification_mode` and only pushes the event to JS when mode is `"activity"`.
+The LiveView's `handle_info` for `{:pane_idle, ...}` checks `socket.assigns.notification_config["mode"]` and only pushes the event to JS when mode is `"activity"`.
 
 ## Implementation Plan
 
@@ -423,20 +488,23 @@ The LiveView's `handle_info` for `{:pane_idle, ...}` checks `socket.assigns.noti
 5. Handle edge case: marker split across two coalesced chunks. `scan_and_strip_notifications/2` returns `{stripped_data, marker_partial}`. The partial is stored in PaneStream state (field `marker_partial`, default `<<>>`) and prepended to the next chunk before scanning. Max marker size is ~200 bytes, so the partial is always small.
 6. Add unit tests for marker parsing, including split-marker edge cases.
 
-### Phase 3: Preferences
+### Phase 3: Config schema
 
-**Files:** `server/assets/js/preferences.js`
+**Files:** `server/lib/termigate/config.ex`
 
-1. Add `notifications`, `notifyIdleThreshold`, `notifyMinDuration`, `notifySound` to `DEFAULTS`.
+1. Add `"notifications"` section to `@default_config` with keys: `mode`, `idle_threshold`, `min_duration`, `sound`.
+2. Add `normalize_notifications_section/1` validation (mode whitelist, threshold clamping, boolean coercion).
+3. Call from the existing config normalization pipeline.
 
 ### Phase 4: JS notification hook
 
 **Files:** `server/assets/js/hooks/notification_hook.js` (new)
 
-1. Create hook with `notify_command_done` and `notify_pane_idle` event handlers.
-2. Implement `showNotification()` with `document.hasFocus()` guard.
-3. Handle `notification.onclick` → `window.focus()` + `pushEvent("focus_pane")`.
-4. Register hook in `app.js`.
+1. Create hook with `notification_config`, `notify_command_done`, and `notify_pane_idle` event handlers.
+2. Store server-pushed config in `this._config`; use it for all notification decisions (no localStorage reads).
+3. Implement `showNotification()` with `document.hasFocus()` guard.
+4. Handle `notification.onclick` → `window.focus()` + `pushEvent("focus_pane")`.
+5. Register hook in `app.js`.
 
 ### Phase 5: LiveView integration
 
@@ -444,13 +512,16 @@ The LiveView's `handle_info` for `{:pane_idle, ...}` checks `socket.assigns.noti
 
 **Note:** `terminal_live` already subscribes to `"pane:#{target}"` in mount. `multi_pane_live` does **not** currently subscribe to per-pane topics — it subscribes to `"sessions:state"` and `"config"`. Per-pane subscriptions must be added to `multi_pane_live`, managed dynamically as panes are added/removed via `{:layout_updated, panes}`. Track subscribed panes in a `subscribed_panes` MapSet assign; on layout update, diff old vs new panes, subscribe to new ones, unsubscribe from removed ones.
 
+Both LiveViews already subscribe to the `"config"` topic and handle `{:config_changed, config}`. Extend that handler to update `notification_config` in assigns and push it to the JS hook.
+
 Notification events (`{:pane_idle, ...}`, `{:command_finished, ...}`) are additional tuple shapes on the per-pane PubSub topic.
 
 1. **`multi_pane_live`:** Add per-pane PubSub subscriptions. In the `{:layout_updated, panes}` handler, diff against `subscribed_panes` and subscribe/unsubscribe accordingly.
-2. Add `handle_info` clauses for `{:pane_idle, ...}` and `{:command_finished, ...}` — forward as push_events to the notification hook.
-3. Handle `"notification_pref"` event to store mode in assigns.
-4. **`multi_pane_live` only:** Handle `"focus_pane"` event to set active pane and push `"focus_terminal"`. **`terminal_live`:** Add a no-op `"focus_pane"` handler that returns `{:noreply, socket}` — LiveView does not silently ignore unhandled `handle_event` calls; an explicit clause is required.
-5. **Cleanup on unmount:** In `terminate/2`, cancel any pending idle timer refs held in assigns (if the LiveView caches them). PubSub subscriptions tied to `self()` are automatically cleaned up when the LiveView process exits, but explicitly unsubscribe from pane topics in `terminate/2` to avoid ghost notifications during navigation (e.g., user navigates away from a session page while a pane idle event is in the mailbox).
+2. Add `handle_info` clauses for `{:pane_idle, ...}` and `{:command_finished, ...}` — forward as push_events to the notification hook. Check `notification_config["mode"]` before pushing (only push idle events in `"activity"` mode, only push command events in `"shell"` mode).
+3. On mount, read notification config from `Config.get()`, store in assigns, and push to JS hook via `push_event("notification_config", ...)`.
+4. In the existing `{:config_changed, config}` handler, update `notification_config` in assigns and re-push to JS hook.
+5. **`multi_pane_live` only:** Handle `"focus_pane"` event to set active pane and push `"focus_terminal"`. **`terminal_live`:** Add a no-op `"focus_pane"` handler that returns `{:noreply, socket}` — LiveView does not silently ignore unhandled `handle_event` calls; an explicit clause is required.
+6. **Cleanup on unmount:** In `terminate/2`, cancel any pending idle timer refs held in assigns (if the LiveView caches them). PubSub subscriptions tied to `self()` are automatically cleaned up when the LiveView process exits, but explicitly unsubscribe from pane topics in `terminate/2` to avoid ghost notifications during navigation (e.g., user navigates away from a session page while a pane idle event is in the mailbox).
 
 ```elixir
 # In both multi_pane_live.ex and terminal_live.ex
