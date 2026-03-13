@@ -38,6 +38,7 @@ defmodule TermigateWeb.TerminalChannel do
           |> assign(:target, target)
           |> assign(:pane_stream_pid, pid)
           |> assign(:pane_stream_ref, ref)
+          |> assign(:pane_dead, false)
 
         {:ok, %{history: Base.encode64(history)}, socket}
 
@@ -95,7 +96,7 @@ defmodule TermigateWeb.TerminalChannel do
 
   def handle_info({:pane_dead, _target}, socket) do
     push(socket, "pane_dead", %{})
-    {:noreply, socket}
+    {:noreply, assign(socket, :pane_dead, true)}
   end
 
   def handle_info({:pane_reconnected, _target, history}, socket) do
@@ -117,27 +118,36 @@ defmodule TermigateWeb.TerminalChannel do
   def handle_info({:DOWN, ref, :process, _pid, _reason}, socket) do
     if ref == socket.assigns[:pane_stream_ref] do
       target = socket.assigns.target
-      Logger.warning("PaneStream crashed for #{target}, attempting re-subscribe")
 
-      # Small delay to let DynamicSupervisor restart
-      Process.sleep(100)
+      # If we already know the pane is dead, don't attempt re-subscribe
+      if socket.assigns[:pane_dead] do
+        {:noreply, socket}
+      else
+        Logger.warning("PaneStream crashed for #{target}, attempting re-subscribe")
 
-      case PaneStream.subscribe(target) do
-        {:ok, history, new_pid} ->
-          new_ref = Process.monitor(new_pid)
+        # Unsubscribe first to prevent duplicate PubSub subscriptions
+        Phoenix.PubSub.unsubscribe(Termigate.PubSub, "pane:#{target}")
 
-          push(socket, "reconnected", %{data: Base.encode64(history)})
+        # Small delay to let DynamicSupervisor restart
+        Process.sleep(100)
 
-          socket =
-            socket
-            |> assign(:pane_stream_pid, new_pid)
-            |> assign(:pane_stream_ref, new_ref)
+        case PaneStream.subscribe(target) do
+          {:ok, history, new_pid} ->
+            new_ref = Process.monitor(new_pid)
 
-          {:noreply, socket}
+            push(socket, "reconnected", %{data: Base.encode64(history)})
 
-        {:error, _reason} ->
-          push(socket, "pane_dead", %{})
-          {:noreply, socket}
+            socket =
+              socket
+              |> assign(:pane_stream_pid, new_pid)
+              |> assign(:pane_stream_ref, new_ref)
+
+            {:noreply, socket}
+
+          {:error, _reason} ->
+            push(socket, "pane_dead", %{})
+            {:noreply, assign(socket, :pane_dead, true)}
+        end
       end
     else
       {:noreply, socket}

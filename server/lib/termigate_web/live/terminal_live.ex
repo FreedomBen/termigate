@@ -1,7 +1,7 @@
 defmodule TermigateWeb.TerminalLive do
   use TermigateWeb, :live_view
 
-  alias Termigate.{Config, PaneStream, TmuxManager}
+  alias Termigate.{Config, LayoutPoller, PaneStream, TmuxManager}
 
   require Logger
 
@@ -24,9 +24,21 @@ defmodule TermigateWeb.TerminalLive do
 
   @impl true
   def mount(%{"target" => target}, _session, socket) do
+    # Parse session:window.pane to extract components
+    {session, window, back_path} =
+      case Regex.run(~r/^(.+):(\d+)\.\d+$/, target) do
+        [_, session, window] -> {session, window, "/sessions/#{session}/windows/#{window}"}
+        _ -> {nil, nil, "/"}
+      end
+
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Termigate.PubSub, "pane:#{target}")
       Phoenix.PubSub.subscribe(Termigate.PubSub, "config")
+
+      # Subscribe to layout changes so we detect external splits
+      if session && window do
+        LayoutPoller.subscribe(session, window)
+      end
     end
 
     channel_token = Phoenix.Token.sign(socket, "channel", %{target: target})
@@ -34,16 +46,11 @@ defmodule TermigateWeb.TerminalLive do
     quick_actions = config["quick_actions"] || []
     terminal_prefs = config["terminal"] || %{}
 
-    # Parse session:window.pane to build back link to multi-pane view
-    back_path =
-      case Regex.run(~r/^(.+):(\d+)\.\d+$/, target) do
-        [_, session, window] -> "/sessions/#{session}/windows/#{window}"
-        _ -> "/"
-      end
-
     socket =
       socket
       |> assign(:target, target)
+      |> assign(:session, session)
+      |> assign(:window, window)
       |> assign(:channel_token, channel_token)
       |> assign(:pane_dead, false)
       |> assign(:page_title, target)
@@ -217,6 +224,13 @@ defmodule TermigateWeb.TerminalLive do
     {:noreply, socket}
   end
 
+  # Layout changed — if the window now has multiple panes, redirect to multi-pane view
+  def handle_info({:layout_updated, panes}, socket) when length(panes) > 1 do
+    {:noreply, push_navigate(socket, to: socket.assigns.back_path)}
+  end
+
+  def handle_info({:layout_updated, _panes}, socket), do: {:noreply, socket}
+
   # Ignore output events — Channel handles these
   def handle_info({:pane_output, _, _}, socket), do: {:noreply, socket}
   def handle_info({:pane_reconnected, _, _}, socket), do: {:noreply, socket}
@@ -310,6 +324,13 @@ defmodule TermigateWeb.TerminalLive do
     end)
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def terminate(_reason, socket) do
+    if socket.assigns[:session] && socket.assigns[:window] do
+      LayoutPoller.unsubscribe(socket.assigns.session, socket.assigns.window)
+    end
   end
 
   # --- Private ---

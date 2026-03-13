@@ -1,6 +1,6 @@
 # Not Run Yet
 
-- Bug:  When I ran tmux split-window in a running pane, it seemed to work, but all the typed input went into the top pane (which was the original) instead of the bottom pane.  After I sent Ctrl+d to the top pane to close them, it began double registering key presses.
+- What's the purpose for the full view?
 
 - Let's add support for Cloudflare and Tailscale, so if an API key is present and the setting is enabled, we can update DNS and/or enable a tunnel.
 
@@ -13,6 +13,8 @@
 - We're ready to begin implementing the MCP server as described in MCP_DESIGN.md.
 
 # Already Run
+
+- Bug:  When I ran tmux split-window in a running pane, it seemed to work, but all the typed input went into the top pane (which was the original) instead of the bottom pane.  After I sent Ctrl+d to the top pane to close them, it began double registering key presses.
 
 - Let's add an actions button row for sending control signals, especially Ctrl+C and Ctrl+D
 
