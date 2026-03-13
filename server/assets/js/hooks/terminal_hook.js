@@ -146,18 +146,22 @@ const TerminalHook = {
       }
     });
 
-    // Resize handling with debounce
+    // Resize handling with debounce — track last pushed dims to avoid feedback loops
     this._resizeTimer = null;
+    this._lastPushedCols = 0;
+    this._lastPushedRows = 0;
     this._resizeObserver = new ResizeObserver(() => {
       clearTimeout(this._resizeTimer);
       this._resizeTimer = setTimeout(() => {
         this.fitAddon.fit();
-        // Push resize to sync tmux pane dimensions
-        if (this.channel && this.term.cols > 0 && this.term.rows > 0) {
-          this.channel.push("resize", {
-            cols: this.term.cols,
-            rows: this.term.rows,
-          });
+        const cols = this.term.cols;
+        const rows = this.term.rows;
+        // Only push if dimensions actually changed
+        if (this.channel && cols > 0 && rows > 0 &&
+            (cols !== this._lastPushedCols || rows !== this._lastPushedRows)) {
+          this._lastPushedCols = cols;
+          this._lastPushedRows = rows;
+          this.channel.push("resize", { cols, rows });
         }
       }, 300);
     });
@@ -166,6 +170,9 @@ const TerminalHook = {
     // Handle pane_resized from other viewers or layout changes (via LiveView)
     this.handleEvent("pane_resized", ({ target, cols, rows }) => {
       if (!target || target === this.el.dataset.target) {
+        // Update tracking to prevent feedback loop with ResizeObserver
+        this._lastPushedCols = cols;
+        this._lastPushedRows = rows;
         this.term.resize(cols, rows);
       }
     });
