@@ -513,44 +513,26 @@ The notification mode is checked in three places (defense-in-depth): PaneStream 
 4. ✅ Include `"notifications"` in `to_yaml/1` serialization (alongside `"terminal"` and `"auth"`).
 5. ✅ Tests added in `test/termigate/config_test.exs` (notifications config describe block).
 
-### Phase 4: JS notification hook
+### Phase 4: JS notification hook ✅ COMPLETED
 
 **Files:** `server/assets/js/hooks/notification_hook.js` (new)
 
-1. Create hook with `notification_config`, `notify_command_done`, and `notify_pane_idle` event handlers.
-2. Store server-pushed config in `this._config`; use it for all notification decisions (no localStorage reads).
-3. Implement `showNotification()` with `document.hasFocus()` guard.
-4. Handle `notification.onclick` → `window.focus()` + `pushEvent("focus_pane")`.
-5. Register hook in `app.js`.
+1. ✅ Create hook with `notification_config`, `notify_command_done`, and `notify_pane_idle` event handlers.
+2. ✅ Store server-pushed config in `this._config`; use it for all notification decisions (no localStorage reads).
+3. ✅ Implement `showNotification()` with `document.hasFocus()` guard.
+4. ✅ Handle `notification.onclick` → `window.focus()` + `pushEvent("focus_pane")`.
+5. ✅ Register hook in `app.js`.
 
-### Phase 5: LiveView integration
+### Phase 5: LiveView integration ✅ COMPLETED
 
 **Files:** `server/lib/termigate_web/live/multi_pane_live.ex`
 
-**Note:** `multi_pane_live` does **not** currently subscribe to per-pane topics — it subscribes to `"sessions:state"` and `"config"`. Per-pane subscriptions must be added, managed dynamically as panes are added/removed via `{:layout_updated, panes}`. Track subscribed panes in a `subscribed_panes` MapSet assign; on layout update, diff old vs new panes, subscribe to new ones, unsubscribe from removed ones.
-
-`multi_pane_live` already subscribes to the `"config"` topic and handles `{:config_changed, config}`. Extend that handler to update `notification_config` in assigns and push it to the JS hook.
-
-Notification events (`{:pane_idle, ...}`, `{:command_finished, ...}`) are additional tuple shapes on the per-pane PubSub topic.
-
-1. Add per-pane PubSub subscriptions. In the `{:layout_updated, panes}` handler, diff against `subscribed_panes` and subscribe/unsubscribe accordingly.
-2. Add `handle_info` clauses for `{:pane_idle, ...}` and `{:command_finished, ...}` — forward as push_events to the notification hook. Check `notification_config["mode"]` before pushing (only push idle events in `"activity"` mode, only push command events in `"shell"` mode).
-3. On mount, read notification config from `Config.get()`, store in assigns, and push to JS hook via `push_event("notification_config", ...)`.
-4. In the existing `{:config_changed, config}` handler, update `notification_config` in assigns and re-push to JS hook.
-5. Handle `"focus_pane"` event to set active pane and push `"focus_terminal"`.
-6. **Cleanup on unmount:** In `terminate/2`, unsubscribe from pane topics to avoid ghost notifications during navigation (e.g., user navigates away from a session page while a pane idle event is in the mailbox). PubSub subscriptions tied to `self()` are automatically cleaned up when the LiveView process exits, but explicit unsubscribe provides faster cleanup.
-
-```elixir
-# In multi_pane_live.ex — uses MapSet since panes change dynamically
-def terminate(_reason, socket) do
-  for target <- socket.assigns[:subscribed_panes] || [] do
-    Phoenix.PubSub.unsubscribe(Termigate.PubSub, "pane:#{target}")
-  end
-  :ok
-end
-```
-
-`multi_pane_live` tracks subscribed panes in a `subscribed_panes` MapSet assign so `terminate/2` knows what to clean up.
+1. ✅ Add per-pane PubSub subscriptions on mount. In the `{:layout_updated, panes}` handler, diff against `subscribed_panes` MapSet and subscribe/unsubscribe accordingly.
+2. ✅ Add `handle_info` clauses for `{:pane_idle, ...}` and `{:command_finished, ...}` — forward as push_events to the notification hook. Check `notification_config["mode"]` before pushing (only push idle events in `"activity"` mode, only push command events in `"shell"` mode).
+3. ✅ On mount, read notification config from `Config.get()`, store in assigns, and push to JS hook via `push_event("notification_config", ...)`.
+4. ✅ In the existing `{:config_changed, config}` handler, update `notification_config` in assigns and re-push to JS hook.
+5. ✅ Handle `"focus_pane"` event to set active pane, unmaximize if needed, and push `"focus_terminal"`.
+6. ✅ Cleanup on unmount: `terminate/2` unsubscribes from pane topics. Invisible `<div id="notification-hook" phx-hook="NotificationHook">` element added to template.
 
 ### Phase 6: Settings UI
 

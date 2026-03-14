@@ -50,6 +50,19 @@ defmodule TermigateWeb.MultiPaneLive do
     quick_actions = config["quick_actions"] || []
     terminal_prefs = config["terminal"] || %{}
 
+    notification_config = config["notifications"] || %{}
+
+    # Subscribe to per-pane topics for notification events
+    pane_targets = Enum.map(layout, & &1.target)
+    subscribed_panes = if connected?(socket) do
+      for target <- pane_targets do
+        Phoenix.PubSub.subscribe(Termigate.PubSub, "pane:#{target}")
+      end
+      MapSet.new(pane_targets)
+    else
+      MapSet.new()
+    end
+
     socket =
       socket
       |> assign(:session, session)
@@ -66,6 +79,10 @@ defmodule TermigateWeb.MultiPaneLive do
       |> assign(:show_actions, true)
       |> assign(:pending_action, nil)
       |> assign(:terminal_prefs, terminal_prefs)
+      |> assign(:notification_config, notification_config)
+      |> assign(:subscribed_panes, subscribed_panes)
+
+    socket = if connected?(socket), do: push_notification_config(socket), else: socket
 
     {:ok, socket, layout: false}
   end
@@ -358,6 +375,9 @@ defmodule TermigateWeb.MultiPaneLive do
           <.link navigate={~p"/"} class="btn btn-primary btn-sm">Back to Sessions</.link>
         </div>
       </div>
+
+      <%!-- Notification hook (invisible, one per LiveView) --%>
+      <div id="notification-hook" phx-hook="NotificationHook" class="hidden" />
     </div>
     """
   end
@@ -404,7 +424,19 @@ defmodule TermigateWeb.MultiPaneLive do
         socket.assigns.active_pane
       end
 
-    {:noreply, assign(socket, panes: panes, grid: grid, maximized: maximized, active_pane: active_pane)}
+    # Manage per-pane PubSub subscriptions for notifications
+    new_targets = MapSet.new(Enum.map(panes, & &1.target))
+    old_targets = socket.assigns.subscribed_panes
+
+    for target <- MapSet.difference(new_targets, old_targets) do
+      Phoenix.PubSub.subscribe(Termigate.PubSub, "pane:#{target}")
+    end
+
+    for target <- MapSet.difference(old_targets, new_targets) do
+      Phoenix.PubSub.unsubscribe(Termigate.PubSub, "pane:#{target}")
+    end
+
+    {:noreply, assign(socket, panes: panes, grid: grid, maximized: maximized, active_pane: active_pane, subscribed_panes: new_targets)}
   end
 
   def handle_info({:sessions_updated, _sessions}, socket) do
@@ -414,15 +446,43 @@ defmodule TermigateWeb.MultiPaneLive do
 
   def handle_info({:config_changed, config}, socket) do
     terminal_prefs = config["terminal"] || %{}
+    notification_config = config["notifications"] || %{}
 
     socket =
       socket
       |> assign(:quick_actions, config["quick_actions"] || [])
       |> assign(:quick_actions_enabled, config["quick_actions_enabled"] != false)
       |> assign(:terminal_prefs, terminal_prefs)
+      |> assign(:notification_config, notification_config)
       |> push_event("terminal_prefs", terminal_prefs)
+      |> push_notification_config()
 
     {:noreply, socket}
+  end
+
+  # Notification events from PaneStream
+  def handle_info({:pane_idle, target, idle_ms}, socket) do
+    if socket.assigns.notification_config["mode"] == "activity" do
+      {:noreply, push_event(socket, "notify_pane_idle", %{
+        pane: target,
+        idle_seconds: div(idle_ms, 1000)
+      })}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({:command_finished, target, metadata}, socket) do
+    if socket.assigns.notification_config["mode"] == "shell" do
+      {:noreply, push_event(socket, "notify_command_done", %{
+        pane: target,
+        exit_code: metadata.exit_code,
+        command: metadata.command,
+        duration_seconds: metadata.duration_seconds
+      })}
+    else
+      {:noreply, socket}
+    end
   end
 
   # Ignore pane output/control events — each TerminalHook handles its own via Channel
@@ -446,6 +506,17 @@ defmodule TermigateWeb.MultiPaneLive do
 
   def handle_event("pane_focused", %{"target" => target}, socket) do
     {:noreply, assign(socket, :active_pane, target)}
+  end
+
+  def handle_event("focus_pane", %{"pane" => pane_target}, socket) do
+    # If maximized on a different pane, unmaximize first
+    socket = if socket.assigns.maximized && socket.assigns.maximized != pane_target do
+      assign(socket, maximized: nil)
+    else
+      socket
+    end
+
+    {:noreply, assign(socket, active_pane: pane_target) |> push_event("focus_terminal", %{pane: pane_target})}
   end
 
   @control_keys %{
@@ -576,6 +647,10 @@ defmodule TermigateWeb.MultiPaneLive do
     if socket.assigns[:session] && socket.assigns[:window] do
       LayoutPoller.unsubscribe(socket.assigns.session, socket.assigns.window)
     end
+
+    for target <- socket.assigns[:subscribed_panes] || [] do
+      Phoenix.PubSub.unsubscribe(Termigate.PubSub, "pane:#{target}")
+    end
   end
 
   # --- Grid computation ---
@@ -653,6 +728,10 @@ defmodule TermigateWeb.MultiPaneLive do
       {:ok, output} -> String.trim(output)
       {:error, _} -> "0"
     end
+  end
+
+  defp push_notification_config(socket) do
+    push_event(socket, "notification_config", %{config: socket.assigns.notification_config})
   end
 
   defp command_runner, do: Application.get_env(:termigate, :command_runner)
