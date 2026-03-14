@@ -161,6 +161,26 @@ defmodule TermigateWeb.MultiPaneLive do
           <kbd>{label}</kbd>
         </button>
 
+        <span class="mx-1 text-zinc-600">|</span>
+
+        <button
+          :for={
+            {label, key} <- [
+              {"Tab", "tab"},
+              {raw("&#x2191;"), "up"},
+              {raw("&#x2193;"), "down"},
+              {raw("&#x2190;"), "left"},
+              {raw("&#x2192;"), "right"}
+            ]
+          }
+          class="ctl-btn"
+          phx-click="send_special_key"
+          phx-value-key={key}
+          disabled={@active_pane == nil}
+        >
+          <kbd>{label}</kbd>
+        </button>
+
         <div :if={length(@panes) > 1} class="flex items-center gap-1 ml-auto">
           <button
             class="ctl-btn"
@@ -560,6 +580,28 @@ defmodule TermigateWeb.MultiPaneLive do
 
       {char, target} ->
         PaneStream.send_keys(target, char)
+        {:noreply, socket}
+    end
+  end
+
+  @special_keys %{
+    "tab" => "\t",
+    "up" => "\e[A",
+    "down" => "\e[B",
+    "right" => "\e[C",
+    "left" => "\e[D"
+  }
+
+  def handle_event("send_special_key", %{"key" => key}, socket) do
+    case {Map.get(@special_keys, key), socket.assigns.active_pane} do
+      {nil, _} ->
+        {:noreply, socket}
+
+      {_, nil} ->
+        {:noreply, socket}
+
+      {seq, target} ->
+        PaneStream.send_keys(target, seq)
         {:noreply, socket}
     end
   end
