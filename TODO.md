@@ -1,12 +1,8 @@
 # Not Run Yet
 
-- Do we need to clear the screen for the formatting issue?  It's very useful to not hide the history.  We do also need to figure out how to scroll up in the app.
-
 - Let's add settings to the settings page to change the app theme itself.  At a minimum we should have a light and dark theme.  Since this is a terminal program and many theme options are common, let's also brainstorm some other themes we could add.
 
 - In the mobile view, when user's click on a Window they're really just viewing a specific pane.  For consistency, should we label is "Pane" instead of "Window?
-
-- The enable/disable toggle in the settings page for quick actions doesn't appear to work.  It animates a bit but always comes back enabled.
 
 - Let's add a close button (maybe a "x") to windows
 
@@ -27,6 +23,10 @@
 - We're ready to begin implementing the MCP server as described in MCP_DESIGN.md.
 
 # Already Run
+
+- Do we need to clear the screen for the formatting issue?  It's very useful to not hide the history.  We do also need to figure out how to scroll up in the app.
+
+- The enable/disable toggle in the settings page for quick actions doesn't appear to work.  It animates a bit but always comes back enabled.
 
 - When first loading an existing pane, the formatting is very messed up.  It also gets mangled when tools like claude code edit text in place.  This is not an issue that real tmux experiences.  What are we doing differently that real tmux does when attaching to a session and opening a pane?  For an example, you can use the open browser to take a look yourself. attach to the "Termigate" session,window 1. If we need to resize the tmux pane to match our dimensions, I think that's acceptable.  That's how multiple tmux on different screens would do it after all.  
 

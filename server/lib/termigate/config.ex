@@ -372,6 +372,14 @@ defmodule Termigate.Config do
 
     clean_config = %{"quick_actions" => clean_actions}
 
+    # Include quick_actions_enabled
+    clean_config =
+      if config["quick_actions_enabled"] == false do
+        Map.put(clean_config, "quick_actions_enabled", false)
+      else
+        clean_config
+      end
+
     # Include terminal section
     clean_config =
       Map.put(clean_config, "terminal", config["terminal"] || @default_config["terminal"])
@@ -416,6 +424,7 @@ defmodule Termigate.Config do
 
     config =
       %{"quick_actions" => actions}
+      |> Map.put("quick_actions_enabled", parsed["quick_actions_enabled"] != false)
       |> Map.put("terminal", parsed["terminal"])
       |> Map.put("notifications", parsed["notifications"])
       |> normalize_terminal_section()
