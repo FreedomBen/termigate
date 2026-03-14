@@ -1,6 +1,8 @@
 # Not Run Yet
 
-- Let's begin implementation of the notifications feature as defined in @NOTIFICATIONS_DESIGN.md.  
+- Let's begin implementation of the notifications feature as defined in @NOTIFICATIONS_DESIGN.md.  Begin with the first phase.  Update the document as you go to track what has been completed.
+
+- Let's continue implementation of the notifications feature as defined in @NOTIFICATIONS_DESIGN.md.  Continue with the first phase.  Update the document as you go to track what has been completed.
 
 - I don't see anywhere in the settings to configure the notification feature we added in @NOTIFICATIONS_DESIGN.md.  
 

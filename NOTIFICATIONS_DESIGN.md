@@ -28,6 +28,7 @@ PaneStream already receives all pane output via pipe-pane → FIFO → Port. We 
 ```elixir
 %{
   # existing fields...
+  notification_mode: "disabled", # "disabled" | "activity" | "shell" — from Config
   idle_timer_ref: nil,           # Process.send_after ref
   idle_threshold_ms: 10_000,     # from Config, updated on {:config_changed, _}
   last_output_at: nil,           # monotonic timestamp of last output
@@ -38,10 +39,10 @@ PaneStream already receives all pane output via pipe-pane → FIFO → Port. We 
 
 **Idle detection logic in PaneStream:**
 
-- In `flush_output/1`: set `last_output_at = System.monotonic_time(:millisecond)`, set `had_recent_activity = true`, cancel existing `idle_timer_ref`, start new timer via `Process.send_after(self(), :idle_timeout, state.idle_threshold_ms)`.
+- In `flush_output/1`: set `last_output_at = System.monotonic_time(:millisecond)`, set `had_recent_activity = true`. If `notification_mode != "disabled"`: cancel existing `idle_timer_ref`, start new timer via `Process.send_after(self(), :idle_timeout, state.idle_threshold_ms)`. If `notification_mode == "disabled"`: skip timer setup.
 - New `handle_info(:idle_timeout, state)`: if `had_recent_activity` is true, broadcast `{:pane_idle, target, elapsed_ms}`, set `had_recent_activity = false`.
-- New `handle_info({:config_changed, config}, state)`: read `config["notifications"]["idle_threshold"]`, convert to ms, update `idle_threshold_ms` in state. If an `idle_timer_ref` is active, cancel it and reschedule with the new threshold (adjusted for time already elapsed since `last_output_at`).
-- PaneStream reads the idle threshold from `Config.get()` on init and subscribes to the `"config"` PubSub topic. When a `{:config_changed, config}` message arrives, PaneStream updates its `idle_threshold_ms` field and reschedules the idle timer if one is active. The LiveView decides whether to forward idle events to the JS hook based on the notification mode. This keeps the timer accurate to the user's setting while the LiveView still gates on mode.
+- New `handle_info({:config_changed, config}, state)`: read `config["notifications"]["mode"]` and `config["notifications"]["idle_threshold"]`. Update `notification_mode` and `idle_threshold_ms` in state. If mode changed to `"disabled"`, cancel any active `idle_timer_ref`. If mode changed from `"disabled"` and `had_recent_activity` is true, start a new idle timer. If mode is unchanged and non-disabled, and an `idle_timer_ref` is active, cancel it and reschedule with the new threshold (adjusted for time already elapsed since `last_output_at`).
+- PaneStream reads the notification mode and idle threshold from `Config.get()` on init and subscribes to the `"config"` PubSub topic. When a `{:config_changed, config}` message arrives, PaneStream updates its `notification_mode`, `idle_threshold_ms` fields and manages the idle timer accordingly: if mode changed to `"disabled"`, cancel any active timer; if mode changed from `"disabled"` and there's been recent activity, start a new timer. The LiveView provides a second gate, only forwarding idle events to the JS hook when mode is `"activity"`.
 
 **Pros:** No user setup. Portable. Uses existing data flow.
 
@@ -342,7 +343,7 @@ If bash <5.1, show a warning in the shell integration section and recommend usin
 
 ### JS notification hook (`server/assets/js/hooks/notification_hook.js`)
 
-The hook is mounted **once per LiveView** on a dedicated invisible element in the LiveView template (both `multi_pane_live.html.heex` and `terminal_live.html.heex`): `<div id="notification-hook" phx-hook="NotificationHook" class="hidden" />`. Placed once per template, not per-terminal. This avoids duplicate notifications in multi-pane view.
+The hook is mounted **once per LiveView** on a dedicated invisible element in `multi_pane_live.html.heex`: `<div id="notification-hook" phx-hook="NotificationHook" class="hidden" />`. Placed once per template, not per-terminal. This avoids duplicate notifications in multi-pane view.
 
 ```javascript
 const IDLE_COOLDOWN_MS = 30_000; // 30 seconds per-pane cooldown for activity mode
@@ -464,7 +465,7 @@ Shell hook (printf OSC sequence)
 
 Notification settings are stored server-side in the config file. The LiveView reads them on mount from `Config.get()` and subscribes to the `"config"` PubSub topic. When settings change (via the settings page or config file edit), the `{:config_changed, config}` broadcast updates all connected LiveViews, which push the new config to the JS hook via `push_event("notification_config", ...)`.
 
-Idle tracking always runs in PaneStream (it's cheap — just a timer reset and a `Process.send_after`). The LiveView decides whether to turn idle events into push_events based on the config. This avoids complex bidirectional preference sync between PaneStream and the client.
+Idle tracking in PaneStream is gated on the notification mode. PaneStream reads the mode from config on init and on `{:config_changed, _}`. When mode is `"disabled"`, PaneStream skips idle timer setup entirely and cancels any active timer. When mode is `"activity"` or `"shell"`, idle tracking runs (it's cheap — just a timer reset and a `Process.send_after`). The LiveView provides a second gate, only forwarding idle events as push_events when mode is `"activity"`. This avoids unnecessary timers when notifications are disabled while keeping the LiveView as a defense-in-depth check.
 
 ```elixir
 # In handle_info for {:config_changed, config}
@@ -475,7 +476,7 @@ def handle_info({:config_changed, config}, socket) do
 end
 ```
 
-The notification mode is checked in two places (defense-in-depth): the LiveView's `handle_info` for `{:pane_idle, ...}` checks `socket.assigns.notification_config["mode"]` and only pushes the event to JS when mode is `"activity"` (server-side gate to avoid unnecessary push_events). The JS hook also checks `this._config.mode` before showing a notification (client-side safety net in case of race between config change and in-flight events).
+The notification mode is checked in three places (defense-in-depth): PaneStream only runs idle timers when mode is not `"disabled"` (avoids unnecessary work). The LiveView's `handle_info` for `{:pane_idle, ...}` checks `socket.assigns.notification_config["mode"]` and only pushes the event to JS when mode is `"activity"` (server-side gate to avoid unnecessary push_events). The JS hook also checks `this._config.mode` before showing a notification (client-side safety net in case of race between config change and in-flight events).
 
 ## Implementation Plan
 
@@ -483,13 +484,13 @@ The notification mode is checked in two places (defense-in-depth): the LiveView'
 
 **Files:** `server/lib/termigate/pane_stream.ex`
 
-1. Add `idle_timer_ref`, `idle_threshold_ms`, `last_output_at`, `had_recent_activity` to state.
-2. In `init/1`: read idle threshold from `Config.get()["notifications"]["idle_threshold"]` (seconds → ms). Subscribe to `"config"` PubSub topic.
-3. In `flush_output/1`: reset idle timer using `state.idle_threshold_ms`, set `had_recent_activity = true`.
+1. Add `notification_mode`, `idle_timer_ref`, `idle_threshold_ms`, `last_output_at`, `had_recent_activity` to state.
+2. In `init/1`: read notification mode and idle threshold from `Config.get()["notifications"]`. Subscribe to `"config"` PubSub topic.
+3. In `flush_output/1`: set `had_recent_activity = true`, `last_output_at`. Only reset/start idle timer if `notification_mode != "disabled"`.
 4. Add `handle_info(:idle_timeout, state)`: broadcast `{:pane_idle, target, elapsed_ms}` if `had_recent_activity`.
-5. Add `handle_info({:config_changed, config}, state)`: update `idle_threshold_ms`, reschedule active timer adjusted for elapsed time.
+5. Add `handle_info({:config_changed, config}, state)`: update `notification_mode` and `idle_threshold_ms`. If mode changed to `"disabled"`, cancel active timer. If mode changed from `"disabled"` and recent activity exists, start timer. If mode unchanged and non-disabled, reschedule with new threshold (adjusted for elapsed time).
 6. Cancel `idle_timer_ref` in `handle_pane_death` (alongside the existing `grace_timer_ref` cancellation) and in `terminate/2`.
-7. Add unit tests for idle detection, including threshold changes mid-timer.
+7. Add unit tests for idle detection, including threshold changes mid-timer and mode transitions.
 
 ### Phase 2: OSC marker scanning
 
@@ -507,8 +508,9 @@ The notification mode is checked in two places (defense-in-depth): the LiveView'
 **Files:** `server/lib/termigate/config.ex`
 
 1. Add `"notifications"` section to `@default_config` with keys: `mode`, `idle_threshold`, `min_duration`, `sound`.
-2. Add `normalize_notifications_section/1` validation (mode whitelist, threshold clamping, boolean coercion).
-3. Call from the existing config normalization pipeline.
+2. Add `normalize_notifications_section/1` validation (mode whitelist, threshold clamping, boolean coercion). Note: `clamp/3` already exists in `config.ex`.
+3. Add `|> normalize_notifications_section()` to the existing `normalize_config/1` pipeline (which already chains `normalize_terminal_section/1`).
+4. Include `"notifications"` in `to_yaml/1` serialization (alongside `"terminal"` and `"auth"`).
 
 ### Phase 4: JS notification hook
 
@@ -522,20 +524,20 @@ The notification mode is checked in two places (defense-in-depth): the LiveView'
 
 ### Phase 5: LiveView integration
 
-**Files:** `server/lib/termigate_web/live/multi_pane_live.ex`, `server/lib/termigate_web/live/terminal_live.ex`
+**Files:** `server/lib/termigate_web/live/multi_pane_live.ex`
 
-**Note:** `terminal_live` already subscribes to `"pane:#{target}"` in mount. `multi_pane_live` does **not** currently subscribe to per-pane topics — it subscribes to `"sessions:state"` and `"config"`. Per-pane subscriptions must be added to `multi_pane_live`, managed dynamically as panes are added/removed via `{:layout_updated, panes}`. Track subscribed panes in a `subscribed_panes` MapSet assign; on layout update, diff old vs new panes, subscribe to new ones, unsubscribe from removed ones.
+**Note:** `multi_pane_live` does **not** currently subscribe to per-pane topics — it subscribes to `"sessions:state"` and `"config"`. Per-pane subscriptions must be added, managed dynamically as panes are added/removed via `{:layout_updated, panes}`. Track subscribed panes in a `subscribed_panes` MapSet assign; on layout update, diff old vs new panes, subscribe to new ones, unsubscribe from removed ones.
 
-Both LiveViews already subscribe to the `"config"` topic and handle `{:config_changed, config}`. Extend that handler to update `notification_config` in assigns and push it to the JS hook.
+`multi_pane_live` already subscribes to the `"config"` topic and handles `{:config_changed, config}`. Extend that handler to update `notification_config` in assigns and push it to the JS hook.
 
 Notification events (`{:pane_idle, ...}`, `{:command_finished, ...}`) are additional tuple shapes on the per-pane PubSub topic.
 
-1. **`multi_pane_live`:** Add per-pane PubSub subscriptions. In the `{:layout_updated, panes}` handler, diff against `subscribed_panes` and subscribe/unsubscribe accordingly.
+1. Add per-pane PubSub subscriptions. In the `{:layout_updated, panes}` handler, diff against `subscribed_panes` and subscribe/unsubscribe accordingly.
 2. Add `handle_info` clauses for `{:pane_idle, ...}` and `{:command_finished, ...}` — forward as push_events to the notification hook. Check `notification_config["mode"]` before pushing (only push idle events in `"activity"` mode, only push command events in `"shell"` mode).
 3. On mount, read notification config from `Config.get()`, store in assigns, and push to JS hook via `push_event("notification_config", ...)`.
 4. In the existing `{:config_changed, config}` handler, update `notification_config` in assigns and re-push to JS hook.
-5. **`multi_pane_live` only:** Handle `"focus_pane"` event to set active pane and push `"focus_terminal"`. **`terminal_live`:** Add a no-op `"focus_pane"` handler that returns `{:noreply, socket}` — the JS NotificationHook always pushes `"focus_pane"` on click regardless of which LiveView is mounted, and LiveView raises `FunctionClauseError` for unhandled `handle_event` calls, so an explicit clause is required even though `terminal_live` has no pane switching.
-6. **Cleanup on unmount:** In `terminate/2`, cancel any pending idle timer refs held in assigns (if the LiveView caches them). PubSub subscriptions tied to `self()` are automatically cleaned up when the LiveView process exits, but explicitly unsubscribe from pane topics in `terminate/2` to avoid ghost notifications during navigation (e.g., user navigates away from a session page while a pane idle event is in the mailbox).
+5. Handle `"focus_pane"` event to set active pane and push `"focus_terminal"`.
+6. **Cleanup on unmount:** In `terminate/2`, unsubscribe from pane topics to avoid ghost notifications during navigation (e.g., user navigates away from a session page while a pane idle event is in the mailbox). PubSub subscriptions tied to `self()` are automatically cleaned up when the LiveView process exits, but explicit unsubscribe provides faster cleanup.
 
 ```elixir
 # In multi_pane_live.ex — uses MapSet since panes change dynamically
@@ -545,17 +547,9 @@ def terminate(_reason, socket) do
   end
   :ok
 end
-
-# In terminal_live.ex — single pane, no MapSet needed
-def terminate(_reason, socket) do
-  if target = socket.assigns[:target] do
-    Phoenix.PubSub.unsubscribe(Termigate.PubSub, "pane:#{target}")
-  end
-  :ok
-end
 ```
 
-`multi_pane_live` tracks subscribed panes in a `subscribed_panes` MapSet assign so `terminate/2` knows what to clean up. `terminal_live` already has `target` in assigns from mount — use it directly.
+`multi_pane_live` tracks subscribed panes in a `subscribed_panes` MapSet assign so `terminate/2` knows what to clean up.
 
 ### Phase 6: Settings UI
 
@@ -570,8 +564,8 @@ end
 
 ### Phase 7: Testing
 
-1. **PaneStream tests:** idle timer fires after threshold, resets on output, marker scanning and stripping.
-2. **LiveView tests:** notification events forwarded correctly, focus_pane works.
+1. **PaneStream tests:** idle timer fires after threshold, resets on output, skipped when disabled, mode transitions, marker scanning and stripping.
+2. **LiveView tests (`multi_pane_live`):** notification events forwarded correctly, focus_pane works, per-pane subscription management.
 3. **JS tests (if test framework exists):** notification hook behavior, permission handling, hasFocus guard.
 
 ## Edge Cases
