@@ -4,11 +4,11 @@ defmodule TermigateWeb.SettingsLiveTest do
   import Phoenix.LiveViewTest
 
   setup do
-    # Reset config for each test
-    Termigate.Config.update(fn _config -> %{"quick_actions" => []} end)
+    # Clear quick actions for each test, preserving auth and other config
+    Termigate.Config.update(fn config -> Map.put(config, "quick_actions", []) end)
 
     on_exit(fn ->
-      Termigate.Config.update(fn _config -> %{"quick_actions" => []} end)
+      Termigate.Config.update(fn config -> Map.put(config, "quick_actions", []) end)
     end)
 
     :ok

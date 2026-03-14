@@ -63,7 +63,15 @@ defmodule Termigate.AuthTest do
     test "returns false when no token and no credentials file" do
       original = Application.get_env(:termigate, :auth_token)
       Application.delete_env(:termigate, :auth_token)
-      on_exit(fn -> if original, do: Application.put_env(:termigate, :auth_token, original) end)
+
+      # Temporarily remove auth from config so read_auth() finds nothing
+      saved_auth = Termigate.Config.get()["auth"]
+      Termigate.Config.update(fn c -> Map.delete(c, "auth") end)
+
+      on_exit(fn ->
+        if original, do: Application.put_env(:termigate, :auth_token, original)
+        if saved_auth, do: Termigate.Config.update(fn c -> Map.put(c, "auth", saved_auth) end)
+      end)
 
       refute Auth.auth_enabled?()
     end

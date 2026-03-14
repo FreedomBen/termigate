@@ -10,13 +10,11 @@ defmodule Termigate.ConfigTest do
     File.mkdir_p!(@test_dir)
     File.rm(test_path)
 
-    # Use Config.update to reset to empty state for each test
-    # This avoids the complexity of restarting the supervised process
-    Config.update(fn _config -> %{"quick_actions" => []} end)
+    # Clear quick actions for each test, preserving auth and other config
+    Config.update(fn config -> Map.put(config, "quick_actions", []) end)
 
     on_exit(fn ->
-      # Reset config after test
-      Config.update(fn _config -> %{"quick_actions" => []} end)
+      Config.update(fn config -> Map.put(config, "quick_actions", []) end)
     end)
 
     %{path: test_path}
