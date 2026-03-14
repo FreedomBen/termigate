@@ -200,7 +200,7 @@ defmodule TermigateWeb.MultiPaneLive do
         id="multi-pane-grid"
         phx-hook="PaneResizeHook"
         class={["flex-1 min-h-0 relative", if(@maximized, do: "grid", else: "hidden sm:grid")]}
-        style={"grid-template-columns: #{@grid.cols}; grid-template-rows: #{@grid.rows}; gap: 2px;"}
+        style={"grid-template-columns: #{@grid.cols}; grid-template-rows: #{@grid.rows}; gap: 1px;"}
         data-panes={
           Jason.encode!(
             Enum.map(@panes, fn p ->
