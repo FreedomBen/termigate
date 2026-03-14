@@ -204,6 +204,18 @@ const TerminalHook = {
       this.el.addEventListener("touchstart", () => {
         this.pushEvent("pane_focused", { target: this.el.dataset.target });
       }, { passive: true });
+
+      // Listen for server-initiated focus (e.g. after creating a new window)
+      this.handleEvent("focus_terminal", ({ pane }) => {
+        if (pane === this.el.dataset.target) {
+          this.term?.focus();
+        }
+      });
+
+      // Auto-focus if this is the only pane (new window)
+      if (document.querySelectorAll('[data-mode="multi"]').length === 1) {
+        this.term?.focus();
+      }
     }
   },
 
