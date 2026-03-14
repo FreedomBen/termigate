@@ -799,8 +799,16 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+.window-tab-wrapper {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
 .window-tab {
   padding: 0.625rem 1rem;
+  padding-right: 1.75rem;
   font-size: 0.8125rem;
   white-space: nowrap;
   flex-shrink: 0;
@@ -823,6 +831,39 @@ body {
 .window-tab-inactive:hover {
   color: oklch(80% 0.01 80);
   background: oklch(16% 0.005 260);
+}
+
+.window-close-btn {
+  position: absolute;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: oklch(45% 0.01 260);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background-color 0.15s;
+}
+
+.window-tab-wrapper:hover .window-close-btn {
+  opacity: 1;
+}
+
+.window-close-btn:hover {
+  background: oklch(30% 0.06 25);
+  color: oklch(75% 0.15 25);
+}
+
+.window-close-btn:active {
+  background: oklch(35% 0.08 25);
+  transform: scale(0.9);
 }
 
 /* New window button in tab bar */

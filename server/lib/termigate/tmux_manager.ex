@@ -154,6 +154,23 @@ defmodule Termigate.TmuxManager do
     end
   end
 
+  @doc "Kill a window in a session."
+  @spec kill_window(String.t(), String.t()) :: :ok | {:error, String.t()}
+  def kill_window(session_name, window_index) do
+    target = "#{session_name}:#{window_index}"
+
+    case command_runner().run(["kill-window", "-t", target]) do
+      {:ok, _} ->
+        Logger.info("Window killed: #{target}")
+        broadcast_sessions_changed()
+        :ok
+
+      {:error, {msg, _code}} ->
+        Logger.warning("Failed to kill window #{target}: #{msg}")
+        {:error, msg}
+    end
+  end
+
   @doc "Split a pane. Direction is :horizontal or :vertical."
   @spec split_pane(String.t(), :horizontal | :vertical) ::
           {:ok, String.t()} | {:error, String.t()}

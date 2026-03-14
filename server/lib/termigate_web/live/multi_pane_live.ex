@@ -81,6 +81,7 @@ defmodule TermigateWeb.MultiPaneLive do
       |> assign(:quick_actions_enabled, config["quick_actions_enabled"] != false)
       |> assign(:show_actions, true)
       |> assign(:pending_action, nil)
+      |> assign(:pending_close_window, nil)
       |> assign(:terminal_prefs, terminal_prefs)
       |> assign(:notification_config, notification_config)
       |> assign(:subscribed_panes, subscribed_panes)
@@ -126,19 +127,29 @@ defmodule TermigateWeb.MultiPaneLive do
       <%!-- Window tabs --%>
       <div class="window-tabs">
         <div class="flex items-center gap-0.5 px-2 flex-1">
-          <.link
-            :for={win <- @windows}
-            navigate={"/sessions/#{@session}/windows/#{win.index}"}
-            class={[
-              "window-tab",
-              if(to_string(win.index) == @window,
-                do: "window-tab-active",
-                else: "window-tab-inactive"
-              )
-            ]}
-          >
-            Window {win.index}{if win.name, do: ": #{win.name}", else: ""}
-          </.link>
+          <div :for={win <- @windows} class="window-tab-wrapper">
+            <.link
+              navigate={"/sessions/#{@session}/windows/#{win.index}"}
+              class={[
+                "window-tab",
+                if(to_string(win.index) == @window,
+                  do: "window-tab-active",
+                  else: "window-tab-inactive"
+                )
+              ]}
+            >
+              Window {win.index}{if win.name, do: ": #{win.name}", else: ""}
+            </.link>
+            <button
+              class="window-close-btn"
+              phx-click="close_window"
+              phx-value-window={win.index}
+              onmousedown="event.preventDefault()"
+              title="Close window"
+            >
+              &times;
+            </button>
+          </div>
           <button
             class="new-window-btn"
             phx-click="create_window"
@@ -261,6 +272,20 @@ defmodule TermigateWeb.MultiPaneLive do
         <div class="flex gap-1">
           <button class="btn btn-warning btn-xs" phx-click="confirm_action">Confirm</button>
           <button class="btn btn-ghost btn-xs" phx-click="cancel_action">Cancel</button>
+        </div>
+      </div>
+
+      <%!-- Confirm dialog for closing a window --%>
+      <div
+        :if={@pending_close_window}
+        class="quick-action-bar items-center justify-between border-b border-error/20 bg-error/5"
+      >
+        <span class="text-xs text-error">
+          Close window <strong>{@pending_close_window}</strong> and kill all its panes?
+        </span>
+        <div class="flex gap-1">
+          <button class="btn btn-error btn-xs" phx-click="confirm_close_window">Close</button>
+          <button class="btn btn-ghost btn-xs" phx-click="cancel_close_window">Cancel</button>
         </div>
       </div>
 
@@ -662,6 +687,36 @@ defmodule TermigateWeb.MultiPaneLive do
       {:error, _msg} ->
         {:noreply, socket}
     end
+  end
+
+  def handle_event("close_window", %{"window" => window_index}, socket) do
+    {:noreply, assign(socket, :pending_close_window, window_index)}
+  end
+
+  def handle_event("confirm_close_window", _params, socket) do
+    session = socket.assigns.session
+    window_index = socket.assigns.pending_close_window
+
+    socket = assign(socket, :pending_close_window, nil)
+
+    case TmuxManager.kill_window(session, window_index) do
+      :ok ->
+        windows = fetch_windows(session)
+
+        if windows == [] do
+          {:noreply, push_navigate(socket, to: "/")}
+        else
+          first = List.first(windows)
+          {:noreply, push_navigate(socket, to: "/sessions/#{session}/windows/#{first.index}")}
+        end
+
+      {:error, _msg} ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("cancel_close_window", _params, socket) do
+    {:noreply, assign(socket, :pending_close_window, nil)}
   end
 
   def handle_event("equalize_panes", %{"direction" => direction}, socket) do
