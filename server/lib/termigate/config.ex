@@ -43,6 +43,7 @@ defmodule Termigate.Config do
         "confirm" => false
       }
     ],
+    "quick_actions_enabled" => true,
     "terminal" => %{
       "font_size" => 14,
       "font_family" => "monospace",

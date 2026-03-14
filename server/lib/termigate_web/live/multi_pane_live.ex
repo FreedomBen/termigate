@@ -62,6 +62,7 @@ defmodule TermigateWeb.MultiPaneLive do
       |> assign(:page_title, "#{session}:#{window}")
       |> assign(:active_pane, nil)
       |> assign(:quick_actions, quick_actions)
+      |> assign(:quick_actions_enabled, config["quick_actions_enabled"] != false)
       |> assign(:show_actions, true)
       |> assign(:pending_action, nil)
       |> assign(:terminal_prefs, terminal_prefs)
@@ -162,7 +163,7 @@ defmodule TermigateWeb.MultiPaneLive do
 
       <%!-- Quick action bar --%>
       <div
-        :if={@quick_actions != [] and @show_actions}
+        :if={@quick_actions_enabled and @quick_actions != [] and @show_actions}
         class="quick-action-bar"
       >
         <button
@@ -194,7 +195,7 @@ defmodule TermigateWeb.MultiPaneLive do
       </div>
 
       <div
-        :if={@quick_actions != [] and not @show_actions}
+        :if={@quick_actions_enabled and @quick_actions != [] and not @show_actions}
         class="quick-action-bar py-0.5"
       >
         <button class="btn btn-ghost btn-xs text-base-content/40" phx-click="toggle_actions">
@@ -417,6 +418,7 @@ defmodule TermigateWeb.MultiPaneLive do
     socket =
       socket
       |> assign(:quick_actions, config["quick_actions"] || [])
+      |> assign(:quick_actions_enabled, config["quick_actions_enabled"] != false)
       |> assign(:terminal_prefs, terminal_prefs)
       |> push_event("terminal_prefs", terminal_prefs)
 

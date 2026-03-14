@@ -10,9 +10,20 @@
   <%!-- Quick Actions --%>
   <div class="settings-section">
     <div class="flex items-center justify-between mb-4">
-      <div class="settings-section-title mb-0">Quick Actions</div>
+      <div class="flex items-center gap-3">
+        <div class="settings-section-title mb-0">Quick Actions</div>
+        <label class="swap swap-flip">
+          <input
+            type="checkbox"
+            checked={@quick_actions_enabled}
+            phx-click="toggle_quick_actions"
+          />
+          <span class="swap-on badge badge-sm badge-success gap-1">Enabled</span>
+          <span class="swap-off badge badge-sm badge-ghost opacity-50 gap-1">Disabled</span>
+        </label>
+      </div>
       <button
-        :if={@editing == nil}
+        :if={@editing == nil and @quick_actions_enabled}
         class="btn btn-primary btn-xs"
         phx-click="new_action"
       >
@@ -21,7 +32,7 @@
     </div>
 
     <%!-- Action form --%>
-    <div :if={@editing != nil} class="inline-form-card mb-4">
+    <div :if={@editing != nil and @quick_actions_enabled} class="inline-form-card mb-4">
       <h3 class="font-medium text-sm mb-3">
         {if @editing == :new, do: "New Quick Action", else: "Edit Quick Action"}
       </h3>
@@ -108,7 +119,7 @@
 
     <%!-- Empty action list --%>
     <div
-      :if={@quick_actions == [] and @editing == nil}
+      :if={@quick_actions == [] and @editing == nil and @quick_actions_enabled}
       class="text-base-content/40 text-center py-6"
     >
       <.icon name="hero-bolt" class="size-6 mx-auto mb-2 opacity-50" />
@@ -119,7 +130,7 @@
     </div>
 
     <%!-- Action list --%>
-    <div :if={@quick_actions != []} class="space-y-2">
+    <div :if={@quick_actions != []} class={["space-y-2", if(!@quick_actions_enabled, do: "opacity-40 pointer-events-none")]}>
       <div
         :for={action <- @quick_actions}
         class="action-item"

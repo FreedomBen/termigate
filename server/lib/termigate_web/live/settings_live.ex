@@ -21,6 +21,7 @@ defmodule TermigateWeb.SettingsLive do
     socket =
       socket
       |> assign(:quick_actions, config["quick_actions"] || [])
+      |> assign(:quick_actions_enabled, config["quick_actions_enabled"] != false)
       |> assign(:session_ttl_hours, Auth.session_ttl_hours())
       |> assign(:editing, nil)
       |> assign(:form_data, default_form())
@@ -41,6 +42,7 @@ defmodule TermigateWeb.SettingsLive do
     {:noreply,
      socket
      |> assign(:quick_actions, config["quick_actions"] || [])
+     |> assign(:quick_actions_enabled, config["quick_actions_enabled"] != false)
      |> assign(:session_ttl_hours, ttl)
      |> assign(:terminal, config["terminal"] || %{})}
   end
@@ -172,6 +174,18 @@ defmodule TermigateWeb.SettingsLive do
 
       _ ->
         {:noreply, put_flash(socket, :error, "Invalid session duration.")}
+    end
+  end
+
+  def handle_event("toggle_quick_actions", _params, socket) do
+    enabled = !socket.assigns.quick_actions_enabled
+
+    case Config.update(fn config -> Map.put(config, "quick_actions_enabled", enabled) end) do
+      {:ok, _} ->
+        {:noreply, assign(socket, :quick_actions_enabled, enabled)}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to save: #{inspect(reason)}")}
     end
   end
 
