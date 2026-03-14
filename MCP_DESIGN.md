@@ -21,7 +21,7 @@ Most AI agents get stateless shell access: run a command, get output, done. term
 1. **Two tiers of tools.** Low-level tools map 1:1 to tmux operations. High-level tools compose them into agent-friendly workflows (e.g., "run command and wait for output"). Both tiers are always available.
 2. **Reuse existing infrastructure.** Every MCP tool delegates to TmuxManager, PaneStream, or Config. No new GenServers, no parallel state.
 3. **Treat terminal output as text.** MCP results are UTF-8 text. Binary terminal escapes are stripped or preserved based on a per-call flag. Default: stripped (clean text). Optional: raw (with ANSI escapes, for agents that can interpret them).
-4. **Auth mirrors the REST API.** MCP connections authenticate the same way channels do — Bearer token via `Phoenix.Token`, verified by the same `RequireAuthToken` plug logic.
+4. **Auth mirrors the REST API.** MCP connections authenticate the same way the REST API does — Bearer token via `Phoenix.Token`, verified by the same `RequireAuthToken` plug pipeline.
 5. **No implicit side effects.** Tools that mutate state (create/kill sessions, send input) are clearly separated from read-only tools. Agents can safely call any read tool without changing tmux state.
 
 ## Transport
@@ -131,7 +131,7 @@ Create a new tmux session.
 }
 ```
 
-**Delegates to:** `TmuxManager.create_session/2`
+**Delegates to:** `TmuxManager.create_session/2` (returns `{:ok, %{name: name}}`). The MCP handler constructs the target string as `"<name>:0.0"` since new sessions always start with one window and one pane.
 
 ---
 
@@ -165,7 +165,7 @@ Split an existing pane.
 }
 ```
 
-**Delegates to:** `TmuxManager.split_pane/2`
+**Delegates to:** `TmuxManager.split_pane/2` (returns raw tmux output). The MCP handler calls `TmuxManager.list_panes/1` after splitting to determine the new pane's target.
 
 ---
 
@@ -217,7 +217,7 @@ Read the current visible content of a pane (what's on screen now).
 }
 ```
 
-**Implementation:** Calls `tmux capture-pane -p -t <target>` (optionally with `-e` for escapes). This is a new thin wrapper in TmuxManager — capture-pane is not currently exposed but is a single tmux command.
+**Implementation:** Calls `tmux capture-pane -p -t <target>` (optionally with `-e` for escapes). Requires a new `TmuxManager.capture_pane/2` wrapper — capture-pane is not currently exposed but is a single tmux command.
 
 ---
 
@@ -447,12 +447,13 @@ These are simple read-only mirrors of the tool equivalents. Their value is in MC
 ```
 lib/termigate_web/mcp/
 ├── mcp_controller.ex        # HTTP endpoint, JSON-RPC dispatch
-├── mcp_auth.ex              # Token verification (delegates to RequireAuthToken logic)
 ├── mcp_tools.ex             # Tool definitions (name, schema, descriptions)
 ├── mcp_tool_handler.ex      # Tool execution (dispatches to TmuxManager/PaneStream)
 ├── mcp_resources.ex         # Resource definitions and handlers
 └── mcp_session.ex           # Per-connection state (active subscriptions, cleanup)
 ```
+
+Auth is handled by the `RequireAuthToken` plug in the route pipeline — no separate MCP auth module is needed.
 
 ### New Route
 
@@ -487,7 +488,7 @@ MCP sessions should track resources they create. When a connection drops:
 
 ### Rate Limiting
 
-MCP requests go through the existing `RateLimitStore`. Same limits as the REST API. High-frequency tools (`read_pane`, `send_keys`) may need higher limits — configurable per-tool if needed.
+The MCP route will use `RateLimitStore` with MCP-specific limits. Currently only the login endpoint is rate-limited — the MCP scope needs its own `RateLimit` plug with appropriate limits. High-frequency tools (`read_pane`, `send_keys`) may need higher limits — configurable per-tool if needed.
 
 ## Example Agent Workflows
 
