@@ -2,8 +2,6 @@
 
 - In mobile 
 
-- Let's create an OpenAPI specification doc for this applications.  We should also serve it as a static asset.
-
 - Let's add support for Cloudflare and Tailscale, so if an API key is present and the setting is enabled, we can update DNS and/or enable a tunnel.
 
 - Let's add support for getting a TLS certificate from Let's Encrypt.  For this the user needs to enter the domain name or select to get an IP address certificate.
@@ -15,6 +13,8 @@
 - We're ready to begin implementing the MCP server as described in MCP_DESIGN.md.
 
 # Already Run
+
+- Let's create an OpenAPI specification doc for this applications.  We should also serve it as a static asset.
 
 - Let's do a final review on MCP_DESIGN.md to ensure it's still accurate with our latest code changes.  Look for any errors, inconsistencies, or ambiguities we need to iron out before moving to implementation.
 
