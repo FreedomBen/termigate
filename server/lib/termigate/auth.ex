@@ -102,6 +102,36 @@ defmodule Termigate.Auth do
     end
   end
 
+  @doc "Change password. Verifies current password, then sets new one."
+  @spec change_password(String.t(), String.t()) :: :ok | {:error, :invalid_current | :no_auth | term()}
+  def change_password(current_password, new_password) do
+    case read_credentials() do
+      {:ok, {username, stored_hash}} ->
+        if verify_password(current_password, stored_hash) do
+          new_hash = hash_password(new_password)
+
+          case read_auth() do
+            {:ok, auth} ->
+              write_auth_section(Map.put(auth, "password_hash", new_hash))
+
+            _ ->
+              auth = %{
+                "username" => username,
+                "password_hash" => new_hash,
+                "session_ttl_hours" => @default_session_ttl_hours
+              }
+
+              write_auth_section(auth)
+          end
+        else
+          {:error, :invalid_current}
+        end
+
+      {:error, :not_found} ->
+        {:error, :no_auth}
+    end
+  end
+
   @doc "Returns the default session TTL in hours."
   def default_session_ttl_hours, do: @default_session_ttl_hours
 

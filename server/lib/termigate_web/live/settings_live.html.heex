@@ -166,6 +166,82 @@
     </div>
   </div>
 
+  <%!-- Terminal Appearance --%>
+  <div class="settings-section">
+    <div class="settings-section-title">Terminal Appearance</div>
+    <form phx-submit="update_terminal" class="space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="term-font-size">Font Size</label>
+          <input
+            type="number"
+            id="term-font-size"
+            name="font_size"
+            value={@terminal["font_size"] || 14}
+            min="8"
+            max="32"
+            class="input input-bordered input-sm w-full"
+          />
+        </div>
+        <div>
+          <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="term-font-family">Font Family</label>
+          <select id="term-font-family" name="font_family" class="select select-bordered select-sm w-full">
+            <option value="monospace" selected={(@terminal["font_family"] || "monospace") == "monospace"}>System Monospace</option>
+            <option value="'Fira Code', monospace" selected={@terminal["font_family"] == "'Fira Code', monospace"}>Fira Code</option>
+            <option value="'JetBrains Mono', monospace" selected={@terminal["font_family"] == "'JetBrains Mono', monospace"}>JetBrains Mono</option>
+            <option value="'Source Code Pro', monospace" selected={@terminal["font_family"] == "'Source Code Pro', monospace"}>Source Code Pro</option>
+            <option value="'Courier New', monospace" selected={@terminal["font_family"] == "'Courier New', monospace"}>Courier New</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="term-theme">Theme</label>
+          <select id="term-theme" name="theme" class="select select-bordered select-sm w-full">
+            <option value="dark" selected={(@terminal["theme"] || "dark") == "dark"}>Dark</option>
+            <option value="light" selected={@terminal["theme"] == "light"}>Light</option>
+            <option value="solarizedDark" selected={@terminal["theme"] == "solarizedDark"}>Solarized Dark</option>
+            <option value="solarizedLight" selected={@terminal["theme"] == "solarizedLight"}>Solarized Light</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="term-cursor">Cursor Style</label>
+          <select id="term-cursor" name="cursor_style" class="select select-bordered select-sm w-full">
+            <option value="block" selected={(@terminal["cursor_style"] || "block") == "block"}>Block</option>
+            <option value="underline" selected={@terminal["cursor_style"] == "underline"}>Underline</option>
+            <option value="bar" selected={@terminal["cursor_style"] == "bar"}>Bar</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-x-6 gap-y-2">
+        <label class="label cursor-pointer gap-2">
+          <input
+            type="checkbox"
+            name="cursor_blink"
+            value="true"
+            checked={@terminal["cursor_blink"] != false}
+            class="checkbox checkbox-sm"
+          />
+          <span class="text-sm">Cursor blink</span>
+        </label>
+        <label class="label cursor-pointer gap-2">
+          <input
+            type="checkbox"
+            name="show_toolbar"
+            value="true"
+            checked={@terminal["show_toolbar"] != false}
+            class="checkbox checkbox-sm"
+          />
+          <span class="text-sm">Mobile toolbar</span>
+        </label>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+    </form>
+  </div>
+
   <%!-- Authentication --%>
   <div class="settings-section">
     <div class="settings-section-title">Authentication</div>
@@ -187,6 +263,55 @@
     <p class="text-xs text-base-content/40 mt-2">
       How long sessions remain valid before requiring re-authentication.
     </p>
+  </div>
+
+  <%!-- Change Password --%>
+  <div class="settings-section">
+    <div class="settings-section-title">Change Password</div>
+    <form phx-submit="change_password" class="space-y-3">
+      <div>
+        <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="pw-current">Current Password</label>
+        <input
+          type="password"
+          id="pw-current"
+          name="current_password"
+          value={@pw_current}
+          class="input input-bordered input-sm w-full"
+          autocomplete="current-password"
+          required
+        />
+      </div>
+      <div>
+        <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="pw-new">New Password</label>
+        <input
+          type="password"
+          id="pw-new"
+          name="new_password"
+          value={@pw_new}
+          class="input input-bordered input-sm w-full"
+          autocomplete="new-password"
+          minlength="8"
+          required
+        />
+      </div>
+      <div>
+        <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="pw-confirm">Confirm New Password</label>
+        <input
+          type="password"
+          id="pw-confirm"
+          name="confirm_password"
+          value={@pw_confirm}
+          class="input input-bordered input-sm w-full"
+          autocomplete="new-password"
+          minlength="8"
+          required
+        />
+      </div>
+      <div class="pt-1">
+        <button type="submit" class="btn btn-primary btn-sm">Change Password</button>
+        <p class="text-xs text-base-content/40 mt-2">Minimum 8 characters.</p>
+      </div>
+    </form>
   </div>
 
   <%!-- Config File --%>

@@ -16,6 +16,7 @@ defmodule TermigateWeb.SettingsLive do
     end
 
     config = Config.get()
+    terminal = config["terminal"] || %{}
 
     socket =
       socket
@@ -24,6 +25,10 @@ defmodule TermigateWeb.SettingsLive do
       |> assign(:editing, nil)
       |> assign(:form_data, default_form())
       |> assign(:form_errors, %{})
+      |> assign(:terminal, terminal)
+      |> assign(:pw_current, "")
+      |> assign(:pw_new, "")
+      |> assign(:pw_confirm, "")
       |> assign(:page_title, "Settings")
 
     {:ok, socket}
@@ -36,7 +41,8 @@ defmodule TermigateWeb.SettingsLive do
     {:noreply,
      socket
      |> assign(:quick_actions, config["quick_actions"] || [])
-     |> assign(:session_ttl_hours, ttl)}
+     |> assign(:session_ttl_hours, ttl)
+     |> assign(:terminal, config["terminal"] || %{})}
   end
 
   @impl true
@@ -169,6 +175,61 @@ defmodule TermigateWeb.SettingsLive do
     end
   end
 
+  def handle_event("update_terminal", params, socket) do
+    terminal = socket.assigns.terminal
+
+    terminal =
+      terminal
+      |> maybe_put("font_size", params["font_size"], &parse_int/1)
+      |> maybe_put("font_family", params["font_family"], & &1)
+      |> maybe_put("theme", params["theme"], & &1)
+      |> maybe_put("cursor_style", params["cursor_style"], & &1)
+      |> maybe_put_bool("cursor_blink", params)
+      |> maybe_put_bool("show_toolbar", params)
+
+    case Config.update(fn config -> Map.put(config, "terminal", terminal) end) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> assign(:terminal, terminal)
+         |> put_flash(:info, "Terminal settings saved.")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to save: #{inspect(reason)}")}
+    end
+  end
+
+  def handle_event("change_password", params, socket) do
+    current = params["current_password"] || ""
+    new_pw = params["new_password"] || ""
+    confirm = params["confirm_password"] || ""
+
+    cond do
+      String.length(new_pw) < 8 ->
+        {:noreply, put_flash(socket, :error, "New password must be at least 8 characters.")}
+
+      new_pw != confirm ->
+        {:noreply, put_flash(socket, :error, "New passwords do not match.")}
+
+      true ->
+        case Auth.change_password(current, new_pw) do
+          :ok ->
+            {:noreply,
+             socket
+             |> assign(:pw_current, "")
+             |> assign(:pw_new, "")
+             |> assign(:pw_confirm, "")
+             |> put_flash(:info, "Password changed successfully.")}
+
+          {:error, :invalid_current} ->
+            {:noreply, put_flash(socket, :error, "Current password is incorrect.")}
+
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "Failed to change password: #{inspect(reason)}")}
+        end
+    end
+  end
+
   def handle_event("reset_config", _params, socket) do
     case Config.reset() do
       {:ok, _config} ->
@@ -249,4 +310,21 @@ defmodule TermigateWeb.SettingsLive do
     |> List.replace_at(i, Enum.at(list, j))
     |> List.replace_at(j, Enum.at(list, i))
   end
+
+  defp maybe_put(map, _key, nil, _transform), do: map
+  defp maybe_put(map, key, value, transform), do: Map.put(map, key, transform.(value))
+
+  defp maybe_put_bool(map, key, params) do
+    Map.put(map, key, params[key] in [true, "true", "on"])
+  end
+
+  defp parse_int(str) when is_binary(str) do
+    case Integer.parse(str) do
+      {n, _} -> n
+      :error -> nil
+    end
+  end
+
+  defp parse_int(n) when is_integer(n), do: n
+  defp parse_int(_), do: nil
 end
