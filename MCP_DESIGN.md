@@ -257,7 +257,7 @@ Resize a pane.
 | `cols` | integer | yes | Width (1–500) |
 | `rows` | integer | yes | Height (1–200) |
 
-**Delegates to:** `PaneStream.resize/3`
+**Delegates to:** `TmuxManager.resize_pane/2`
 
 ---
 

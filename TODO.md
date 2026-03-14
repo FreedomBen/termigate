@@ -2,6 +2,16 @@
 
 - Let's add settings to the settings page to change the app theme itself.  At a minimum we should have a light and dark theme.  Since this is a terminal program and many theme options are common, let's also brainstorm some other themes we could add.
 
+- When first loading an existing pane, the formatting is very messed up.  It also gets mangled when tools like claude code edit text in place.  This is not an issue that real tmux experiences.  What are we doing differently that real tmux does when attaching to a session and opening a pane?  For an example, you can use the open browser to take a look yourself. attach to the "Termigate" session,window 1
+
+- Let's add a close button (maybe a "x") to windows
+
+- Let's add a quick button for tab and for the up, left, right, and down arrows next to our control character buttons (like ^c, ^d, etc).
+
+- In mobile 
+
+- Let's add a notification feature.  This is intended for long-running commands.  When a command finishes, pop up a notification informing the user.  Clicking on the notification should take you to the browser tab and put focus on the pane that triggered the notification.
+
 - I don't see anywhere in the settings to configure the notification feature we added in @NOTIFICATIONS_DESIGN.md.  
 
 - There seems to be a bug with the initial config file that get's written.  It doesn't have any quick_actions in it, just an empty array.  Let's make sure we're writing out the full config file on initial setup.
