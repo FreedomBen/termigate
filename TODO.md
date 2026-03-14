@@ -2,8 +2,6 @@
 
 - Let's add settings to the settings page to change the app theme itself.  At a minimum we should have a light and dark theme.  Since this is a terminal program and many theme options are common, let's also brainstorm some other themes we could add.
 
-- When first loading an existing pane, the formatting is very messed up.  It also gets mangled when tools like claude code edit text in place.  This is not an issue that real tmux experiences.  What are we doing differently that real tmux does when attaching to a session and opening a pane?  For an example, you can use the open browser to take a look yourself. attach to the "Termigate" session,window 1. If we need to resize the tmux pane to match our dimensions, I think that's acceptable.  That's how multiple tmux on different screens would do it after all.  
-
 - In the mobile view, when user's click on a Window they're really just viewing a specific pane.  For consistency, should we label is "Pane" instead of "Window?
 
 - The enable/disable toggle in the settings page for quick actions doesn't appear to work.  It animates a bit but always comes back enabled.
@@ -27,6 +25,8 @@
 - We're ready to begin implementing the MCP server as described in MCP_DESIGN.md.
 
 # Already Run
+
+- When first loading an existing pane, the formatting is very messed up.  It also gets mangled when tools like claude code edit text in place.  This is not an issue that real tmux experiences.  What are we doing differently that real tmux does when attaching to a session and opening a pane?  For an example, you can use the open browser to take a look yourself. attach to the "Termigate" session,window 1. If we need to resize the tmux pane to match our dimensions, I think that's acceptable.  That's how multiple tmux on different screens would do it after all.  
 
 - Let's add a notification feature.  This is intended for long-running commands.  When a command finishes, pop up a notification informing the user.  Clicking on the notification should take you to the browser tab and put focus on the pane that triggered the notification.
 
