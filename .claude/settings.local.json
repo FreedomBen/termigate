@@ -54,7 +54,8 @@
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__hover",
       "Bash(grep -r \"pane_resize_hook\" /home/ben/gitclone/tmux-rm/server --include=\"*.js\" --include=\"*.ts\" 2>/dev/null | head -20)",
       "Bash(find:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "mcp__plugin_context-mode_context-mode__batch_execute"
     ]
   }
 }
