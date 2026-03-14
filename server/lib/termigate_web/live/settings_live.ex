@@ -9,6 +9,69 @@ defmodule TermigateWeb.SettingsLive do
   @valid_colors ~w(default green red yellow blue)
   @valid_icons [nil, "rocket", "play", "stop", "trash", "arrow-up", "terminal"]
 
+  @snippet_bash ~S"""
+                # Termigate notifications — add to ~/.bashrc
+                if [ -n "$TMUX_PANE" ]; then
+                  __termigate_precmd() {
+                    local exit_code=$?
+                    local duration=$(( SECONDS - ${__termigate_cmd_start:-$SECONDS} ))
+                    if [ -n "$__termigate_cmd_start" ]; then
+                      printf '\033]termigate;cmd_done;%s;%s;%s\007' "$exit_code" "${__termigate_cmd_name:-unknown}" "$duration"
+                    fi
+                    unset __termigate_cmd_start __termigate_cmd_name
+                  }
+                  __termigate_preexec() {
+                    if [ -z "$__termigate_cmd_start" ]; then
+                      __termigate_cmd_start=$SECONDS
+                      __termigate_cmd_name="${BASH_COMMAND%% *}"
+                    fi
+                  }
+                  PROMPT_COMMAND+=(__termigate_precmd)
+                  __termigate_prev_trap=$(trap -p DEBUG)
+                  trap '__termigate_preexec; '"${__termigate_prev_trap:+${__termigate_prev_trap#trap -- }}" DEBUG
+                fi
+                """
+                |> String.trim()
+
+  @snippet_zsh ~S"""
+               # Termigate notifications — add to ~/.zshrc
+               if [[ -n "$TMUX_PANE" ]]; then
+                 __termigate_preexec() {
+                   __termigate_cmd_start=$SECONDS
+                   __termigate_cmd_name="${1%% *}"
+                 }
+                 __termigate_precmd() {
+                   local exit_code=$?
+                   if [[ -n "$__termigate_cmd_start" ]]; then
+                     local duration=$(( SECONDS - __termigate_cmd_start ))
+                     printf '\033]termigate;cmd_done;%s;%s;%s\007' "$exit_code" "$__termigate_cmd_name" "$duration"
+                     unset __termigate_cmd_start __termigate_cmd_name
+                   fi
+                 }
+                 precmd_functions+=(__termigate_precmd)
+                 preexec_functions+=(__termigate_preexec)
+               fi
+               """
+               |> String.trim()
+
+  @snippet_fish ~S"""
+                # Termigate notifications — add to ~/.config/fish/config.fish
+                if set -q TMUX_PANE
+                  function __termigate_preexec --on-event fish_preexec
+                    set -g __termigate_cmd_name (string split ' ' -- $argv[1])[1]
+                  end
+                  function __termigate_postexec --on-event fish_postexec
+                    set -l exit_code $status
+                    set -l duration (math "$CMD_DURATION / 1000")
+                    if set -q __termigate_cmd_name
+                      printf '\e]termigate;cmd_done;%s;%s;%s\a' $exit_code $__termigate_cmd_name $duration
+                      set -e __termigate_cmd_name
+                    end
+                  end
+                end
+                """
+                |> String.trim()
+
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
@@ -17,6 +80,7 @@ defmodule TermigateWeb.SettingsLive do
 
     config = Config.get()
     terminal = config["terminal"] || %{}
+    notif = config["notifications"] || %{}
 
     socket =
       socket
@@ -31,6 +95,15 @@ defmodule TermigateWeb.SettingsLive do
       |> assign(:pw_new, "")
       |> assign(:pw_confirm, "")
       |> assign(:page_title, "Settings")
+      |> assign(:notification_mode, notif["mode"] || "disabled")
+      |> assign(:notification_idle_threshold, notif["idle_threshold"] || 10)
+      |> assign(:notification_min_duration, notif["min_duration"] || 5)
+      |> assign(:notification_sound, notif["sound"] == true)
+      |> assign(:bash_version_display, nil)
+      |> assign(:bash_shell_integration_ok, nil)
+      |> assign(:snippet_bash, @snippet_bash)
+      |> assign(:snippet_zsh, @snippet_zsh)
+      |> assign(:snippet_fish, @snippet_fish)
 
     {:ok, socket}
   end
@@ -38,13 +111,18 @@ defmodule TermigateWeb.SettingsLive do
   @impl true
   def handle_info({:config_changed, config}, socket) do
     ttl = get_in(config, ["auth", "session_ttl_hours"]) || Auth.default_session_ttl_hours()
+    notif = config["notifications"] || %{}
 
     {:noreply,
      socket
      |> assign(:quick_actions, config["quick_actions"] || [])
      |> assign(:quick_actions_enabled, config["quick_actions_enabled"] != false)
      |> assign(:session_ttl_hours, ttl)
-     |> assign(:terminal, config["terminal"] || %{})}
+     |> assign(:terminal, config["terminal"] || %{})
+     |> assign(:notification_mode, notif["mode"] || "disabled")
+     |> assign(:notification_idle_threshold, notif["idle_threshold"] || 10)
+     |> assign(:notification_min_duration, notif["min_duration"] || 5)
+     |> assign(:notification_sound, notif["sound"] == true)}
   end
 
   @impl true
@@ -244,6 +322,44 @@ defmodule TermigateWeb.SettingsLive do
     end
   end
 
+  def handle_event("update_notification_setting", %{"key" => key, "value" => value}, socket) do
+    value =
+      case key do
+        "idle_threshold" -> parse_int(value) || 10
+        "min_duration" -> parse_int(value) || 5
+        "sound" -> value in ["true", true]
+        "mode" -> if value in ~w(disabled activity shell), do: value, else: "disabled"
+        _ -> value
+      end
+
+    case Config.update(fn config ->
+           notif = Map.get(config, "notifications", %{})
+           Map.put(config, "notifications", Map.put(notif, key, value))
+         end) do
+      {:ok, _} ->
+        # Check bash version when switching to shell mode
+        socket =
+          if key == "mode" and value == "shell" do
+            check_bash_version(socket)
+          else
+            socket
+          end
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to save: #{inspect(reason)}")}
+    end
+  end
+
+  def handle_event("test_notification", _params, socket) do
+    {:noreply, push_event(socket, "test_notification", %{})}
+  end
+
+  def handle_event("check_bash_version", _params, socket) do
+    {:noreply, check_bash_version(socket)}
+  end
+
   def handle_event("reset_config", _params, socket) do
     case Config.reset() do
       {:ok, _config} ->
@@ -330,6 +446,32 @@ defmodule TermigateWeb.SettingsLive do
 
   defp maybe_put_bool(map, key, params) do
     Map.put(map, key, params[key] in [true, "true", "on"])
+  end
+
+  defp check_bash_version(socket) do
+    version =
+      case System.cmd("bash", ["--version"], stderr_to_stdout: true) do
+        {output, 0} ->
+          case Regex.run(~r/version (\d+)\.(\d+)/, output) do
+            [_, major, minor] -> {String.to_integer(major), String.to_integer(minor)}
+            _ -> :unknown
+          end
+
+        _ ->
+          :unknown
+      end
+
+    {bash_ok, display} =
+      case version do
+        {major, minor} when major > 5 -> {true, "#{major}.#{minor}"}
+        {5, minor} when minor >= 1 -> {true, "5.#{minor}"}
+        {major, minor} -> {false, "#{major}.#{minor}"}
+        :unknown -> {nil, nil}
+      end
+
+    socket
+    |> assign(:bash_shell_integration_ok, bash_ok)
+    |> assign(:bash_version_display, display)
   end
 
   defp parse_int(str) when is_binary(str) do

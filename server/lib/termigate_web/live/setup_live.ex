@@ -36,12 +36,16 @@ defmodule TermigateWeb.SetupLive do
         <div class="card-body gap-5">
           <div class="text-center">
             <div class="auth-logo mb-2">termigate</div>
-            <p class="text-xs text-base-content/40">Create an account to secure your terminal access</p>
+            <p class="text-xs text-base-content/40">
+              Create an account to secure your terminal access
+            </p>
           </div>
 
           <form phx-submit="setup" class="space-y-4">
             <div>
-              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="username">Username</label>
+              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="username">
+                Username
+              </label>
               <input
                 type="text"
                 id="username"
@@ -53,7 +57,9 @@ defmodule TermigateWeb.SetupLive do
               />
             </div>
             <div>
-              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="password">Password</label>
+              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="password">
+                Password
+              </label>
               <input
                 type="password"
                 id="password"
@@ -63,7 +69,12 @@ defmodule TermigateWeb.SetupLive do
               />
             </div>
             <div>
-              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="password_confirm">Confirm Password</label>
+              <label
+                class="text-xs font-medium text-base-content/60 mb-1.5 block"
+                for="password_confirm"
+              >
+                Confirm Password
+              </label>
               <input
                 type="password"
                 id="password_confirm"
@@ -73,7 +84,12 @@ defmodule TermigateWeb.SetupLive do
               />
             </div>
             <div>
-              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="session_ttl_hours">Session Duration</label>
+              <label
+                class="text-xs font-medium text-base-content/60 mb-1.5 block"
+                for="session_ttl_hours"
+              >
+                Session Duration
+              </label>
               <select
                 id="session_ttl_hours"
                 name="session_ttl_hours"

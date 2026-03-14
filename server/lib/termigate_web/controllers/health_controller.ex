@@ -3,7 +3,10 @@ defmodule TermigateWeb.HealthController do
 
   def healthz(conn, _params) do
     tmux_status = Termigate.SessionPoller.tmux_status()
-    active_streams = DynamicSupervisor.count_children(Termigate.PaneStreamSupervisor)[:active] || 0
+
+    active_streams =
+      DynamicSupervisor.count_children(Termigate.PaneStreamSupervisor)[:active] || 0
+
     memory = :erlang.memory()
 
     auth_mode =

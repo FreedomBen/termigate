@@ -59,3 +59,48 @@ export const NotificationHook = {
     };
   },
 };
+
+// Hook for the "Request permission" button on the settings page
+export const NotificationPermission = {
+  mounted() {
+    this._updateStatus();
+
+    this.el.addEventListener("click", () => {
+      if (typeof Notification === "undefined") return;
+      Notification.requestPermission().then(() => this._updateStatus());
+    });
+
+    this.handleEvent("test_notification", () => {
+      if (typeof Notification === "undefined") return;
+      if (Notification.permission !== "granted") {
+        Notification.requestPermission().then(() => this._updateStatus());
+        return;
+      }
+      new Notification("Termigate test", {
+        body: "Notifications are working!",
+        tag: "termigate-test",
+        icon: "/favicon.ico",
+      });
+    });
+  },
+
+  _updateStatus() {
+    const el = document.getElementById("notif-permission-status");
+    if (!el) return;
+    if (typeof Notification === "undefined") {
+      el.textContent = "Notifications not supported in this browser";
+      return;
+    }
+    const perm = Notification.permission;
+    if (perm === "granted") {
+      el.textContent = "Permission granted";
+      el.className = "text-xs text-success";
+    } else if (perm === "denied") {
+      el.textContent = "Permission denied — enable in browser settings";
+      el.className = "text-xs text-error";
+    } else {
+      el.textContent = "Permission not yet requested";
+      el.className = "text-xs text-base-content/40";
+    }
+  },
+};

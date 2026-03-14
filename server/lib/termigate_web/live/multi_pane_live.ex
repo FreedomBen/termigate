@@ -54,14 +54,17 @@ defmodule TermigateWeb.MultiPaneLive do
 
     # Subscribe to per-pane topics for notification events
     pane_targets = Enum.map(layout, & &1.target)
-    subscribed_panes = if connected?(socket) do
-      for target <- pane_targets do
-        Phoenix.PubSub.subscribe(Termigate.PubSub, "pane:#{target}")
+
+    subscribed_panes =
+      if connected?(socket) do
+        for target <- pane_targets do
+          Phoenix.PubSub.subscribe(Termigate.PubSub, "pane:#{target}")
+        end
+
+        MapSet.new(pane_targets)
+      else
+        MapSet.new()
       end
-      MapSet.new(pane_targets)
-    else
-      MapSet.new()
-    end
 
     socket =
       socket
@@ -111,7 +114,11 @@ defmodule TermigateWeb.MultiPaneLive do
           <span class="hidden sm:inline">Sessions</span>
         </.link>
         <span class="text-base-content/70 text-sm font-mono tracking-tight">{@session}</span>
-        <.link navigate={~p"/settings"} class="text-base-content/50 hover:text-base-content text-sm" aria-label="Settings">
+        <.link
+          navigate={~p"/settings"}
+          class="text-base-content/50 hover:text-base-content text-sm"
+          aria-label="Settings"
+        >
           <.icon name="hero-cog-6-tooth-micro" class="size-5" />
         </.link>
       </div>
@@ -349,7 +356,10 @@ defmodule TermigateWeb.MultiPaneLive do
       </div>
 
       <%!-- Mobile pane list — tappable cards maximize the pane --%>
-      <div :if={@panes != [] and @maximized == nil} class="flex-1 overflow-y-auto sm:hidden p-3 space-y-2">
+      <div
+        :if={@panes != [] and @maximized == nil}
+        class="flex-1 overflow-y-auto sm:hidden p-3 space-y-2"
+      >
         <div
           :for={pane <- @panes}
           class="pane-row rounded-xl mobile-pane-card cursor-pointer"
@@ -436,7 +446,14 @@ defmodule TermigateWeb.MultiPaneLive do
       Phoenix.PubSub.unsubscribe(Termigate.PubSub, "pane:#{target}")
     end
 
-    {:noreply, assign(socket, panes: panes, grid: grid, maximized: maximized, active_pane: active_pane, subscribed_panes: new_targets)}
+    {:noreply,
+     assign(socket,
+       panes: panes,
+       grid: grid,
+       maximized: maximized,
+       active_pane: active_pane,
+       subscribed_panes: new_targets
+     )}
   end
 
   def handle_info({:sessions_updated, _sessions}, socket) do
@@ -463,10 +480,11 @@ defmodule TermigateWeb.MultiPaneLive do
   # Notification events from PaneStream
   def handle_info({:pane_idle, target, idle_ms}, socket) do
     if socket.assigns.notification_config["mode"] == "activity" do
-      {:noreply, push_event(socket, "notify_pane_idle", %{
-        pane: target,
-        idle_seconds: div(idle_ms, 1000)
-      })}
+      {:noreply,
+       push_event(socket, "notify_pane_idle", %{
+         pane: target,
+         idle_seconds: div(idle_ms, 1000)
+       })}
     else
       {:noreply, socket}
     end
@@ -474,12 +492,13 @@ defmodule TermigateWeb.MultiPaneLive do
 
   def handle_info({:command_finished, target, metadata}, socket) do
     if socket.assigns.notification_config["mode"] == "shell" do
-      {:noreply, push_event(socket, "notify_command_done", %{
-        pane: target,
-        exit_code: metadata.exit_code,
-        command: metadata.command,
-        duration_seconds: metadata.duration_seconds
-      })}
+      {:noreply,
+       push_event(socket, "notify_command_done", %{
+         pane: target,
+         exit_code: metadata.exit_code,
+         command: metadata.command,
+         duration_seconds: metadata.duration_seconds
+       })}
     else
       {:noreply, socket}
     end
@@ -510,13 +529,16 @@ defmodule TermigateWeb.MultiPaneLive do
 
   def handle_event("focus_pane", %{"pane" => pane_target}, socket) do
     # If maximized on a different pane, unmaximize first
-    socket = if socket.assigns.maximized && socket.assigns.maximized != pane_target do
-      assign(socket, maximized: nil)
-    else
-      socket
-    end
+    socket =
+      if socket.assigns.maximized && socket.assigns.maximized != pane_target do
+        assign(socket, maximized: nil)
+      else
+        socket
+      end
 
-    {:noreply, assign(socket, active_pane: pane_target) |> push_event("focus_terminal", %{pane: pane_target})}
+    {:noreply,
+     assign(socket, active_pane: pane_target)
+     |> push_event("focus_terminal", %{pane: pane_target})}
   end
 
   @control_keys %{

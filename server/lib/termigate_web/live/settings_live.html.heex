@@ -1,7 +1,10 @@
-
 <div class="page-container">
   <div class="flex items-center gap-3 pb-4">
-    <button class="btn btn-ghost btn-sm" aria-label="Back" onclick="history.length > 1 ? history.back() : (window.location.href = '/')">
+    <button
+      class="btn btn-ghost btn-sm"
+      aria-label="Back"
+      onclick="history.length > 1 ? history.back() : (window.location.href = '/')"
+    >
       <.icon name="hero-arrow-left-micro" class="size-5" />
     </button>
     <h1 class="text-xl font-bold tracking-tight">Settings</h1>
@@ -38,7 +41,9 @@
       </h3>
       <form phx-submit="save_action" phx-change="validate_action" class="space-y-3">
         <div>
-          <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="action-label">Label</label>
+          <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="action-label">
+            Label
+          </label>
           <input
             type="text"
             id="action-label"
@@ -50,11 +55,18 @@
             autofocus
             phx-debounce="300"
           />
-          <p :if={@form_errors["label"]} class="text-error text-xs mt-1">{@form_errors["label"]}</p>
+          <p :if={@form_errors["label"]} class="text-error text-xs mt-1">
+            {@form_errors["label"]}
+          </p>
         </div>
 
         <div>
-          <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="action-command">Command</label>
+          <label
+            class="text-xs font-medium text-base-content/60 mb-1.5 block"
+            for="action-command"
+          >
+            Command
+          </label>
           <textarea
             id="action-command"
             name="action[command]"
@@ -73,8 +85,17 @@
 
         <div class="flex gap-4 flex-wrap">
           <div>
-            <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="action-color">Color</label>
-            <select id="action-color" name="action[color]" class="select select-bordered select-sm">
+            <label
+              class="text-xs font-medium text-base-content/60 mb-1.5 block"
+              for="action-color"
+            >
+              Color
+            </label>
+            <select
+              id="action-color"
+              name="action[color]"
+              class="select select-bordered select-sm"
+            >
               <option value="default" selected={@form_data["color"] == "default"}>Default</option>
               <option value="green" selected={@form_data["color"] == "green"}>Green</option>
               <option value="red" selected={@form_data["color"] == "red"}>Red</option>
@@ -84,15 +105,21 @@
           </div>
 
           <div>
-            <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="action-icon">Icon</label>
+            <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="action-icon">
+              Icon
+            </label>
             <select id="action-icon" name="action[icon]" class="select select-bordered select-sm">
               <option value="" selected={@form_data["icon"] in [nil, ""]}>None</option>
               <option value="rocket" selected={@form_data["icon"] == "rocket"}>Rocket</option>
               <option value="play" selected={@form_data["icon"] == "play"}>Play</option>
               <option value="stop" selected={@form_data["icon"] == "stop"}>Stop</option>
               <option value="trash" selected={@form_data["icon"] == "trash"}>Trash</option>
-              <option value="arrow-up" selected={@form_data["icon"] == "arrow-up"}>Arrow Up</option>
-              <option value="terminal" selected={@form_data["icon"] == "terminal"}>Terminal</option>
+              <option value="arrow-up" selected={@form_data["icon"] == "arrow-up"}>
+                Arrow Up
+              </option>
+              <option value="terminal" selected={@form_data["icon"] == "terminal"}>
+                Terminal
+              </option>
             </select>
           </div>
 
@@ -112,7 +139,9 @@
 
         <div class="flex gap-2 pt-2">
           <button type="submit" class="btn btn-primary btn-sm">Save</button>
-          <button type="button" class="btn btn-ghost btn-sm" phx-click="cancel_edit">Cancel</button>
+          <button type="button" class="btn btn-ghost btn-sm" phx-click="cancel_edit">
+            Cancel
+          </button>
         </div>
       </form>
     </div>
@@ -130,13 +159,20 @@
     </div>
 
     <%!-- Action list --%>
-    <div :if={@quick_actions != []} class={["space-y-2", if(!@quick_actions_enabled, do: "opacity-40 pointer-events-none")]}>
+    <div
+      :if={@quick_actions != []}
+      class={["space-y-2", if(!@quick_actions_enabled, do: "opacity-40 pointer-events-none")]}
+    >
       <div
         :for={action <- @quick_actions}
         class="action-item"
       >
         <div class="flex flex-col gap-0.5">
-          <button class="btn btn-ghost btn-xs px-0" phx-click="move_up" phx-value-id={action["id"]}>
+          <button
+            class="btn btn-ghost btn-xs px-0"
+            phx-click="move_up"
+            phx-value-id={action["id"]}
+          >
             <.icon name="hero-chevron-up-micro" class="size-3" />
           </button>
           <button
@@ -177,13 +213,229 @@
     </div>
   </div>
 
+  <%!-- Notifications --%>
+  <div class="settings-section">
+    <div class="settings-section-title">Notifications</div>
+    <p class="text-xs text-base-content/50 mb-3">
+      Get browser notifications when commands finish or panes go idle.
+    </p>
+
+    <%!-- Mode selector --%>
+    <div class="space-y-2 mb-4">
+      <label class="text-xs font-medium text-base-content/60 block">Detection Mode</label>
+      <div class="flex flex-col gap-1.5">
+        <label class="label cursor-pointer justify-start gap-3 py-1">
+          <input
+            type="radio"
+            name="notification_mode"
+            value="disabled"
+            checked={@notification_mode == "disabled"}
+            class="radio radio-sm"
+            phx-click="update_notification_setting"
+            phx-value-key="mode"
+            phx-value-value="disabled"
+          />
+          <div>
+            <span class="text-sm">Disabled</span>
+          </div>
+        </label>
+        <label class="label cursor-pointer justify-start gap-3 py-1">
+          <input
+            type="radio"
+            name="notification_mode"
+            value="activity"
+            checked={@notification_mode == "activity"}
+            class="radio radio-sm"
+            phx-click="update_notification_setting"
+            phx-value-key="mode"
+            phx-value-value="activity"
+          />
+          <div>
+            <span class="text-sm">Activity-based</span>
+            <span class="text-xs text-base-content/40 block">
+              Notify when a pane goes silent. No setup required.
+            </span>
+          </div>
+        </label>
+        <label class="label cursor-pointer justify-start gap-3 py-1">
+          <input
+            type="radio"
+            name="notification_mode"
+            value="shell"
+            checked={@notification_mode == "shell"}
+            class="radio radio-sm"
+            phx-click="update_notification_setting"
+            phx-value-key="mode"
+            phx-value-value="shell"
+          />
+          <div>
+            <span class="text-sm">Shell integration</span>
+            <span class="text-xs text-base-content/40 block">
+              Precise command detection with name, exit code, and duration. Requires shell setup.
+            </span>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <%!-- Activity mode options --%>
+    <div :if={@notification_mode == "activity"} class="pl-7 space-y-3 mb-4">
+      <div>
+        <label
+          class="text-xs font-medium text-base-content/60 mb-1.5 block"
+          for="notif-idle-threshold"
+        >
+          Idle threshold: {@notification_idle_threshold}s
+        </label>
+        <input
+          type="range"
+          id="notif-idle-threshold"
+          min="3"
+          max="120"
+          value={@notification_idle_threshold}
+          class="range range-sm range-primary w-full max-w-xs"
+          phx-change="update_notification_setting"
+          phx-value-key="idle_threshold"
+          name="value"
+          phx-debounce="300"
+        />
+        <div class="flex justify-between text-[10px] text-base-content/30 max-w-xs">
+          <span>3s</span><span>30s</span><span>60s</span><span>120s</span>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Shell integration options --%>
+    <div :if={@notification_mode == "shell"} class="pl-7 space-y-3 mb-4">
+      <div>
+        <label
+          class="text-xs font-medium text-base-content/60 mb-1.5 block"
+          for="notif-min-duration"
+        >
+          Minimum command duration: {@notification_min_duration}s
+        </label>
+        <input
+          type="range"
+          id="notif-min-duration"
+          min="0"
+          max="60"
+          value={@notification_min_duration}
+          class="range range-sm range-primary w-full max-w-xs"
+          phx-change="update_notification_setting"
+          phx-value-key="min_duration"
+          name="value"
+          phx-debounce="300"
+        />
+        <div class="flex justify-between text-[10px] text-base-content/30 max-w-xs">
+          <span>0s</span><span>15s</span><span>30s</span><span>60s</span>
+        </div>
+        <p class="text-xs text-base-content/40 mt-1">
+          Commands shorter than this won't trigger notifications.
+        </p>
+      </div>
+
+      <%!-- Bash version warning --%>
+      <div :if={@bash_shell_integration_ok == false} class="alert alert-warning py-2 text-xs">
+        <.icon name="hero-exclamation-triangle-micro" class="size-4" />
+        <span>
+          Bash {@bash_version_display} detected. Shell integration requires bash ≥5.1.
+          Use zsh, fish, or the activity-based mode instead.
+        </span>
+      </div>
+
+      <%!-- Shell setup snippets --%>
+      <div class="collapse collapse-arrow bg-base-200/50 rounded-lg">
+        <input type="checkbox" />
+        <div class="collapse-title text-sm font-medium py-2 min-h-0">
+          Shell setup instructions
+        </div>
+        <div class="collapse-content space-y-3 text-xs">
+          <p class="text-base-content/50">Add one of these snippets to your shell config file:</p>
+
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <span class="font-semibold text-base-content/70">bash</span>
+              <span :if={@bash_shell_integration_ok == false} class="badge badge-warning badge-xs">
+                ≥5.1 required
+              </span>
+              <span :if={@bash_shell_integration_ok == true} class="badge badge-success badge-xs">
+                compatible
+              </span>
+            </div>
+            <pre
+              id="snippet-bash"
+              class="bg-base-300/50 p-2 rounded text-[11px] leading-relaxed overflow-x-auto whitespace-pre"
+            ><code>{@snippet_bash}</code></pre>
+          </div>
+
+          <div>
+            <span class="font-semibold text-base-content/70">zsh</span>
+            <pre
+              id="snippet-zsh"
+              class="bg-base-300/50 p-2 rounded text-[11px] leading-relaxed overflow-x-auto whitespace-pre mt-1"
+            ><code>{@snippet_zsh}</code></pre>
+          </div>
+
+          <div>
+            <span class="font-semibold text-base-content/70">fish</span>
+            <pre
+              id="snippet-fish"
+              class="bg-base-300/50 p-2 rounded text-[11px] leading-relaxed overflow-x-auto whitespace-pre mt-1"
+            ><code>{@snippet_fish}</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Common options (shown when not disabled) --%>
+    <div
+      :if={@notification_mode != "disabled"}
+      class="space-y-3 pt-2 border-t border-base-content/10"
+    >
+      <label class="label cursor-pointer justify-start gap-3 py-1">
+        <input
+          type="checkbox"
+          checked={@notification_sound}
+          class="checkbox checkbox-sm"
+          phx-click="update_notification_setting"
+          phx-value-key="sound"
+          phx-value-value={to_string(!@notification_sound)}
+        />
+        <span class="text-sm">Play sound with notification</span>
+      </label>
+
+      <div class="flex items-center gap-3">
+        <button
+          id="notif-request-permission"
+          class="btn btn-sm btn-outline"
+          phx-hook="NotificationPermission"
+        >
+          <.icon name="hero-bell-micro" class="size-4" /> Request permission
+        </button>
+        <span id="notif-permission-status" class="text-xs text-base-content/40"></span>
+      </div>
+
+      <button
+        class="btn btn-sm btn-ghost"
+        phx-click="test_notification"
+      >
+        <.icon name="hero-bell-alert-micro" class="size-4" /> Test notification
+      </button>
+    </div>
+  </div>
+
   <%!-- Terminal Appearance --%>
   <div class="settings-section">
     <div class="settings-section-title">Terminal Appearance</div>
     <form phx-submit="update_terminal" class="space-y-4">
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="term-font-size">Font Size</label>
+          <label
+            class="text-xs font-medium text-base-content/60 mb-1.5 block"
+            for="term-font-size"
+          >
+            Font Size
+          </label>
           <input
             type="number"
             id="term-font-size"
@@ -195,32 +447,82 @@
           />
         </div>
         <div>
-          <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="term-font-family">Font Family</label>
-          <select id="term-font-family" name="font_family" class="select select-bordered select-sm w-full">
-            <option value="monospace" selected={(@terminal["font_family"] || "monospace") == "monospace"}>System Monospace</option>
-            <option value="'Fira Code', monospace" selected={@terminal["font_family"] == "'Fira Code', monospace"}>Fira Code</option>
-            <option value="'JetBrains Mono', monospace" selected={@terminal["font_family"] == "'JetBrains Mono', monospace"}>JetBrains Mono</option>
-            <option value="'Source Code Pro', monospace" selected={@terminal["font_family"] == "'Source Code Pro', monospace"}>Source Code Pro</option>
-            <option value="'Courier New', monospace" selected={@terminal["font_family"] == "'Courier New', monospace"}>Courier New</option>
+          <label
+            class="text-xs font-medium text-base-content/60 mb-1.5 block"
+            for="term-font-family"
+          >
+            Font Family
+          </label>
+          <select
+            id="term-font-family"
+            name="font_family"
+            class="select select-bordered select-sm w-full"
+          >
+            <option
+              value="monospace"
+              selected={(@terminal["font_family"] || "monospace") == "monospace"}
+            >
+              System Monospace
+            </option>
+            <option
+              value="'Fira Code', monospace"
+              selected={@terminal["font_family"] == "'Fira Code', monospace"}
+            >
+              Fira Code
+            </option>
+            <option
+              value="'JetBrains Mono', monospace"
+              selected={@terminal["font_family"] == "'JetBrains Mono', monospace"}
+            >
+              JetBrains Mono
+            </option>
+            <option
+              value="'Source Code Pro', monospace"
+              selected={@terminal["font_family"] == "'Source Code Pro', monospace"}
+            >
+              Source Code Pro
+            </option>
+            <option
+              value="'Courier New', monospace"
+              selected={@terminal["font_family"] == "'Courier New', monospace"}
+            >
+              Courier New
+            </option>
           </select>
         </div>
       </div>
 
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="term-theme">Theme</label>
+          <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="term-theme">
+            Theme
+          </label>
           <select id="term-theme" name="theme" class="select select-bordered select-sm w-full">
             <option value="dark" selected={(@terminal["theme"] || "dark") == "dark"}>Dark</option>
             <option value="light" selected={@terminal["theme"] == "light"}>Light</option>
-            <option value="solarizedDark" selected={@terminal["theme"] == "solarizedDark"}>Solarized Dark</option>
-            <option value="solarizedLight" selected={@terminal["theme"] == "solarizedLight"}>Solarized Light</option>
+            <option value="solarizedDark" selected={@terminal["theme"] == "solarizedDark"}>
+              Solarized Dark
+            </option>
+            <option value="solarizedLight" selected={@terminal["theme"] == "solarizedLight"}>
+              Solarized Light
+            </option>
           </select>
         </div>
         <div>
-          <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="term-cursor">Cursor Style</label>
-          <select id="term-cursor" name="cursor_style" class="select select-bordered select-sm w-full">
-            <option value="block" selected={(@terminal["cursor_style"] || "block") == "block"}>Block</option>
-            <option value="underline" selected={@terminal["cursor_style"] == "underline"}>Underline</option>
+          <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="term-cursor">
+            Cursor Style
+          </label>
+          <select
+            id="term-cursor"
+            name="cursor_style"
+            class="select select-bordered select-sm w-full"
+          >
+            <option value="block" selected={(@terminal["cursor_style"] || "block") == "block"}>
+              Block
+            </option>
+            <option value="underline" selected={@terminal["cursor_style"] == "underline"}>
+              Underline
+            </option>
             <option value="bar" selected={@terminal["cursor_style"] == "bar"}>Bar</option>
           </select>
         </div>
@@ -258,8 +560,14 @@
     <div class="settings-section-title">Authentication</div>
     <form phx-submit="update_ttl" class="flex items-end gap-3">
       <div class="flex-1">
-        <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="session-ttl">Session Duration</label>
-        <select id="session-ttl" name="session_ttl_hours" class="select select-bordered select-sm w-full">
+        <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="session-ttl">
+          Session Duration
+        </label>
+        <select
+          id="session-ttl"
+          name="session_ttl_hours"
+          class="select select-bordered select-sm w-full"
+        >
           <option value="1" selected={@session_ttl_hours == 1}>1 hour</option>
           <option value="8" selected={@session_ttl_hours == 8}>8 hours</option>
           <option value="24" selected={@session_ttl_hours == 24}>1 day</option>
@@ -281,7 +589,9 @@
     <div class="settings-section-title">Change Password</div>
     <form phx-submit="change_password" class="space-y-3">
       <div>
-        <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="pw-current">Current Password</label>
+        <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="pw-current">
+          Current Password
+        </label>
         <input
           type="password"
           id="pw-current"
@@ -293,7 +603,9 @@
         />
       </div>
       <div>
-        <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="pw-new">New Password</label>
+        <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="pw-new">
+          New Password
+        </label>
         <input
           type="password"
           id="pw-new"
@@ -306,7 +618,9 @@
         />
       </div>
       <div>
-        <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="pw-confirm">Confirm New Password</label>
+        <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="pw-confirm">
+          Confirm New Password
+        </label>
         <input
           type="password"
           id="pw-confirm"
@@ -341,7 +655,11 @@
   </div>
 </div>
 
-<.modal id="reset-confirm-modal" on_confirm={JS.push("reset_config")} confirm_variant="btn-warning">
+<.modal
+  id="reset-confirm-modal"
+  on_confirm={JS.push("reset_config")}
+  confirm_variant="btn-warning"
+>
   <:title>Reset configuration?</:title>
   This will replace all your quick actions with the defaults. This cannot be undone.
   <:confirm>Reset</:confirm>

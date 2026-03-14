@@ -11,7 +11,9 @@ defmodule TermigateWeb.UserSocket do
     if Termigate.Auth.auth_enabled?() do
       max_age = Termigate.Auth.session_ttl_seconds()
 
-      case Phoenix.Token.verify(TermigateWeb.Endpoint, "channel", params["token"], max_age: max_age) do
+      case Phoenix.Token.verify(TermigateWeb.Endpoint, "channel", params["token"],
+             max_age: max_age
+           ) do
         {:ok, _data} ->
           {:ok, socket}
 

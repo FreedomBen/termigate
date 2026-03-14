@@ -629,7 +629,11 @@ defmodule Termigate.PaneStream do
     }
 
     # Idle tracking for notifications
-    state = %{state | last_output_at: System.monotonic_time(:millisecond), had_recent_activity: true}
+    state = %{
+      state
+      | last_output_at: System.monotonic_time(:millisecond),
+        had_recent_activity: true
+    }
 
     if state.notification_mode != "disabled" do
       state = cancel_idle_timer(state)
@@ -844,8 +848,7 @@ defmodule Termigate.PaneStream do
 
           :nomatch ->
             # Incomplete marker at end of chunk — store as partial
-            {<<acc::binary, before::binary>>,
-             binary_part(data, start, byte_size(data) - start)}
+            {<<acc::binary, before::binary>>, binary_part(data, start, byte_size(data) - start)}
         end
 
       :nomatch ->
@@ -863,11 +866,15 @@ defmodule Termigate.PaneStream do
 
         with {parsed_exit_code, _} <- Integer.parse(exit_code),
              {parsed_duration, _} <- Integer.parse(duration) do
-          broadcast(target, {:command_finished, target, %{
-            exit_code: parsed_exit_code,
-            command: sanitized_name,
-            duration_seconds: parsed_duration
-          }})
+          broadcast(
+            target,
+            {:command_finished, target,
+             %{
+               exit_code: parsed_exit_code,
+               command: sanitized_name,
+               duration_seconds: parsed_duration
+             }}
+          )
         end
 
       _ ->

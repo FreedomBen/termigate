@@ -38,7 +38,9 @@ defmodule TermigateWeb.AuthLive do
           <form action="/login" method="post" class="space-y-4">
             <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
             <div>
-              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="username">Username</label>
+              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="username">
+                Username
+              </label>
               <input
                 type="text"
                 id="username"
@@ -50,7 +52,9 @@ defmodule TermigateWeb.AuthLive do
               />
             </div>
             <div>
-              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="password">Password</label>
+              <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="password">
+                Password
+              </label>
               <input
                 type="password"
                 id="password"
@@ -66,5 +70,4 @@ defmodule TermigateWeb.AuthLive do
     </div>
     """
   end
-
 end

@@ -178,7 +178,10 @@ defmodule Termigate.LayoutPoller do
     end
   rescue
     e ->
-      Logger.warning("LayoutPoller poll error for #{state.session}:#{state.window}: #{inspect(e)}")
+      Logger.warning(
+        "LayoutPoller poll error for #{state.session}:#{state.window}: #{inspect(e)}"
+      )
+
       state
   end
 

@@ -534,16 +534,16 @@ The notification mode is checked in three places (defense-in-depth): PaneStream 
 5. ✅ Handle `"focus_pane"` event to set active pane, unmaximize if needed, and push `"focus_terminal"`.
 6. ✅ Cleanup on unmount: `terminate/2` unsubscribes from pane topics. Invisible `<div id="notification-hook" phx-hook="NotificationHook">` element added to template.
 
-### Phase 6: Settings UI
+### Phase 6: Settings UI ✅ COMPLETED
 
-**Files:** `server/lib/termigate_web/live/settings_live.ex`
+**Files:** `server/lib/termigate_web/live/settings_live.ex`, `settings_live.html.heex`
 
-1. Add "Notifications" section with mode selector (radio buttons: disabled / activity / shell integration).
-2. Conditional display of mode-specific options.
-3. Bash version check endpoint — show warning for bash <5.1 when shell integration selected.
-4. Shell snippet display with copy button per shell (bash, zsh, fish).
-5. "Request permission" button + permission status display.
-6. "Test notification" button.
+1. ✅ Add "Notifications" section with mode selector (radio buttons: disabled / activity / shell integration).
+2. ✅ Conditional display of mode-specific options (idle threshold slider for activity, min duration slider + shell snippets for shell integration).
+3. ✅ Bash version check — show warning for bash <5.1 when shell integration selected.
+4. ✅ Shell snippet display in collapsible section per shell (bash, zsh, fish). Snippets stored as module attributes using `~S` sigil to avoid HEEx interpolation conflicts.
+5. ✅ "Request permission" button + permission status display via `NotificationPermission` JS hook.
+6. ✅ "Test notification" button. Sound toggle. All settings saved via `Config.update/1` with normalization.
 
 ### Phase 7: Testing
 

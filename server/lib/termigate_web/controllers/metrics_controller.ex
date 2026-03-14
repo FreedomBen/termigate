@@ -18,7 +18,9 @@ defmodule TermigateWeb.MetricsController do
   end
 
   defp collect_metrics do
-    active_streams = DynamicSupervisor.count_children(Termigate.PaneStreamSupervisor)[:active] || 0
+    active_streams =
+      DynamicSupervisor.count_children(Termigate.PaneStreamSupervisor)[:active] || 0
+
     memory = :erlang.memory()
     uptime_seconds = div(System.monotonic_time(:millisecond) - boot_time(), 1000)
 

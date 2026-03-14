@@ -29,7 +29,9 @@ defmodule Mix.Tasks.Termigate.Reset do
           end
         end)
 
-        Mix.shell().info("\nReset complete. On next server start you will be prompted to set up a new account.")
+        Mix.shell().info(
+          "\nReset complete. On next server start you will be prompted to set up a new account."
+        )
       else
         Mix.shell().info("Aborted.")
       end

@@ -17,7 +17,10 @@ defmodule TermigateWeb.Plugs.RequireAuthToken do
         conn
       else
         _ ->
-          Logger.warning("API auth rejected: invalid or missing token, ip=#{conn.remote_ip |> :inet.ntoa() |> to_string()}")
+          Logger.warning(
+            "API auth rejected: invalid or missing token, ip=#{conn.remote_ip |> :inet.ntoa() |> to_string()}"
+          )
+
           conn |> put_status(401) |> json(%{error: "unauthorized"}) |> halt()
       end
     else

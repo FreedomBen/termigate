@@ -1,4 +1,3 @@
-
 <div class="page-container">
   <%!-- tmux status banners --%>
   <div :if={@tmux_status == :not_found} role="alert" class="alert alert-error mb-4 rounded-xl">
@@ -13,11 +12,17 @@
     </div>
   </div>
 
-  <div :if={match?({:error, _}, @tmux_status)} role="alert" class="alert alert-warning mb-4 rounded-xl">
+  <div
+    :if={match?({:error, _}, @tmux_status)}
+    role="alert"
+    class="alert alert-warning mb-4 rounded-xl"
+  >
     <.icon name="hero-exclamation-triangle" class="size-5" />
     <div class="flex-1">
       <p class="font-semibold">tmux server is no longer reachable</p>
-      <p class="text-sm mt-1 opacity-80">Sessions may have been lost. Error: {elem(@tmux_status, 1)}</p>
+      <p class="text-sm mt-1 opacity-80">
+        Sessions may have been lost. Error: {elem(@tmux_status, 1)}
+      </p>
     </div>
     <button class="btn btn-sm btn-ghost" phx-click="retry_tmux">Retry</button>
   </div>
@@ -53,7 +58,10 @@
       class="flex gap-3 items-end"
     >
       <div class="flex-1">
-        <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="new-session-name">
+        <label
+          class="text-xs font-medium text-base-content/60 mb-1.5 block"
+          for="new-session-name"
+        >
           Session name
         </label>
         <input
@@ -142,15 +150,23 @@
         </div>
       <% else %>
         <%!-- Normal mode — tapping navigates to session view --%>
-        <.link navigate={"/sessions/#{session.name}"} class="session-header no-underline text-inherit">
+        <.link
+          navigate={"/sessions/#{session.name}"}
+          class="session-header no-underline text-inherit"
+        >
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
               <span class="font-semibold truncate text-base">{session.name}</span>
-              <span :if={session.attached?} class="status-dot status-dot-active" title="attached"></span>
+              <span :if={session.attached?} class="status-dot status-dot-active" title="attached">
+              </span>
             </div>
             <div class="text-xs text-base-content/40 mt-0.5">
-              {session.windows} window{if session.windows != 1, do: "s", else: ""} &middot; {total_panes(session)} pane{if total_panes(session) != 1, do: "s", else: ""}
-              <span :if={session.created} class="hidden sm:inline">&middot; {format_created(session.created)}</span>
+              {session.windows} window{if session.windows != 1, do: "s", else: ""} &middot; {total_panes(
+                session
+              )} pane{if total_panes(session) != 1, do: "s", else: ""}
+              <span :if={session.created} class="hidden sm:inline">
+                &middot; {format_created(session.created)}
+              </span>
             </div>
           </div>
           <.icon name="hero-chevron-right-micro" class="size-5 text-base-content/20 shrink-0" />
@@ -158,22 +174,27 @@
 
         <%!-- Session action menu (kebab) — positioned over the card --%>
         <div class="session-menu-overlay">
-          <details class="dropdown dropdown-end" phx-click-away={JS.remove_attribute("open", to: "details.dropdown")}>
+          <details
+            class="dropdown dropdown-end"
+            phx-click-away={JS.remove_attribute("open", to: "details.dropdown")}
+          >
             <summary class="btn btn-ghost btn-xs" onclick="event.stopPropagation();">
               <.icon name="hero-ellipsis-vertical-micro" class="size-5" />
             </summary>
             <ul class="dropdown-content menu bg-base-100 rounded-box z-10 w-48 p-2 shadow-lg">
               <li>
-                <button
-                  phx-click={JS.remove_attribute("open", to: "details.dropdown") |> JS.push("start_rename", value: %{name: session.name})}
-                >
+                <button phx-click={
+                  JS.remove_attribute("open", to: "details.dropdown")
+                  |> JS.push("start_rename", value: %{name: session.name})
+                }>
                   <.icon name="hero-pencil-micro" class="size-4" /> Rename
                 </button>
               </li>
               <li>
-                <button
-                  phx-click={JS.remove_attribute("open", to: "details.dropdown") |> JS.push("create_window", value: %{session: session.name})}
-                >
+                <button phx-click={
+                  JS.remove_attribute("open", to: "details.dropdown")
+                  |> JS.push("create_window", value: %{session: session.name})
+                }>
                   <.icon name="hero-window-micro" class="size-4" /> New Window
                 </button>
               </li>

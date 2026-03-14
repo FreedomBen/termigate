@@ -437,8 +437,7 @@ defmodule Termigate.Config do
           do: terminal["font_family"],
           else: "monospace"
         ),
-      "theme" =>
-        if(terminal["theme"] in @valid_themes, do: terminal["theme"], else: "dark"),
+      "theme" => if(terminal["theme"] in @valid_themes, do: terminal["theme"], else: "dark"),
       "custom_theme" =>
         if(is_map(terminal["custom_theme"]), do: terminal["custom_theme"], else: %{}),
       "cursor_style" =>

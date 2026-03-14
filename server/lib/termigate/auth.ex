@@ -103,7 +103,8 @@ defmodule Termigate.Auth do
   end
 
   @doc "Change password. Verifies current password, then sets new one."
-  @spec change_password(String.t(), String.t()) :: :ok | {:error, :invalid_current | :no_auth | term()}
+  @spec change_password(String.t(), String.t()) ::
+          :ok | {:error, :invalid_current | :no_auth | term()}
   def change_password(current_password, new_password) do
     case read_credentials() do
       {:ok, {username, stored_hash}} ->
