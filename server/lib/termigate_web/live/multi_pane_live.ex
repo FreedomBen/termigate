@@ -157,6 +157,7 @@ defmodule TermigateWeb.MultiPaneLive do
           phx-click="send_control"
           phx-value-key={key}
           disabled={@active_pane == nil}
+          onmousedown="event.preventDefault()"
         >
           <kbd>{label}</kbd>
         </button>
@@ -177,6 +178,7 @@ defmodule TermigateWeb.MultiPaneLive do
           phx-click="send_special_key"
           phx-value-key={key}
           disabled={@active_pane == nil}
+          onmousedown="event.preventDefault()"
         >
           <kbd>{label}</kbd>
         </button>
@@ -580,7 +582,7 @@ defmodule TermigateWeb.MultiPaneLive do
 
       {char, target} ->
         PaneStream.send_keys(target, char)
-        {:noreply, push_event(socket, "focus_terminal", %{pane: target})}
+        {:noreply, socket}
     end
   end
 
@@ -602,7 +604,7 @@ defmodule TermigateWeb.MultiPaneLive do
 
       {seq, target} ->
         PaneStream.send_keys(target, seq)
-        {:noreply, push_event(socket, "focus_terminal", %{pane: target})}
+        {:noreply, socket}
     end
   end
 
