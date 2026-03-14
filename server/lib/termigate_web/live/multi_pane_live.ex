@@ -580,7 +580,7 @@ defmodule TermigateWeb.MultiPaneLive do
 
       {char, target} ->
         PaneStream.send_keys(target, char)
-        {:noreply, socket}
+        {:noreply, push_event(socket, "focus_terminal", %{pane: target})}
     end
   end
 
@@ -602,7 +602,7 @@ defmodule TermigateWeb.MultiPaneLive do
 
       {seq, target} ->
         PaneStream.send_keys(target, seq)
-        {:noreply, socket}
+        {:noreply, push_event(socket, "focus_terminal", %{pane: target})}
     end
   end
 
