@@ -1,5 +1,7 @@
 # Not Run Yet
 
+- Let's add an Enabled/Disabled control on the settings page for quick actions, so the user can turn them on or off without wiping out their config.  This is useful if they don't need them currently and want to reclaim the screen real estate.
+
 - There seems to be a bug with the initial config file that get's written.  It doesn't have any quick_actions in it, just an empty array.  Let's make sure we're writing out the full config file on initial setup.
 
 - Let's add support for Cloudflare and Tailscale, so if an API key is present and the setting is enabled, we can update DNS and/or enable a tunnel.
