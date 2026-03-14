@@ -14,6 +14,8 @@
 
 # Already Run
 
+- Where do the terminal appearance settings get configured now?  I don't see them in the Settings page.  While we're at it, let's make sure and add every configurable value in the config file to the settings page.  We should also have a password change control in there as well.
+
 - Let's make the space between panes narrower so it doesn't waste screen real estate.  A thin line would be better I think.  Also ensure the user can still resize by clicking and dragging on them.
 
 - What's the purpose for the full view?

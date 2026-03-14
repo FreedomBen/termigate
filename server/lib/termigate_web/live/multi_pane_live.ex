@@ -135,6 +135,29 @@ defmodule TermigateWeb.MultiPaneLive do
         >
           <kbd>{label}</kbd>
         </button>
+
+        <div :if={length(@panes) > 1} class="flex items-center gap-1 ml-auto">
+          <button
+            class="ctl-btn"
+            phx-click="equalize_panes"
+            phx-value-direction="horizontal"
+            title="Equal widths"
+          >
+            <svg viewBox="0 0 16 16" fill="currentColor" class="size-3.5">
+              <path d="M1 2.5A1.5 1.5 0 012.5 1h4A1.5 1.5 0 018 2.5v11A1.5 1.5 0 016.5 15h-4A1.5 1.5 0 011 13.5v-11zM2.5 2a.5.5 0 00-.5.5v11a.5.5 0 00.5.5h4a.5.5 0 00.5-.5v-11a.5.5 0 00-.5-.5h-4zM9.5 1A1.5 1.5 0 008 2.5v11A1.5 1.5 0 009.5 15h4a1.5 1.5 0 001.5-1.5v-11A1.5 1.5 0 0013.5 1h-4zM9 2.5a.5.5 0 01.5-.5h4a.5.5 0 01.5.5v11a.5.5 0 01-.5.5h-4a.5.5 0 01-.5-.5v-11z" />
+            </svg>
+          </button>
+          <button
+            class="ctl-btn"
+            phx-click="equalize_panes"
+            phx-value-direction="vertical"
+            title="Equal heights"
+          >
+            <svg viewBox="0 0 16 16" fill="currentColor" class="size-3.5">
+              <path d="M2.5 1A1.5 1.5 0 001 2.5v4A1.5 1.5 0 002.5 8h11A1.5 1.5 0 0015 6.5v-4A1.5 1.5 0 0013.5 1h-11zM2 2.5a.5.5 0 01.5-.5h11a.5.5 0 01.5.5v4a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5v-4zM1 9.5A1.5 1.5 0 012.5 8h11A1.5 1.5 0 0115 9.5v4a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 011 13.5v-4zM2.5 9a.5.5 0 00-.5.5v4a.5.5 0 00.5.5h11a.5.5 0 00.5-.5v-4a.5.5 0 00-.5-.5h-11z" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <%!-- Quick action bar --%>
@@ -499,6 +522,14 @@ defmodule TermigateWeb.MultiPaneLive do
       {:error, _msg} ->
         {:noreply, socket}
     end
+  end
+
+  def handle_event("equalize_panes", %{"direction" => direction}, socket) do
+    # Use the session:window as target so tmux applies layout to the whole window
+    target = "#{socket.assigns.session}:#{socket.assigns.window}"
+    dir = if direction == "vertical", do: :vertical, else: :horizontal
+    TmuxManager.equalize_panes(target, dir)
+    {:noreply, socket}
   end
 
   def handle_event("split_pane", %{"target" => target, "direction" => direction}, socket) do

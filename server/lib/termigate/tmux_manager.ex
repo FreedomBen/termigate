@@ -185,6 +185,25 @@ defmodule Termigate.TmuxManager do
     end
   end
 
+  @doc "Equalize pane sizes. Layout can be :horizontal (even-horizontal) or :vertical (even-vertical)."
+  @spec equalize_panes(String.t(), :horizontal | :vertical) :: :ok | {:error, String.t()}
+  def equalize_panes(target, direction) do
+    layout =
+      case direction do
+        :horizontal -> "even-horizontal"
+        :vertical -> "even-vertical"
+      end
+
+    case command_runner().run(["select-layout", "-t", target, layout]) do
+      {:ok, _} ->
+        broadcast_sessions_changed()
+        :ok
+
+      {:error, {msg, _code}} ->
+        {:error, msg}
+    end
+  end
+
   @doc "Kill a pane."
   @spec kill_pane(String.t()) :: :ok | {:error, String.t()}
   def kill_pane(target) do
