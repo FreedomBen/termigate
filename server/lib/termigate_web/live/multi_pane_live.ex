@@ -221,8 +221,8 @@ defmodule TermigateWeb.MultiPaneLive do
                 do: "pane-maximized",
                 else:
                   if(@active_pane == pane.target,
-                    do: "border border-primary/40",
-                    else: "border border-base-content/5"
+                    do: "border border-primary/50",
+                    else: "border border-base-content/15"
                   )
               )
             ]}
