@@ -1,7 +1,5 @@
 # Not Run Yet
 
-- Let's add a close button (maybe a "x") to windows
-
 - In mobile 
 
 - Let's add support for Cloudflare and Tailscale, so if an API key is present and the setting is enabled, we can update DNS and/or enable a tunnel.
@@ -15,6 +13,8 @@
 - We're ready to begin implementing the MCP server as described in MCP_DESIGN.md.
 
 # Already Run
+
+- Let's add a close button (maybe a "x") to windows. This button should kill all the panes and window when clicked.  Show the user a confirmation prompt though since it might be easy to accidentally press.
 
 - There seems to be a bug with the initial config file that get's written.  It doesn't have any quick_actions in it, just an empty array.  Let's make sure we're writing out the full config file on initial setup.
 
