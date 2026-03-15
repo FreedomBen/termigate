@@ -1,5 +1,7 @@
 # Not Run Yet
 
+- Let's review the android implementation plan in ANDROID_IMPLEMENTATION.md before we move on to implementation.  Look for any errors, inconsistencies, ambiguities, or otherwise missing things that need to be corrected prior to implementation.
+
 - Let's write an external test for the MCP server.
 
 - Let's begin implementation of the Android app.  Read ANDROID_IMPLEMENTATION.md and start with the first phase.
