@@ -1,21 +1,13 @@
-defmodule Termigate.MCP.Tools.ListPanes do
-  @moduledoc "List all panes in a tmux session, grouped by window."
+defmodule Termigate.MCP.Resources.SessionPanes do
+  @moduledoc "Pane layout for a tmux session."
 
-  use Hermes.Server.Component,
-    type: :tool,
-    annotations: %{"readOnlyHint" => true}
-
-  alias Hermes.Server.Response
+  alias Hermes.MCP.Error
   alias Termigate.MCP.TargetHelper
   alias Termigate.TmuxManager
 
-  schema do
-    field(:session, :string, required: true, description: "Session name")
-  end
-
-  @impl true
-  def execute(%{session: session}, frame) do
-    case TmuxManager.list_panes(session) do
+  @doc "Read panes for the given session name."
+  def read(session_name, frame) do
+    case TmuxManager.list_panes(session_name) do
       {:ok, panes_by_window} ->
         data =
           panes_by_window
@@ -27,13 +19,20 @@ defmodule Termigate.MCP.Tools.ListPanes do
             }
           end)
 
-        {:reply, Response.json(Response.tool(), data), frame}
+        content = %{
+          "uri" => "tmux://session/#{session_name}/panes",
+          "mimeType" => "application/json",
+          "text" => JSON.encode!(data)
+        }
+
+        {:reply, %{"contents" => [content]}, frame}
 
       {:error, :session_not_found} ->
-        {:reply, Response.error(Response.tool(), "Session not found: #{session}"), frame}
+        {:error, Error.resource(:not_found, %{message: "Session not found: #{session_name}"}),
+         frame}
 
       {:error, reason} ->
-        {:reply, Response.error(Response.tool(), "Failed to list panes: #{reason}"), frame}
+        {:error, Error.resource(:not_found, %{message: "Failed to list panes: #{reason}"}), frame}
     end
   end
 

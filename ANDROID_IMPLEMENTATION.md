@@ -4,7 +4,7 @@
 
 Native Android app for termigate — connects to the termigate server via Phoenix Channels (WebSocket) for real-time terminal I/O and REST API for session management. The app does **not** bundle tmux; the server is the source of truth for all terminal state.
 
-**Package ID**: `org.tamx.tmuxrm`
+**Package ID**: `org.tamx.termigate`
 **Min API**: 26 (Android 8.0)
 **Language**: Kotlin
 
@@ -17,7 +17,7 @@ The termigate server already has all required infrastructure:
 - Terminal output: base64-encoded data in JSON text frames (`"output"` event with `{data: "<base64>"}`)
 - Terminal input: accepts both JSON text frames (`"input"` event with `{data: "<bytes>"}`) and raw binary WebSocket frames
 
-No server changes are needed for the Android app.
+No server changes are strictly required. One inconsistency to be aware of: `SessionChannel` sends `created` as an ISO 8601 string (raw DateTime), while the REST API sends it as a Unix timestamp (integer). The Android client handles both via a custom serializer, but a server-side fix to normalize both to Unix timestamps would simplify things.
 
 ## Phase Overview
 
@@ -50,7 +50,7 @@ Create `android/` at the repo root with this structure:
 android/
   app/
     src/main/
-      java/org/tamx/tmuxrm/
+      java/org/tamx/termigate/
         App.kt                     # @HiltAndroidApp
       AndroidManifest.xml
     build.gradle.kts
@@ -147,7 +147,7 @@ Create `terminal-lib/build.gradle.kts` as an Android library module (no Compose,
 #### 1.4 App Module Setup
 
 `app/build.gradle.kts`:
-- `applicationId = "org.tamx.tmuxrm"`
+- `applicationId = "org.tamx.termigate"`
 - `minSdk = 26`, `targetSdk = 35`
 - Enable Compose, Hilt (KSP), kotlinx.serialization
 - `implementation(project(":terminal-lib"))`
@@ -163,7 +163,7 @@ class App : Application()
 #### 1.6 Create Package Structure
 
 ```
-org/tamx/tmuxrm/
+org/tamx/termigate/
   di/
   data/
     network/
@@ -203,12 +203,13 @@ Minimal Kotlin implementation of the Phoenix Channel protocol on top of OkHttp W
 **PhoenixSocket**:
 ```kotlin
 class PhoenixSocket(
-    private val url: String,
-    private val params: Map<String, String>,  // {"token": "..."}
+    private val baseUrl: String,       // e.g. "https://myserver:4000"
+    private val params: Map<String, String>,  // {"token": "..."} — sent as URL query params
     private val client: OkHttpClient
 ) {
     val connectionState: StateFlow<ConnectionState>  // Connected, Disconnected, Reconnecting
 
+    // Connects to: ws(s)://<baseUrl>/socket/websocket?token=...&vsn=2.0.0
     fun connect()
     fun disconnect()
     fun channel(topic: String): PhoenixChannel
@@ -216,7 +217,8 @@ class PhoenixSocket(
 ```
 
 Protocol details:
-- **All frames are JSON text frames**: `[join_ref, ref, topic, event, payload]` — including terminal output, control messages, join/leave, heartbeat, replies
+- **WebSocket URL**: `ws(s)://<host>:<port>/socket/websocket?token=<token>&vsn=2.0.0` — the `vsn=2.0.0` parameter is **required** for the v2 wire protocol
+- **All frames are JSON text frames**: `[join_ref, ref, topic, event, payload]` (v2 protocol) — including terminal output, control messages, join/leave, heartbeat, replies
 - **Terminal output**: arrives as `"output"` event with `{"data": "<base64>"}` payload — must base64-decode before feeding to emulator
 - **Heartbeat**: send `"heartbeat"` event every 30 seconds, expect `"phx_reply"` within 10 seconds or reconnect
 - **Reconnection**: exponential backoff 1s → 2s → 4s → 8s → 16s → 30s cap, reset on successful connect
@@ -224,6 +226,7 @@ Protocol details:
 Key implementation notes:
 - Use `ref` counter (AtomicLong) to match push replies
 - Client-to-server input: send as JSON text frame `["join_ref", "ref", "terminal:...", "input", {"data": "<bytes>"}]`. The server `handle_in("input")` accepts the data field as a binary string. Alternatively, raw binary WebSocket frames are also accepted by the server.
+- **Max input size**: the server rejects input messages larger than 131,072 bytes (128 KB). Large paste operations must be chunked.
 
 #### 2.2 Phoenix Channel Abstraction (`data/network/PhoenixChannel.kt`)
 
@@ -261,18 +264,18 @@ class ApiClient(
     // Auth
     suspend fun login(username: String, password: String): Result<LoginResponse>
 
-    // Sessions
+    // Sessions — GET /api/sessions returns {"sessions": [...]}
     suspend fun listSessions(): Result<List<Session>>
-    suspend fun createSession(name: String, command: String? = null): Result<Session>
+    suspend fun createSession(name: String, command: String? = null): Result<Unit>
     suspend fun deleteSession(name: String): Result<Unit>
-    suspend fun renameSession(name: String, newName: String): Result<Unit>
+    suspend fun renameSession(name: String, newName: String): Result<Unit>  // PUT /api/sessions/:name body: {"new_name": "..."}
     suspend fun createWindow(sessionName: String): Result<Unit>
 
     // Panes (target format: "session:window.pane", e.g. "myapp:0.1")
     suspend fun splitPane(target: String, direction: String): Result<Unit>
     suspend fun deletePane(target: String): Result<Unit>
 
-    // Quick Actions
+    // Quick Actions — GET/POST/PUT return {"quick_actions": [...]}, DELETE returns {"status": "ok"}
     suspend fun getQuickActions(): Result<List<QuickAction>>
     suspend fun createQuickAction(action: QuickAction): Result<List<QuickAction>>
     suspend fun updateQuickAction(id: String, action: QuickAction): Result<List<QuickAction>>
@@ -284,9 +287,27 @@ class ApiClient(
 }
 ```
 
+All REST responses are wrapped in a top-level key. The `ApiClient` must unwrap them:
+- `GET /api/sessions` → `{"sessions": [...]}`
+- `GET /api/quick-actions` → `{"quick_actions": [...]}`
+- `POST /api/quick-actions` → `{"quick_actions": [...]}` (201 status)
+- `PUT /api/quick-actions/:id` → `{"quick_actions": [...]}`
+- `DELETE /api/quick-actions/:id` → `{"status": "ok"}`
+- `PUT /api/quick-actions/order` → `{"quick_actions": [...]}`
+
+Use wrapper data classes for deserialization:
+
+```kotlin
+@Serializable
+data class SessionsResponse(val sessions: List<Session>)
+
+@Serializable
+data class QuickActionsResponse(@SerialName("quick_actions") val quickActions: List<QuickAction>)
+```
+
 #### 2.4 Auth Plugin (`data/network/AuthPlugin.kt`)
 
-Ktor plugin that adds the bearer token from `AuthRepository` to all API requests (except `/api/login`). On 401 response, clear the token and signal re-authentication.
+Ktor plugin that adds `Authorization: Bearer <token>` header from `AuthRepository` to all API requests (except `/api/login`). On 401 response, clear the token and signal re-authentication. Handle 429 responses from rate-limited endpoints (e.g., `/api/login`) by showing a "too many attempts" error.
 
 #### 2.5 Hilt Network Module (`di/NetworkModule.kt`)
 
@@ -313,8 +334,9 @@ data class Session(
     val name: String,
     val windows: Int,               // window COUNT, not a list
     val attached: Boolean,
-    val created: Long,
-    val panes: List<Pane>           // flat list of all panes across all windows
+    @Serializable(with = CreatedTimestampSerializer::class)
+    val created: Long? = null,      // Unix timestamp (seconds), nullable — see note below
+    val panes: List<Pane> = emptyList()  // flat list of all panes across all windows
 )
 
 @Serializable
@@ -351,6 +373,8 @@ data class LoginResponse(
     val expiresIn: Long             // TTL in seconds (default: 604800 = 7 days)
 )
 ```
+
+**`created` field serialization**: The REST API (`GET /api/sessions`) sends `created` as a **Unix timestamp** (integer seconds). The Session Channel sends `created` as an **ISO 8601 string** (e.g., `"2025-01-15T10:30:00Z"`). Write a custom `CreatedTimestampSerializer` that handles both formats — parse integers directly, parse ISO 8601 strings via `Instant.parse()` and convert to epoch seconds. The field is nullable because tmux sessions may have no creation time.
 
 ### Verification
 - Unit test PhoenixSocket/Channel with a mock WebSocket (verify JSON framing, heartbeat, reconnect)
@@ -610,7 +634,9 @@ sealed class TerminalEvent {
 
 Channel topic format: `"terminal:{session}:{window}:{pane}"` — convert from the `"session:window.pane"` target format used in the UI.
 
-Join reply: `{"history": "<base64>"}` — decode base64 history into ByteArray. The join reply does **not** include cols/rows. To get correctly-sized history, pass `cols` and `rows` as join params — the server will resize the pane and recapture the buffer before replying. Pane dimensions can be read from the session list (`Pane.width`, `Pane.height`) before joining.
+Join reply: `{"history": "<base64>"}` — decode base64 history into ByteArray. The join reply does **not** include cols/rows. To get correctly-sized history, pass `cols` and `rows` as **channel join payload params** (not socket URL params) — the server will resize the pane and recapture the buffer before replying. Server validates: cols 1-500, rows 1-200. Pane dimensions can be read from the session list (`Pane.width`, `Pane.height`) before joining.
+
+Join errors: the server may reject with `{"reason": "pane_not_ready"}` or `{"reason": "..."}`. Handle `pane_not_ready` with a short retry delay — the PaneStream may still be starting.
 
 #### 5.2 Terminal Session Bridge (`ui/terminal/TerminalSession.kt`)
 
@@ -1069,7 +1095,7 @@ android/
     changelogs/
       1.txt
   fdroid/
-    org.tamx.tmuxrm.yml    # F-Droid build recipe
+    org.tamx.termigate.yml    # F-Droid build recipe
 ```
 
 Requirements for F-Droid:
@@ -1161,11 +1187,19 @@ For client-to-server input, the app sends JSON text frames with the `"input"` ev
 
 ### Session Channel Join Reply
 
-The `"sessions"` channel join reply contains the current session list. The server serializes sessions as a list of maps. Parse with kotlinx.serialization matching the server's JSON format.
+The `"sessions"` channel join reply contains the current session list wrapped in `{"sessions": [...]}`. The `"sessions_updated"` push events use the same format: `{"sessions": [...]}`. Parse with kotlinx.serialization matching the server's JSON format. Note that the Channel serialization of sessions sends `created` as an ISO 8601 string (not a Unix timestamp like the REST API) — see the `CreatedTimestampSerializer` note in Phase 2.
 
 ### Error Recovery
 
 - **Channel disconnect**: exponential backoff reconnect (1s → 30s cap). On reconnect, rejoin all active topics. Server sends fresh history in join reply.
 - **REST API failure**: show error in UI, retry on user action (pull-to-refresh, retry button)
 - **Token expired (401)**: clear token, navigate to login
+- **Rate limited (429)**: show "Too many attempts, try again later" — applies to `/api/login`
 - **Server unreachable**: show "Server unreachable" with cached data where available (session list, quick actions)
+
+### Auth-Disabled Mode
+
+The server can run with auth disabled (`Termigate.Auth.auth_enabled?()` returns false). When auth is disabled:
+- `POST /api/login` still exists but is unnecessary — all API routes accept requests without a Bearer token
+- WebSocket connects without a token
+- The app should detect this (e.g., try connecting without auth first, or add a `GET /api/config` check) and skip the login screen

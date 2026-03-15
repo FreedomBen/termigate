@@ -1,7 +1,9 @@
 defmodule Termigate.MCP.Tools.ListSessions do
   @moduledoc "List all tmux sessions with their metadata."
 
-  use Hermes.Server.Component, type: :tool
+  use Hermes.Server.Component,
+    type: :tool,
+    annotations: %{"readOnlyHint" => true}
 
   alias Hermes.Server.Response
   alias Termigate.TmuxManager

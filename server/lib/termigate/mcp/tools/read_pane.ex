@@ -1,7 +1,9 @@
 defmodule Termigate.MCP.Tools.ReadPane do
   @moduledoc "Read the current visible content of a tmux pane."
 
-  use Hermes.Server.Component, type: :tool
+  use Hermes.Server.Component,
+    type: :tool,
+    annotations: %{"readOnlyHint" => true}
 
   alias Hermes.Server.Response
   alias Termigate.MCP.AnsiStripper

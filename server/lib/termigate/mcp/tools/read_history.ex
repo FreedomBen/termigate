@@ -1,7 +1,9 @@
 defmodule Termigate.MCP.Tools.ReadHistory do
   @moduledoc "Read scrollback history from a tmux pane's buffer."
 
-  use Hermes.Server.Component, type: :tool
+  use Hermes.Server.Component,
+    type: :tool,
+    annotations: %{"readOnlyHint" => true}
 
   alias Hermes.Server.Response
   alias Termigate.MCP.AnsiStripper

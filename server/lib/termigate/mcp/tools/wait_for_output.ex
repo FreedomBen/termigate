@@ -1,7 +1,9 @@
 defmodule Termigate.MCP.Tools.WaitForOutput do
   @moduledoc "Wait for output matching a regex pattern in a tmux pane."
 
-  use Hermes.Server.Component, type: :tool
+  use Hermes.Server.Component,
+    type: :tool,
+    annotations: %{"readOnlyHint" => true}
 
   alias Hermes.Server.Response
   alias Termigate.MCP.Workflows

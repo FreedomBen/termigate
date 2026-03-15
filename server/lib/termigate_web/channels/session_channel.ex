@@ -47,7 +47,7 @@ defmodule TermigateWeb.SessionChannel do
       %{
         name: session.name,
         windows: session.windows,
-        created: session.created,
+        created: session.created && DateTime.to_unix(session.created),
         attached: session.attached?,
         panes: serialize_panes(session)
       }

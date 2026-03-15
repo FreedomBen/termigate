@@ -20,7 +20,9 @@
 
 # Already Run
 
-- Let's move on to implementing the android application.  Read through APPLICATION_DESIGN.md , and write an implementation plan to ANDROID_IMPLEMENTATION.md.  
+- Let's continue implementing the MCP server according to MCP_DESIGN.md.  (Implemented MCP resources: tmux://sessions, tmux://session/{name}/panes, tmux://pane/{target}/screen.  Added readOnlyHint annotations to read-only tools.  72 MCP tests passing.)
+
+- Let's move on to implementing the android application.  Read through APPLICATION_DESIGN.md , and write an implementation plan to ANDROID_IMPLEMENTATION.md.
 
 - We're ready to begin implementing the MCP server as described in MCP_DESIGN.md.
 

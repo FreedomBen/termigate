@@ -127,6 +127,104 @@ defmodule TermigateWeb.MCPEndpointTest do
              ]
     end
 
+    test "initialize includes resources capability", %{conn: conn} do
+      conn =
+        conn
+        |> mcp_conn()
+        |> post("/mcp", init_payload())
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert body["result"]["capabilities"]["resources"] != nil
+    end
+
+    test "resources/list returns static resources", %{conn: conn} do
+      session_id = init_session(conn)
+
+      list_conn =
+        conn
+        |> mcp_conn()
+        |> put_req_header("mcp-session-id", session_id)
+        |> post("/mcp", %{
+          "jsonrpc" => "2.0",
+          "id" => 3,
+          "method" => "resources/list",
+          "params" => %{}
+        })
+
+      assert list_conn.status == 200
+      body = Jason.decode!(list_conn.resp_body)
+      resources = body["result"]["resources"]
+      assert is_list(resources)
+
+      names = Enum.map(resources, & &1["name"])
+      assert "tmux_sessions" in names
+
+      sessions_resource = Enum.find(resources, &(&1["name"] == "tmux_sessions"))
+      assert sessions_resource["uri"] == "tmux://sessions"
+      assert sessions_resource["mimeType"] == "application/json"
+    end
+
+    test "resource templates are defined for discovery" do
+      # Verify our server defines the expected resource templates.
+      # Templates are served via handle_request override since the Hermes
+      # StreamableHTTP transport has issues routing resources/templates/list.
+      templates = Termigate.MCP.Server.resource_templates()
+      assert length(templates) == 2
+
+      names = Enum.map(templates, & &1.name)
+      assert "session_panes" in names
+      assert "pane_screen" in names
+
+      session_panes = Enum.find(templates, &(&1.name == "session_panes"))
+      assert session_panes.uri_template == "tmux://session/{name}/panes"
+      assert session_panes.mime_type == "application/json"
+
+      pane_screen = Enum.find(templates, &(&1.name == "pane_screen"))
+      assert pane_screen.uri_template == "tmux://pane/{target}/screen"
+      assert pane_screen.mime_type == "text/plain"
+    end
+
+    test "tools have correct annotations", %{conn: conn} do
+      session_id = init_session(conn)
+
+      list_conn =
+        conn
+        |> mcp_conn()
+        |> put_req_header("mcp-session-id", session_id)
+        |> post("/mcp", %{
+          "jsonrpc" => "2.0",
+          "id" => 5,
+          "method" => "tools/list",
+          "params" => %{}
+        })
+
+      assert list_conn.status == 200
+      body = Jason.decode!(list_conn.resp_body)
+      tools = body["result"]["tools"]
+
+      # Read-only tools should have readOnlyHint
+      read_only_tools =
+        ~w(tmux_list_sessions tmux_list_panes tmux_read_pane tmux_read_history tmux_wait_for_output)
+
+      for tool_name <- read_only_tools do
+        tool = Enum.find(tools, &(&1["name"] == tool_name))
+
+        assert tool["annotations"]["readOnlyHint"] == true,
+               "Expected #{tool_name} to have readOnlyHint: true"
+      end
+
+      # Destructive tools should have destructiveHint
+      destructive_tools = ~w(tmux_kill_session tmux_kill_pane)
+
+      for tool_name <- destructive_tools do
+        tool = Enum.find(tools, &(&1["name"] == tool_name))
+
+        assert tool["annotations"]["destructiveHint"] == true,
+               "Expected #{tool_name} to have destructiveHint: true"
+      end
+    end
+
     test "rate limits excessive requests", %{conn: conn} do
       # Use a very low limit and clear the ETS table first
       original_limits = Application.get_env(:termigate, :rate_limits)
@@ -155,6 +253,25 @@ defmodule TermigateWeb.MCPEndpointTest do
       assert conn3.status == 429
       assert get_resp_header(conn3, "retry-after") != []
     end
+  end
+
+  defp init_session(conn) do
+    init_conn =
+      conn
+      |> mcp_conn()
+      |> post("/mcp", init_payload())
+
+    session_id = get_resp_header(init_conn, "mcp-session-id") |> hd()
+
+    conn
+    |> mcp_conn()
+    |> put_req_header("mcp-session-id", session_id)
+    |> post("/mcp", %{
+      "jsonrpc" => "2.0",
+      "method" => "notifications/initialized"
+    })
+
+    session_id
   end
 
   defp start_mcp_server do
