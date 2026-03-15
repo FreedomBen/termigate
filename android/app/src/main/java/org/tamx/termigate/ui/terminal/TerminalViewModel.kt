@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.tamx.termigate.data.model.QuickAction
+import org.tamx.termigate.data.network.ApiClient
 import org.tamx.termigate.data.repository.TerminalEvent
 import org.tamx.termigate.data.repository.TerminalRepository
 import javax.inject.Inject
@@ -20,6 +22,7 @@ import javax.inject.Inject
 @HiltViewModel
 class TerminalViewModel @Inject constructor(
     private val terminalRepo: TerminalRepository,
+    private val apiClient: ApiClient,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -38,7 +41,8 @@ class TerminalViewModel @Inject constructor(
         val error: String? = null,
         val paneDead: Boolean = false,
         val supersededTarget: String? = null,
-        val title: String = ""
+        val title: String = "",
+        val quickActions: List<QuickAction> = emptyList()
     )
 
     private val _uiState = MutableStateFlow(UiState(title = target))
@@ -104,6 +108,8 @@ class TerminalViewModel @Inject constructor(
                         it.copy(isConnected = true, isLoading = false)
                     }
 
+                    loadQuickActions()
+
                     // Feed history once emulator is available
                     // This is called from the UI after attachSession triggers updateSize
                     if (history.isNotEmpty()) {
@@ -138,6 +144,20 @@ class TerminalViewModel @Inject constructor(
     fun sendInput(data: ByteArray) {
         viewModelScope.launch {
             terminalRepo.sendInput(target, data)
+        }
+    }
+
+    fun onQuickAction(action: QuickAction) {
+        val command = action.command + "\n"
+        sendInput(command.toByteArray(Charsets.UTF_8))
+    }
+
+    private fun loadQuickActions() {
+        viewModelScope.launch {
+            apiClient.getQuickActions()
+                .onSuccess { actions ->
+                    _uiState.update { it.copy(quickActions = actions) }
+                }
         }
     }
 

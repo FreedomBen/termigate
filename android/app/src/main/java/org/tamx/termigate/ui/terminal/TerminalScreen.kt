@@ -3,7 +3,6 @@ package org.tamx.termigate.ui.terminal
 import android.graphics.Typeface
 import android.view.KeyEvent
 import android.view.MotionEvent
-import android.view.inputmethod.EditorInfo
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -11,8 +10,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
@@ -37,9 +39,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.termux.terminal.TerminalSession
@@ -60,6 +66,19 @@ fun TerminalScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showTopBar by remember { mutableStateOf(true) }
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
+    var isKeyboardVisible by remember { mutableStateOf(false) }
+
+    // Detect soft keyboard visibility
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val listener = ViewCompat.setOnApplyWindowInsetsListener(view) { _, insets ->
+            isKeyboardVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+            insets
+        }
+        onDispose {
+            ViewCompat.setOnApplyWindowInsetsListener(view, null)
+        }
+    }
 
     // Auto-hide top bar
     LaunchedEffect(showTopBar) {
@@ -74,23 +93,46 @@ fun TerminalScreen(
         state.supersededTarget?.let { onNavigateToTarget(it) }
     }
 
-    // Disconnect on dispose
-    DisposableEffect(Unit) {
-        onDispose { /* viewModel handles disconnect in onCleared */ }
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
-        // Terminal view
-        if (state.isConnected && viewModel.remoteSession != null) {
-            TerminalViewComposable(
-                viewModel = viewModel,
-                onTerminalViewCreated = { view -> terminalView = view },
-                onTopBarToggle = { showTopBar = !showTopBar },
-                modifier = Modifier.fillMaxSize()
-            )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
+        ) {
+            // Quick action bar (below top bar area, above terminal)
+            if (state.isConnected && state.quickActions.isNotEmpty()) {
+                QuickActionBar(
+                    quickActions = state.quickActions,
+                    onActionExecute = viewModel::onQuickAction
+                )
+            }
+
+            // Terminal view
+            if (state.isConnected && viewModel.remoteSession != null) {
+                TerminalViewComposable(
+                    viewModel = viewModel,
+                    onTerminalViewCreated = { tv -> terminalView = tv },
+                    onTopBarToggle = { showTopBar = !showTopBar },
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                // Spacer when terminal not connected
+                Box(modifier = Modifier.weight(1f))
+            }
+
+            // Special key toolbar (visible when keyboard is open)
+            AnimatedVisibility(
+                visible = isKeyboardVisible,
+                enter = slideInVertically { it },
+                exit = slideOutVertically { it }
+            ) {
+                SpecialKeyToolbar(
+                    onSendInput = viewModel::sendInput
+                )
+            }
         }
 
-        // Loading
+        // Loading overlay
         if (state.isLoading) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -100,7 +142,7 @@ fun TerminalScreen(
             }
         }
 
-        // Error
+        // Error overlay
         state.error?.let { error ->
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -180,8 +222,6 @@ private fun TerminalViewComposable(
     onTopBarToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-
     AndroidView(
         factory = { ctx ->
             TerminalView(ctx, null).apply {
@@ -192,7 +232,7 @@ private fun TerminalViewComposable(
                 val session = viewModel.remoteSession ?: return@apply
                 attachSession(session)
 
-                // After attachSession → updateSize → initializeEmulator, feed pending history
+                // After attachSession -> updateSize -> initializeEmulator, feed pending history
                 session.pendingHistory?.let { history ->
                     session.feedInput(history)
                     session.pendingHistory = null
@@ -204,7 +244,6 @@ private fun TerminalViewComposable(
             }
         },
         update = { view ->
-            // Re-bind on recomposition (e.g., after config change)
             val session = viewModel.remoteSession
             if (session != null && view.currentSession !== session) {
                 view.attachSession(session)
@@ -218,12 +257,9 @@ private fun TerminalViewComposable(
         modifier = modifier
     )
 
-    // Trigger connect when first composed — use initial default dimensions,
-    // the real size comes from TerminalView.onSizeChanged → updateSize
+    // Trigger connect when first composed
     LaunchedEffect(Unit) {
-        if (!viewModel.uiState.value.isConnected && !viewModel.uiState.value.isLoading) {
-            viewModel.connect(cols = 80, rows = 24)
-        } else if (!viewModel.uiState.value.isConnected) {
+        if (!viewModel.uiState.value.isConnected) {
             viewModel.connect(cols = 80, rows = 24)
         }
     }
@@ -259,8 +295,6 @@ private fun createViewClient(
         override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession?): Boolean = false
 
         override fun onEmulatorSet() {
-            // Called when emulator is (re-)initialized after updateSize
-            // Send resize to server with the actual terminal dimensions
             val session = viewModel.remoteSession ?: return
             val emulator = session.emulator ?: return
             viewModel.sendResize(emulator.mColumns, emulator.mRows)

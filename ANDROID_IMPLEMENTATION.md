@@ -28,7 +28,7 @@ No server changes are needed for the Android app.
 | 3 | Login Screen | Auth flow, token storage, server URL config | Small | Done |
 | 4 | Session List Screen | Session/pane listing via Channel + REST, CRUD actions | Medium | Done |
 | 5 | Terminal Screen (Core) | Termux TerminalView + Channel integration, keyboard input | Large | Done |
-| 6 | Terminal Toolbars | Special key toolbar, quick action bar | Medium | |
+| 6 | Terminal Toolbars | Special key toolbar, quick action bar | Medium | Done |
 | 7 | Settings Screen | Quick actions CRUD, display preferences, connection settings | Small | |
 | 8 | Foreground Service & Notifications | Background connection persistence, pane death alerts | Medium | |
 | 9 | Polish & Distribution | ProGuard, CI/CD, Play Store, F-Droid, direct APK | Medium | |
@@ -889,10 +889,10 @@ Material 3 `AlertDialog` with the command text in a monospace code block.
 
 ### Checklist
 
-- [ ] 6.1 Special key toolbar (`ui/terminal/SpecialKeyToolbar.kt` — Esc, Tab, Ctrl, Alt, arrows, Paste, extended keys)
-- [ ] 6.2 Quick action bar (`ui/terminal/QuickActionBar.kt` — scrollable pills, color-coded, confirm indicator)
-- [ ] 6.3 Confirmation dialog (for `confirm: true` quick actions)
-- [ ] 6.4 Toolbar visibility with soft keyboard (show toolbar when keyboard open, hide when closed)
+- [x] 6.1 Special key toolbar (`ui/terminal/SpecialKeyToolbar.kt` — Esc, Tab, Ctrl, Alt, arrows, Paste, extended keys)
+- [x] 6.2 Quick action bar (`ui/terminal/QuickActionBar.kt` — scrollable pills, color-coded, confirm indicator)
+- [x] 6.3 Confirmation dialog (for `confirm: true` quick actions)
+- [x] 6.4 Toolbar visibility with soft keyboard (show toolbar when keyboard open, hide when closed)
 - [ ] Verification: Esc, Tab, arrow keys produce correct behavior
 - [ ] Verification: Ctrl+C cancels a running process
 - [ ] Verification: Sticky Ctrl works (tap Ctrl, tap C → Ctrl+C)
