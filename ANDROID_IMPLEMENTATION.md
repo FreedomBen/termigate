@@ -31,7 +31,7 @@ No server changes are needed for the Android app.
 | 6 | Terminal Toolbars | Special key toolbar, quick action bar | Medium | Done |
 | 7 | Settings Screen | Quick actions CRUD, display preferences, connection settings | Small | Done |
 | 8 | Foreground Service & Notifications | Background connection persistence, pane death alerts | Medium | Done |
-| 9 | Polish & Distribution | ProGuard, CI/CD, Play Store, F-Droid, direct APK | Medium | |
+| 9 | Polish & Distribution | ProGuard, CI/CD, Play Store, F-Droid, direct APK | Medium | Done |
 
 ---
 
@@ -1169,12 +1169,12 @@ TBD — placeholder icon for initial release.
 
 ### Checklist
 
-- [ ] 9.1 ProGuard rules (`app/proguard-rules.pro` — keep rules for serialization, Ktor, OkHttp, Termux)
-- [ ] 9.2 Build variants (release with minify, debug with `.debug` suffix)
-- [ ] 9.3 CI/CD (`.github/workflows/android.yml` — build, test, lint, release)
-- [ ] 9.4 F-Droid metadata (`metadata/android/en-US/`)
-- [ ] 9.5 Signing (debug keystore, release keystore as GitHub secret)
-- [ ] 9.6 App icon (final design)
+- [x] 9.1 ProGuard rules (`app/proguard-rules.pro` — keep rules for serialization, Ktor, OkHttp, Termux)
+- [x] 9.2 Build variants (release with minify + shrinkResources, debug with `.debug` suffix)
+- [x] 9.3 CI/CD (`.github/workflows/android.yml` — build, test, lint, release)
+- [x] 9.4 F-Droid metadata (`metadata/android/en-US/` + `fdroid/org.tamx.termigate.yml`)
+- [x] 9.5 Signing (debug keystore, release keystore via env vars / GitHub secrets)
+- [ ] 9.6 App icon (final design — TBD)
 - [ ] Verification: Release APK installs and runs correctly
 - [ ] Verification: CI builds pass on push to main
 - [ ] Verification: Tagged release creates GitHub Release with APK

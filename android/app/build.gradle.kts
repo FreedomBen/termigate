@@ -21,13 +21,33 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val ksFile = System.getenv("RELEASE_KEYSTORE_FILE")
+            if (ksFile != null) {
+                storeFile = file(ksFile)
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            val ksFile = System.getenv("RELEASE_KEYSTORE_FILE")
+            if (ksFile != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+        debug {
+            applicationIdSuffix = ".debug"
         }
     }
 

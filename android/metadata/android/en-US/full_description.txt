@@ -1,0 +1,14 @@
+termigate provides browser-based and native access to tmux sessions with real-time terminal streaming.
+
+This Android app connects to a self-hosted termigate server, giving you full terminal access from your phone or tablet. The server manages tmux sessions and streams terminal I/O over WebSocket using Phoenix Channels.
+
+Features:
+- Real-time terminal rendering with full ANSI/VT support
+- Session and pane management (create, delete, rename, split)
+- Configurable quick action buttons for common commands
+- Special key toolbar (Ctrl, Alt, Tab, Esc, arrows, function keys)
+- Background connection via foreground service with notifications
+- Secure authentication (username/password or token-based)
+- Works with any self-hosted termigate server
+
+No data is collected. All terminal data stays between your device and your server.

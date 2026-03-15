@@ -1,0 +1,8 @@
+Initial release:
+- Terminal screen with real-time streaming via Phoenix Channels
+- Session and pane management
+- Quick action bar with configurable commands
+- Special key toolbar (Ctrl, Alt, Tab, Esc, arrows, function keys)
+- Background connection with foreground service
+- Username/password and token-based authentication
+- Auth-disabled server support

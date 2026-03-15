@@ -1,0 +1,30 @@
+Categories:
+  - System
+  - Development
+License: Apache-2.0
+AuthorName: tamx
+SourceCode: https://github.com/tamx/termigate
+IssueTracker: https://github.com/tamx/termigate/issues
+
+AutoName: termigate
+
+RepoType: git
+Repo: https://github.com/tamx/termigate.git
+
+Builds:
+  - versionName: 1.0.0
+    versionCode: 1
+    commit: v1.0.0
+    subdir: android/app
+    submodules: false
+    sudo:
+      - apt-get update
+      - apt-get install -y openjdk-17-jdk-headless
+    gradle:
+      - yes
+    output: build/outputs/apk/release/app-release-unsigned.apk
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.0.0
+CurrentVersionCode: 1
