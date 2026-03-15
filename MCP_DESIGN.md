@@ -19,7 +19,7 @@ Most AI agents get stateless shell access: run a command, get output, done. term
 ## Design Principles
 
 1. **Two tiers of tools.** Low-level tools map 1:1 to tmux operations. High-level tools compose them into agent-friendly workflows (e.g., "run command and wait for output"). Both tiers are always available.
-2. **Reuse existing infrastructure.** Every MCP tool delegates to TmuxManager, PaneStream, or Config. No new GenServers, no parallel state.
+2. **Reuse existing infrastructure.** Every MCP tool delegates to TmuxManager, PaneStream, or Config. No new business-logic state. The one exception is `mcp_session.ex`, a lightweight per-connection GenServer that tracks which PaneStream subscriptions and cleanup-pending sessions belong to each MCP client — it dies when the connection drops and holds no tmux state of its own.
 3. **Treat terminal output as text.** MCP results are UTF-8 text. Binary terminal escapes are stripped or preserved based on a per-call flag. Default: stripped (clean text). Optional: raw (with ANSI escapes, for agents that can interpret them).
 4. **Auth mirrors the REST API.** MCP connections authenticate the same way the REST API does — Bearer token via `Phoenix.Token`, verified by the same `RequireAuthToken` plug pipeline.
 5. **No implicit side effects.** Tools that mutate state (create/kill sessions, send input) are clearly separated from read-only tools. Agents can safely call any read tool without changing tmux state.
@@ -107,7 +107,7 @@ List all panes in a session, grouped by window.
 }
 ```
 
-**Delegates to:** `TmuxManager.list_panes/1`
+**Delegates to:** `TmuxManager.list_panes/1`. The `Pane` struct has separate `session_name`, `window_index`, and `index` fields — the MCP handler constructs the `target` string as `"#{session_name}:#{window_index}.#{index}"`. Window index keys are integers in the Elixir map but serialize as string keys in JSON.
 
 ---
 
@@ -156,7 +156,7 @@ Split an existing pane.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `target` | string | yes | Pane target (e.g., `"dev:0.0"`) |
-| `direction` | string | no | `"horizontal"` or `"vertical"` (default: `"horizontal"`) |
+| `direction` | string | no | `"horizontal"` (side-by-side panes) or `"vertical"` (top/bottom panes). Default: `"horizontal"`. Matches tmux `-h`/`-v` semantics. |
 
 **Returns:**
 ```json
@@ -217,7 +217,7 @@ Read the current visible content of a pane (what's on screen now).
 }
 ```
 
-**Implementation:** Calls `tmux capture-pane -p -t <target>` (optionally with `-e` for escapes). Requires a new `TmuxManager.capture_pane/2` wrapper — capture-pane is not currently exposed but is a single tmux command.
+**Implementation:** Calls `tmux capture-pane -p -t <target>` (optionally with `-e` for escapes). Requires a new public `TmuxManager.capture_pane/2` function. The command is already used internally in `PaneStream` (`capture_scrollback/2`, `resize_and_capture`) — this just exposes it as a standalone function.
 
 ---
 
@@ -241,7 +241,7 @@ Read the scrollback buffer for a pane. Returns more content than `read_pane` (wh
 ```
 
 **Implementation:** Two paths depending on whether a PaneStream is active for this target:
-- **PaneStream active:** Read from the RingBuffer via `PaneStream.subscribe/1` (returns history), then immediately unsubscribe. Strip ANSI unless `raw: true`.
+- **PaneStream active:** Read from the RingBuffer via a new `PaneStream.read_buffer/1` function (a simple `GenServer.call` that returns `RingBuffer.read(state.buffer)` without triggering viewer lifecycle — no monitors, grace timers, or PubSub subscriptions). Strip ANSI unless `raw: true`.
 - **No PaneStream:** Fall back to `tmux capture-pane -p -S -<lines> -t <target>`.
 
 ---
@@ -257,7 +257,7 @@ Resize a pane.
 | `cols` | integer | yes | Width (1–500) |
 | `rows` | integer | yes | Height (1–200) |
 
-**Delegates to:** `TmuxManager.resize_pane/2`
+**Delegates to:** `TmuxManager.resize_pane/2` (maps `cols` → `x:`, `rows` → `y:` keyword opts)
 
 ---
 
@@ -282,7 +282,7 @@ Run a command in a pane and return the output. This is the primary tool most age
 **Behavior:**
 
 1. Subscribe to PaneStream output for `target`.
-2. Inject a unique marker: send `; echo __MCP_DONE_<uuid>__\n` appended to the command.
+2. Inject a unique marker: send `<command>; echo __MCP_DONE_<uuid>_$?__\n` so the marker contains the exit code.
 3. Stream output, buffering everything after the command echo.
 4. When the marker appears in output, capture everything between command echo and marker.
 5. Unsubscribe and return captured output.
@@ -297,7 +297,7 @@ Run a command in a pane and return the output. This is the primary tool most age
 }
 ```
 
-**Exit code capture:** The injected command is actually `<command>; echo __MCP_DONE_<uuid>_$?__` so the marker contains the exit code.
+**Exit code capture:** The `$?` in the marker expands to the previous command's exit code, so the marker doubles as exit status delivery.
 
 **Edge cases:**
 - If the pane is running an interactive program (vim, python REPL), the marker approach won't work cleanly. The agent should use `send_keys` + `read_pane` instead. `run_command` is for shell prompts.
@@ -484,11 +484,11 @@ MCP sessions should track resources they create. When a connection drops:
 - Unsubscribe from any active PaneStream subscriptions.
 - Optionally kill sessions created with `cleanup: true` that are still running.
 
-`mcp_session.ex` holds this state per connection, keyed by a connection ID derived from the auth token + request metadata.
+`mcp_session.ex` is a lightweight GenServer, one per MCP connection. It starts on the first request for a given `Mcp-Session-Id` header (per Streamable HTTP spec) and is supervised under a DynamicSupervisor. It dies when the client sends a `DELETE /mcp` session teardown or after an inactivity timeout. It holds no tmux state — only a list of PaneStream subscriptions and pending-cleanup session names.
 
 ### Rate Limiting
 
-The MCP route will use `RateLimitStore` with MCP-specific limits. Currently only the login endpoint is rate-limited — the MCP scope needs its own `RateLimit` plug with appropriate limits. High-frequency tools (`read_pane`, `send_keys`) may need higher limits — configurable per-tool if needed.
+The MCP route will use `RateLimitStore` with MCP-specific limits. Default: 120 requests/minute per IP (2/sec sustained). This is a single rate limit on the `/mcp` endpoint — no per-tool differentiation initially. The limit is higher than the login endpoint (5/60s) because agents make many rapid tool calls in normal use. Can be tightened or split per-tool later if needed.
 
 ## Example Agent Workflows
 

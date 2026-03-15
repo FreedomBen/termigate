@@ -1,0 +1,786 @@
+openapi: 3.1.0
+info:
+  title: Termigate API
+  description: |
+    REST API for Termigate — a browser-based tmux session manager with real-time
+    terminal streaming. Provides session and pane lifecycle management, quick actions,
+    configuration, health checks, and metrics.
+
+    ## Authentication
+
+    Termigate supports two authentication strategies:
+
+    - **Username/Password** — obtain a bearer token via `POST /api/login`
+    - **Static Token** — set `TERMIGATE_AUTH_TOKEN` environment variable
+
+    All authenticated endpoints require a bearer token in the `Authorization` header.
+
+    When no credentials file exists and no `TERMIGATE_AUTH_TOKEN` is set, auth is
+    disabled (localhost mode).
+
+    ## WebSocket Channels
+
+    Real-time terminal streaming and session updates are available via Phoenix
+    Channels over WebSocket at `/socket/websocket`. See the channel documentation
+    below for details.
+  version: 1.0.0
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:4000
+    description: Local development server
+
+tags:
+  - name: Auth
+    description: Authentication and session management
+  - name: Sessions
+    description: tmux session lifecycle
+  - name: Panes
+    description: tmux pane operations
+  - name: Quick Actions
+    description: Configurable quick-action commands
+  - name: Config
+    description: Application configuration
+  - name: Health
+    description: Health and readiness checks
+  - name: Metrics
+    description: Runtime metrics
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Phoenix.Token signed with "api_token" scope. Obtain via `POST /api/login`.
+        Max age: 7 days.
+
+  schemas:
+    Pane:
+      type: object
+      properties:
+        session_name:
+          type: string
+          example: dev
+        window_index:
+          type: integer
+          example: 0
+        index:
+          type: integer
+          example: 0
+        width:
+          type: integer
+          example: 120
+        height:
+          type: integer
+          example: 40
+        command:
+          type: string
+          example: bash
+        pane_id:
+          type: string
+          example: "%0"
+
+    Session:
+      type: object
+      properties:
+        name:
+          type: string
+          example: dev
+        windows:
+          type: integer
+          example: 2
+        created:
+          type: integer
+          description: Unix timestamp
+          example: 1710000000
+        attached:
+          type: boolean
+          example: false
+        panes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pane"
+
+    QuickAction:
+      type: object
+      properties:
+        id:
+          type: string
+          example: abc123
+        label:
+          type: string
+          example: Status
+        command:
+          type: string
+          example: git status
+        confirm:
+          type: boolean
+          example: false
+        color:
+          type: string
+          example: default
+        icon:
+          type: string
+          example: terminal
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+        tmux:
+          type: string
+          enum: [ok, no_server, not_found, error]
+        message:
+          type: string
+          description: Present when status is error
+        active_pane_streams:
+          type: integer
+        vm_memory_mb:
+          type: number
+        auth_mode:
+          type: string
+          enum: [credentials, token, disabled]
+
+    RateLimitError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [rate_limited]
+        retry_after:
+          type: integer
+          description: Seconds until the rate limit resets
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: unauthorized
+
+    RateLimited:
+      description: Too many requests
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds until the rate limit resets
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/RateLimitError"
+          example:
+            error: rate_limited
+            retry_after: 45
+
+paths:
+  /api/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate and obtain a bearer token
+      description: |
+        Rate-limited to 5 requests per 60 seconds per IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  expires_in:
+                    type: integer
+                    description: Token lifetime in seconds
+                    example: 604800
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: invalid_credentials
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/sessions:
+    get:
+      tags: [Sessions]
+      summary: List all tmux sessions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Session list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags: [Sessions]
+      summary: Create a new tmux session
+      description: |
+        Rate-limited to 10 requests per 60 seconds per IP.
+        Session names must match `^[a-zA-Z0-9_-]+$`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  pattern: "^[a-zA-Z0-9_-]+$"
+                  example: my-session
+                command:
+                  type: string
+                  description: Optional command to run in the new session
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  status:
+                    type: string
+                    enum: [created]
+        "400":
+          description: Invalid session name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: invalid_name
+                message: "Session name must match ^[a-zA-Z0-9_-]+$"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Session already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: creation_failed
+                message: duplicate session
+        "422":
+          description: Creation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/sessions/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+
+    put:
+      tags: [Sessions]
+      summary: Rename a tmux session
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_name]
+              properties:
+                new_name:
+                  type: string
+                  pattern: "^[a-zA-Z0-9_-]+$"
+      responses:
+        "200":
+          description: Session renamed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  status:
+                    type: string
+                    enum: [renamed]
+        "400":
+          description: Invalid session name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Rename failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      tags: [Sessions]
+      summary: Kill a tmux session
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Session killed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: not_found
+                message: "Session 'foo' not found"
+
+  /api/sessions/{name}/windows:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+
+    post:
+      tags: [Sessions]
+      summary: Create a new window in a session
+      security:
+        - bearerAuth: []
+      responses:
+        "201":
+          description: Window created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [created]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Creation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/panes/{target}/split:
+    parameters:
+      - name: target
+        in: path
+        required: true
+        description: "tmux target in format `session:window.pane`"
+        schema:
+          type: string
+          example: "dev:0.0"
+
+    post:
+      tags: [Panes]
+      summary: Split a pane
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                direction:
+                  type: string
+                  enum: [horizontal, vertical]
+                  default: horizontal
+      responses:
+        "201":
+          description: Pane split created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [created]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Split failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/panes/{target}:
+    parameters:
+      - name: target
+        in: path
+        required: true
+        description: "tmux target in format `session:window.pane`"
+        schema:
+          type: string
+          example: "dev:0.0"
+
+    delete:
+      tags: [Panes]
+      summary: Kill a pane
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Pane killed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Kill failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/quick-actions:
+    get:
+      tags: [Quick Actions]
+      summary: List all quick actions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Quick actions list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  quick_actions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/QuickAction"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags: [Quick Actions]
+      summary: Create a quick action
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label, command]
+              properties:
+                label:
+                  type: string
+                command:
+                  type: string
+                confirm:
+                  type: boolean
+                  default: false
+                color:
+                  type: string
+                icon:
+                  type: string
+      responses:
+        "201":
+          description: Quick action created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  quick_actions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/QuickAction"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Creation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/quick-actions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+
+    put:
+      tags: [Quick Actions]
+      summary: Update a quick action
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                command:
+                  type: string
+                confirm:
+                  type: boolean
+                color:
+                  type: string
+                icon:
+                  type: string
+      responses:
+        "200":
+          description: Quick action updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  quick_actions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/QuickAction"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Update failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      tags: [Quick Actions]
+      summary: Delete a quick action
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Quick action deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Delete failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/quick-actions/order:
+    put:
+      tags: [Quick Actions]
+      summary: Reorder quick actions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                  description: Ordered list of quick action IDs
+      responses:
+        "200":
+          description: Quick actions reordered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  quick_actions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/QuickAction"
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: validation_failed
+                message: "Missing required field: ids (array)"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Reorder failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/config:
+    get:
+      tags: [Config]
+      summary: Get application configuration
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Full YAML config as JSON. Shape depends on config file contents.
+                properties:
+                  quick_actions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/QuickAction"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: |
+        Returns the health status of the application and tmux server.
+        No authentication required.
+      responses:
+        "200":
+          description: Healthy (tmux may have no sessions, which is not an error)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: Unhealthy — tmux not found or communication error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /metrics:
+    get:
+      tags: [Metrics]
+      summary: Runtime metrics
+      description: |
+        Optionally protected by `TERMIGATE_METRICS_TOKEN` environment variable.
+        When set, requires `Authorization: Bearer <token>`.
+      responses:
+        "200":
+          description: Metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active_pane_streams:
+                    type: integer
+                  uptime_seconds:
+                    type: integer
+                  vm:
+                    type: object
+                    properties:
+                      memory_total_mb:
+                        type: number
+                      memory_processes_mb:
+                        type: number
+                      memory_binary_mb:
+                        type: number
+                      process_count:
+                        type: integer
+                      run_queue:
+                        type: integer
+        "401":
+          description: Unauthorized (only when TERMIGATE_METRICS_TOKEN is set)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
