@@ -11,10 +11,11 @@ Native Android app for termigate — connects to the termigate server via Phoeni
 ## Server Prerequisites
 
 The termigate server already has all required infrastructure:
-- Phoenix Channels: `TerminalChannel` (binary terminal I/O), `SessionChannel` (real-time session list)
+- Phoenix Channels: `TerminalChannel` (base64-encoded terminal I/O over JSON), `SessionChannel` (real-time session list)
 - REST API: `/api/login`, `/api/sessions`, `/api/panes`, `/api/quick-actions`, `/api/config`
-- Auth: `POST /api/login` returns a `Phoenix.Token` bearer token; `UserSocket` validates it on connect
-- Binary frame support: raw binary WebSocket frames for terminal data, JSON for control messages
+- Auth: `POST /api/login` returns a `Phoenix.Token` bearer token (context `"api_token"`); `UserSocket` validates it on connect (accepts both `"channel"` and `"api_token"` token contexts)
+- Terminal output: base64-encoded data in JSON text frames (`"output"` event with `{data: "<base64>"}`)
+- Terminal input: accepts both JSON text frames (`"input"` event with `{data: "<bytes>"}`) and raw binary WebSocket frames
 
 No server changes are needed for the Android app.
 
@@ -73,7 +74,6 @@ android/
 kotlin = "2.1.0"
 agp = "8.7.3"
 compose-bom = "2025.01.01"
-compose-compiler = "1.5.15"
 hilt = "2.53.1"
 ktor = "3.0.3"
 okhttp = "4.12.0"
@@ -216,15 +216,14 @@ class PhoenixSocket(
 ```
 
 Protocol details:
-- **Text frames** (JSON): `[join_ref, ref, topic, event, payload]` — control messages, join/leave, heartbeat, replies
-- **Binary frames**: raw terminal data — dispatched by WebSocket opcode (OkHttp's `onMessage(bytes: ByteString)`)
+- **All frames are JSON text frames**: `[join_ref, ref, topic, event, payload]` — including terminal output, control messages, join/leave, heartbeat, replies
+- **Terminal output**: arrives as `"output"` event with `{"data": "<base64>"}` payload — must base64-decode before feeding to emulator
 - **Heartbeat**: send `"heartbeat"` event every 30 seconds, expect `"phx_reply"` within 10 seconds or reconnect
 - **Reconnection**: exponential backoff 1s → 2s → 4s → 8s → 16s → 30s cap, reset on successful connect
 
 Key implementation notes:
 - Use `ref` counter (AtomicLong) to match push replies
-- Parse binary frames: the server sends raw bytes with no header for terminal output (see Phase 11 of server docs — `{:push, {:binary, data}, socket}` bypasses Channel framing). The client distinguishes binary frames (terminal data) from text frames (JSON control) by WebSocket opcode.
-- Client-to-server binary input: send as JSON text frame `["join_ref", "ref", "terminal:...", "input", {"data": "<base64>"}]` since the existing server `handle_in("input")` accepts base64. Alternatively, if binary input is supported, use that path.
+- Client-to-server input: send as JSON text frame `["join_ref", "ref", "terminal:...", "input", {"data": "<bytes>"}]`. The server `handle_in("input")` accepts the data field as a binary string. Alternatively, raw binary WebSocket frames are also accepted by the server.
 
 #### 2.2 Phoenix Channel Abstraction (`data/network/PhoenixChannel.kt`)
 
@@ -241,8 +240,7 @@ class PhoenixChannel(
 }
 
 sealed class ChannelEvent {
-    data class TextEvent(val event: String, val payload: Map<String, Any?>) : ChannelEvent()
-    data class BinaryEvent(val data: ByteArray) : ChannelEvent()
+    data class Message(val event: String, val payload: Map<String, Any?>) : ChannelEvent()
 }
 
 sealed class JoinResult {
@@ -270,7 +268,7 @@ class ApiClient(
     suspend fun renameSession(name: String, newName: String): Result<Unit>
     suspend fun createWindow(sessionName: String): Result<Unit>
 
-    // Panes
+    // Panes (target format: "session:window.pane", e.g. "myapp:0.1")
     suspend fun splitPane(target: String, direction: String): Result<Unit>
     suspend fun deletePane(target: String): Result<Unit>
 
@@ -278,7 +276,7 @@ class ApiClient(
     suspend fun getQuickActions(): Result<List<QuickAction>>
     suspend fun createQuickAction(action: QuickAction): Result<List<QuickAction>>
     suspend fun updateQuickAction(id: String, action: QuickAction): Result<List<QuickAction>>
-    suspend fun deleteQuickAction(id: String): Result<List<QuickAction>>
+    suspend fun deleteQuickAction(id: String): Result<Unit>
     suspend fun reorderQuickActions(ids: List<String>): Result<List<QuickAction>>
 
     // Config
@@ -313,26 +311,28 @@ object NetworkModule {
 @Serializable
 data class Session(
     val name: String,
-    val windows: List<Window>,
+    val windows: Int,               // window COUNT, not a list
     val attached: Boolean,
-    val created: Long
-)
-
-@Serializable
-data class Window(
-    val index: Int,
-    val name: String,
-    val panes: List<Pane>
+    val created: Long,
+    val panes: List<Pane>           // flat list of all panes across all windows
 )
 
 @Serializable
 data class Pane(
+    @SerialName("session_name")
+    val sessionName: String,
+    @SerialName("window_index")
+    val windowIndex: Int,
     val index: Int,
     val width: Int,
     val height: Int,
     val command: String,
-    val active: Boolean
-)
+    @SerialName("pane_id")
+    val paneId: String
+) {
+    /** Target format used by REST API and Channel topics: "session:window.pane" */
+    val target: String get() = "$sessionName:$windowIndex.$index"
+}
 
 @Serializable
 data class QuickAction(
@@ -345,7 +345,11 @@ data class QuickAction(
 )
 
 @Serializable
-data class LoginResponse(val token: String)
+data class LoginResponse(
+    val token: String,
+    @SerialName("expires_in")
+    val expiresIn: Long             // TTL in seconds (default: 604800 = 7 days)
+)
 ```
 
 ### Verification
@@ -492,6 +496,7 @@ class SessionRepository @Inject constructor(
 ```
 
 - On `connectSessionChannel()`: join the `"sessions"` Channel topic, parse join reply for initial session list, collect `"sessions_updated"` push events
+- Also handle `"tmux_status"` events: `{"status": "ok" | "no_server" | "not_found" | "error: ..."}` — show appropriate banner when tmux is unavailable
 - Cache last session list in memory for immediate display
 
 #### 4.2 Session List ViewModel
@@ -506,6 +511,7 @@ class SessionListViewModel @Inject constructor(
         val sessions: List<Session> = emptyList(),
         val isLoading: Boolean = true,
         val error: String? = null,
+        val tmuxStatus: String? = null,  // null = ok, "no_server", "not_found", "error: ..."
         val showCreateDialog: Boolean = false,
         val showRenameDialog: SessionRenameState? = null,
         val showDeleteConfirmation: String? = null  // session name
@@ -528,8 +534,8 @@ class SessionListViewModel @Inject constructor(
 
 Compose UI:
 - **Session cards**: expandable cards showing session name, window count, attached status, created time
-  - Expand to show panes: pane index, dimensions, running command
-  - Tap pane → navigate to Terminal Screen with target
+  - Expand to show panes (flat list grouped by `windowIndex`): pane index, dimensions, running command
+  - Tap pane → navigate to Terminal Screen with target (`"session:window.pane"`)
 - **FAB**: "New Session" → bottom sheet with name input (validated: `^[a-zA-Z0-9_-]+$`) and optional command
 - **Session actions** (long-press or kebab menu): rename, create window, kill (with confirmation dialog)
 - **Pane actions** (long-press on pane): split horizontal, split vertical, kill pane (with confirmation)
@@ -572,8 +578,9 @@ Full-screen terminal rendering with real-time streaming via Phoenix Channel. Thi
 class TerminalRepository @Inject constructor(
     private val phoenixSocket: PhoenixSocket
 ) {
-    // Join terminal channel, return history + dimensions
-    suspend fun connect(target: String): Result<TerminalConnection>
+    // Join terminal channel, return history
+    // Pass cols/rows as join params to resize pane on join and get correctly-sized history
+    suspend fun connect(target: String, cols: Int, rows: Int): Result<TerminalConnection>
 
     // Disconnect from terminal channel
     suspend fun disconnect(target: String)
@@ -586,14 +593,14 @@ class TerminalRepository @Inject constructor(
 }
 
 data class TerminalConnection(
-    val history: ByteArray,       // ring buffer contents from join reply
-    val cols: Int,
-    val rows: Int,
+    val history: ByteArray,       // ring buffer contents from join reply (base64-decoded)
+    val cols: Int,                // from join params (passed through)
+    val rows: Int,                // from join params (passed through)
     val events: Flow<TerminalEvent>  // streaming events from server
 )
 
 sealed class TerminalEvent {
-    data class Output(val data: ByteArray) : TerminalEvent()
+    data class Output(val data: ByteArray) : TerminalEvent()   // already base64-decoded
     data class Reconnected(val buffer: ByteArray) : TerminalEvent()
     data class Resized(val cols: Int, val rows: Int) : TerminalEvent()
     data object PaneDead : TerminalEvent()
@@ -603,7 +610,7 @@ sealed class TerminalEvent {
 
 Channel topic format: `"terminal:{session}:{window}:{pane}"` — convert from the `"session:window.pane"` target format used in the UI.
 
-Join reply: `{"history": "<base64>", "cols": int, "rows": int}` — decode base64 history into ByteArray.
+Join reply: `{"history": "<base64>"}` — decode base64 history into ByteArray. The join reply does **not** include cols/rows. To get correctly-sized history, pass `cols` and `rows` as join params — the server will resize the pane and recapture the buffer before replying. Pane dimensions can be read from the session list (`Pane.width`, `Pane.height`) before joining.
 
 #### 5.2 Terminal Session Bridge (`ui/terminal/TerminalSession.kt`)
 
@@ -675,7 +682,7 @@ class TerminalViewModel @Inject constructor(
 }
 ```
 
-- `connect()`: calls `terminalRepo.connect(target)`, creates `TerminalSession` with the returned dimensions, feeds history into it, then launches a coroutine to collect the event Flow and dispatch to `TerminalSession`
+- `connect()`: calculates cols/rows from the viewport, calls `terminalRepo.connect(target, cols, rows)`, creates `TerminalSession` with those dimensions, feeds history into it, then launches a coroutine to collect the event Flow and dispatch to `TerminalSession`. The `"output"` events arrive with base64-encoded data — `TerminalRepository` decodes them before emitting `TerminalEvent.Output`.
 - `TerminalSession` is held in the ViewModel, not the Composable — it persists across rotation/recomposition
 - On `PaneDead`: set `paneDead = true`, show overlay
 - On `Superseded(newTarget)`: set `supersededTarget`, prompt user or auto-navigate
@@ -724,11 +731,11 @@ AndroidView(
 
 **Keyboard input**: The Termux `TerminalView` translates Android `KeyEvent`s and `InputConnection` text into terminal byte sequences. Capture these bytes and send via `viewModel.sendInput(bytes)`.
 
-#### 5.5 Passive Resize Behavior
+#### 5.5 Resize Behavior
 
-The Android app is a **passive resizer** — it reads pane dimensions from the join reply and renders at that size. It does NOT send resize events when the viewport changes (soft keyboard, rotation). Instead:
+On initial connect, the app sends `cols` and `rows` as join params (calculated from viewport size and font metrics). The server resizes the pane and returns correctly-sized history. After joining, the app does NOT send resize events when the viewport changes (soft keyboard, rotation). Instead:
 - Scale the terminal view to fit via font size adjustment
-- When receiving `"resized"` from server: reconfigure `TerminalEmulator` with new dimensions, re-render
+- When receiving `"resized"` from server (another viewer resized): reconfigure `TerminalEmulator` with new dimensions, re-render
 - Optional "Fit to screen" button (Phase 6): calculates cols/rows for current viewport, sends resize with confirmation
 
 #### 5.6 Auto-Hide Top Bar
@@ -808,10 +815,10 @@ For quick actions with `confirm: true`:
 
 Material 3 `AlertDialog` with the command text in a monospace code block.
 
-#### 6.4 Toolbar Auto-Hide with Soft Keyboard
+#### 6.4 Toolbar Visibility with Soft Keyboard
 
-- When the soft keyboard is open: hide the special key toolbar (to maximize terminal space)
-- When the soft keyboard closes: show the toolbar again
+- When the soft keyboard is open: show the special key toolbar above it as an extra row (Esc, Ctrl, arrows are most useful alongside the keyboard)
+- When the soft keyboard closes: hide the toolbar (tap the terminal to bring up keyboard + toolbar together)
 - Detect keyboard state via `WindowInsets.ime` (Compose) or `ViewTreeObserver.OnGlobalLayoutListener`
 
 ### Verification
@@ -821,7 +828,7 @@ Material 3 `AlertDialog` with the command text in a monospace code block.
 - Paste inserts clipboard content into terminal
 - Quick action tap sends command + Enter
 - Confirmation dialog appears for `confirm: true` actions
-- Toolbar hides when soft keyboard opens
+- Toolbar appears when soft keyboard opens, hides when keyboard closes
 
 ---
 
@@ -1031,11 +1038,10 @@ Workflow file at `.github/workflows/android.yml`:
 on:
   push:
     branches: [main]
+    tags: ['v*']
     paths: ['android/**']
   pull_request:
     paths: ['android/**']
-  push:
-    tags: ['v*']
 
 jobs:
   build:
@@ -1141,13 +1147,17 @@ fun topicToTarget(topic: String): String {
 }
 ```
 
-### Binary Frame Handling
+### Terminal Data Encoding
 
-The server sends terminal output as raw binary WebSocket frames (no Channel framing — `{:push, {:binary, data}, socket}` bypasses the serializer). The client receives these via OkHttp's `onMessage(webSocket, bytes: ByteString)` callback. These are terminal output bytes — feed directly into the Termux emulator.
+All server-to-client communication uses standard Phoenix Channel JSON text frames `[join_ref, ref, topic, event, payload]`. Terminal output arrives as `"output"` events with base64-encoded data:
 
-Control messages (pane_dead, resized, superseded) arrive as JSON text frames with standard Channel framing `[join_ref, ref, topic, event, payload]`.
+```json
+[null, null, "terminal:myapp:0:1", "output", {"data": "bHMgLWxhCg=="}]
+```
 
-The client must handle both frame types on the same WebSocket connection.
+The client must base64-decode the `data` field before feeding bytes into the Termux emulator. Control messages (`pane_dead`, `resized`, `superseded`, `reconnected`) use the same JSON text frame format with their respective event names and payloads.
+
+For client-to-server input, the app sends JSON text frames with the `"input"` event. The server also accepts raw binary WebSocket frames for input, but JSON is simpler and sufficient.
 
 ### Session Channel Join Reply
 
