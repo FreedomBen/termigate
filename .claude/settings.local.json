@@ -72,7 +72,9 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Read(//home/ben/gitclone/termigate/**)",
       "Bash(./gradlew assembleDebug 2>&1 | tail -40)",
-      "Bash(./gradlew assembleDebug 2>&1 | tail -30)"
+      "Bash(./gradlew assembleDebug 2>&1 | tail -30)",
+      "Bash(./gradlew :app:compileDebugKotlin 2>&1 | tail -30)",
+      "Bash(./gradlew :app:compileDebugKotlin 2>&1 | tail -20)"
     ]
   }
 }

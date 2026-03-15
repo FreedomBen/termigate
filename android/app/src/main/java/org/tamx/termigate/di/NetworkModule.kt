@@ -13,6 +13,7 @@ import okhttp3.OkHttpClient
 import org.tamx.termigate.data.network.ApiClient
 import org.tamx.termigate.data.network.AuthPlugin
 import org.tamx.termigate.data.network.AuthPluginConfig
+import org.tamx.termigate.data.network.PhoenixSocket
 import org.tamx.termigate.data.repository.AppPreferences
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
@@ -72,6 +73,19 @@ object NetworkModule {
         return ApiClient(
             client = httpClient,
             serverUrl = { prefs.serverUrl ?: "" }
+        )
+    }
+
+    @Provides
+    @Singleton
+    fun providePhoenixSocket(
+        okhttp: OkHttpClient,
+        prefs: AppPreferences
+    ): PhoenixSocket {
+        return PhoenixSocket(
+            baseUrl = prefs.serverUrl ?: "",
+            params = prefs.authToken?.let { mapOf("token" to it) } ?: emptyMap(),
+            client = okhttp
         )
     }
 }

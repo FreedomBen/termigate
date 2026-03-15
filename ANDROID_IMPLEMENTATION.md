@@ -26,7 +26,7 @@ No server changes are needed for the Android app.
 | 1 | Project Setup & Dependencies | Gradle project, Termux library fork, Hilt DI shell | Medium | Done |
 | 2 | Network Layer | Phoenix Channel client, REST API client (Ktor), auth | Large | Done |
 | 3 | Login Screen | Auth flow, token storage, server URL config | Small | Done |
-| 4 | Session List Screen | Session/pane listing via Channel + REST, CRUD actions | Medium | |
+| 4 | Session List Screen | Session/pane listing via Channel + REST, CRUD actions | Medium | Done |
 | 5 | Terminal Screen (Core) | Termux TerminalView + Channel integration, keyboard input | Large | |
 | 6 | Terminal Toolbars | Special key toolbar, quick action bar | Medium | |
 | 7 | Settings Screen | Quick actions CRUD, display preferences, connection settings | Small | |
@@ -600,10 +600,10 @@ Implement `SwipeToDismiss` on session cards for quick delete, with a confirmatio
 
 ### Checklist
 
-- [ ] 4.1 Session repository (`data/repository/SessionRepository.kt` — Channel-based real-time sessions, REST mutations, fallback refresh)
-- [ ] 4.2 Session list ViewModel (`ui/sessions/SessionListViewModel.kt`)
-- [ ] 4.3 Session list screen (`ui/sessions/SessionListScreen.kt` — session cards, pane list, FAB, dialogs)
-- [ ] 4.4 Swipe-to-delete on session cards
+- [x] 4.1 Session repository (`data/repository/SessionRepository.kt` — Channel-based real-time sessions, REST mutations, fallback refresh)
+- [x] 4.2 Session list ViewModel (`ui/sessions/SessionListViewModel.kt`)
+- [x] 4.3 Session list screen (`ui/sessions/SessionListScreen.kt` — session cards, pane list, FAB, dialogs)
+- [x] 4.4 Swipe-to-delete on session cards
 - [ ] Verification: Sessions appear from Channel join reply
 - [ ] Verification: Real-time updates when sessions change
 - [ ] Verification: Create/delete/rename session works
