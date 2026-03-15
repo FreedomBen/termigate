@@ -4,6 +4,7 @@ defmodule Termigate.MCP.Tools.RunCommandInNewSession do
   use Hermes.Server.Component, type: :tool
 
   alias Hermes.Server.Response
+  alias Termigate.MCP.McpSession
   alias Termigate.MCP.Workflows
   alias Termigate.TmuxManager
 
@@ -25,19 +26,30 @@ defmodule Termigate.MCP.Tools.RunCommandInNewSession do
     cleanup = if(params[:cleanup] == false, do: false, else: true)
     timeout_ms = (params[:timeout_seconds] || 30) * 1000
     raw = params[:raw] || false
+    mcp_session_id = frame.private[:session_id]
 
     with {:ok, %{name: name}} <- TmuxManager.create_session(session_name) do
       target = "#{name}:0.0"
 
+      # Track session for cleanup if MCP connection drops mid-execution
+      if mcp_session_id, do: McpSession.track_session(mcp_session_id, name)
+
       result =
         case Workflows.RunCommand.run(target, command, timeout_ms: timeout_ms, raw: raw) do
           {:ok, result} ->
-            if cleanup, do: TmuxManager.kill_session(name)
+            if cleanup do
+              TmuxManager.kill_session(name)
+              if mcp_session_id, do: McpSession.untrack_session(mcp_session_id, name)
+            end
+
             data = Map.merge(result, %{target: target, session: name, cleaned_up: cleanup})
             {:reply, Response.json(Response.tool(), data), frame}
 
           {:error, reason} ->
-            if cleanup, do: TmuxManager.kill_session(name)
+            if cleanup do
+              TmuxManager.kill_session(name)
+              if mcp_session_id, do: McpSession.untrack_session(mcp_session_id, name)
+            end
 
             {:reply, Response.error(Response.tool(), "Command failed: #{inspect(reason)}"), frame}
         end
