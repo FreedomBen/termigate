@@ -42,9 +42,9 @@ defmodule Termigate.MCP.Workflows.RunCommand do
             output = clean_output(output, command, marker, raw)
             {:ok, %{output: output, exit_code: exit_code, timed_out: false}}
 
-          :timeout ->
-            # Return partial output on timeout
-            {:ok, %{output: "", exit_code: nil, timed_out: true}}
+          {:timeout, partial} ->
+            partial = if raw, do: partial, else: AnsiStripper.strip(partial)
+            {:ok, %{output: partial, exit_code: nil, timed_out: true}}
         end
 
       {:error, reason} ->
@@ -63,7 +63,7 @@ defmodule Termigate.MCP.Workflows.RunCommand do
     remaining = deadline - System.monotonic_time(:millisecond)
 
     if remaining <= 0 do
-      :timeout
+      {:timeout, IO.iodata_to_binary(acc)}
     else
       receive do
         {:pane_output, ^target, data} ->
@@ -90,16 +90,21 @@ defmodule Termigate.MCP.Workflows.RunCommand do
   end
 
   defp clean_output(output, command, _marker, raw) do
-    output =
-      output
-      |> String.split("\n")
-      # Strip the echoed command line (first line typically)
-      |> Enum.reject(fn line ->
-        stripped = String.trim(line)
-        stripped == "" or String.contains?(stripped, command |> String.slice(0, 40))
-      end)
-      |> Enum.join("\n")
-      |> String.trim()
+    lines = String.split(output, "\n")
+
+    # Strip only the first line that looks like the echoed command
+    # (shell echoes the command back when using send-keys)
+    cmd_prefix = String.slice(command, 0, 40)
+
+    lines =
+      case Enum.split_while(lines, fn line ->
+             not String.contains?(String.trim(line), cmd_prefix)
+           end) do
+        {before, [_echoed | rest]} -> before ++ rest
+        {all, []} -> all
+      end
+
+    output = lines |> Enum.join("\n") |> String.trim()
 
     if raw, do: output, else: AnsiStripper.strip(output)
   end

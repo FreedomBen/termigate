@@ -177,6 +177,76 @@ defmodule Termigate.MCP.ToolsTest do
     end
   end
 
+  describe "SplitPane" do
+    test "splits pane and returns new target" do
+      pane_format =
+        "\#{session_name}\t\#{window_index}\t\#{pane_index}\t\#{pane_width}\t\#{pane_height}\t\#{pane_current_command}\t\#{pane_id}"
+
+      Termigate.MockCommandRunner
+      |> expect(:run, fn ["list-panes", "-s", "-t", "dev", "-F", ^pane_format] ->
+        {:ok, "dev\t0\t0\t120\t40\tbash\t%0"}
+      end)
+      |> expect(:run, fn ["split-window", "-h", "-t", "dev:0.0"] ->
+        {:ok, ""}
+      end)
+      |> expect(:run, fn ["list-panes", "-s", "-t", "dev", "-F", ^pane_format] ->
+        {:ok, "dev\t0\t0\t60\t40\tbash\t%0\ndev\t0\t1\t60\t40\tbash\t%1"}
+      end)
+
+      result =
+        Termigate.MCP.Tools.SplitPane.execute(%{target: "dev:0.0"}, frame())
+
+      data = extract_json(result)
+      assert data["original_target"] == "dev:0.0"
+      assert data["new_target"] == "dev:0.1"
+      assert data["direction"] == "horizontal"
+    end
+
+    test "splits pane vertically" do
+      pane_format =
+        "\#{session_name}\t\#{window_index}\t\#{pane_index}\t\#{pane_width}\t\#{pane_height}\t\#{pane_current_command}\t\#{pane_id}"
+
+      Termigate.MockCommandRunner
+      |> expect(:run, fn ["list-panes", "-s", "-t", "dev", "-F", ^pane_format] ->
+        {:ok, "dev\t0\t0\t120\t40\tbash\t%0"}
+      end)
+      |> expect(:run, fn ["split-window", "-v", "-t", "dev:0.0"] ->
+        {:ok, ""}
+      end)
+      |> expect(:run, fn ["list-panes", "-s", "-t", "dev", "-F", ^pane_format] ->
+        {:ok, "dev\t0\t0\t120\t20\tbash\t%0\ndev\t0\t1\t120\t20\tbash\t%1"}
+      end)
+
+      result =
+        Termigate.MCP.Tools.SplitPane.execute(
+          %{target: "dev:0.0", direction: "vertical"},
+          frame()
+        )
+
+      data = extract_json(result)
+      assert data["direction"] == "vertical"
+    end
+
+    test "returns error when split fails" do
+      pane_format =
+        "\#{session_name}\t\#{window_index}\t\#{pane_index}\t\#{pane_width}\t\#{pane_height}\t\#{pane_current_command}\t\#{pane_id}"
+
+      Termigate.MockCommandRunner
+      |> expect(:run, fn ["list-panes", "-s", "-t", "dev", "-F", ^pane_format] ->
+        {:ok, "dev\t0\t0\t120\t40\tbash\t%0"}
+      end)
+      |> expect(:run, fn ["split-window", "-h", "-t", "dev:0.0"] ->
+        {:error, {"no space for new pane", 1}}
+      end)
+
+      result =
+        Termigate.MCP.Tools.SplitPane.execute(%{target: "dev:0.0"}, frame())
+
+      assert is_error?(result)
+      assert extract_text(result) =~ "no space"
+    end
+  end
+
   describe "ResizePane" do
     test "resizes with both dimensions" do
       Termigate.MockCommandRunner

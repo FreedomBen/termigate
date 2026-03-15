@@ -1,5 +1,7 @@
 # Not Run Yet
 
+- Let's write an external test for the MCP server.
+
 - Let's begin implementation of the Android app.  Read ANDROID_IMPLEMENTATION.md and start with the first phase.
 
 - Let's continue implementation for the Android app.  Read ANDROID_IMPLEMENTATION.md and continue with the next task.
