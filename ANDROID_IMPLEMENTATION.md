@@ -30,7 +30,7 @@ No server changes are needed for the Android app.
 | 5 | Terminal Screen (Core) | Termux TerminalView + Channel integration, keyboard input | Large | Done |
 | 6 | Terminal Toolbars | Special key toolbar, quick action bar | Medium | Done |
 | 7 | Settings Screen | Quick actions CRUD, display preferences, connection settings | Small | Done |
-| 8 | Foreground Service & Notifications | Background connection persistence, pane death alerts | Medium | |
+| 8 | Foreground Service & Notifications | Background connection persistence, pane death alerts | Medium | Done |
 | 9 | Polish & Distribution | ProGuard, CI/CD, Play Store, F-Droid, direct APK | Medium | |
 
 ---
@@ -1057,11 +1057,11 @@ When WebSocket disconnects and cannot reconnect after 60 seconds while in backgr
 
 ### Checklist
 
-- [ ] 8.1 Foreground service (`service/TerminalForegroundService.kt`)
-- [ ] 8.2 Notification channels (create in `App.onCreate()` — `terminal_connection`, `terminal_events`)
-- [ ] 8.3 Pane death notification (background `pane_dead` event → notification)
-- [ ] 8.4 Connection lost notification (WebSocket disconnect after 60s → notification)
-- [ ] 8.5 Manifest permissions (`FOREGROUND_SERVICE_DATA_SYNC`, `POST_NOTIFICATIONS`)
+- [x] 8.1 Foreground service (`service/TerminalForegroundService.kt`)
+- [x] 8.2 Notification channels (create in `App.onCreate()` — `terminal_connection`, `terminal_events`)
+- [x] 8.3 Pane death notification (background `pane_dead` event → notification)
+- [x] 8.4 Connection lost notification (WebSocket disconnect after 60s → notification)
+- [x] 8.5 Manifest permissions (`FOREGROUND_SERVICE_DATA_SYNC`, `POST_NOTIFICATIONS`)
 - [ ] Verification: Background app → notification appears
 - [ ] Verification: Return to app → notification dismissed
 - [ ] Verification: Pane killed in background → event notification

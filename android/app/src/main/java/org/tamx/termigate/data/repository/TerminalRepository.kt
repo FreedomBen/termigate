@@ -1,15 +1,23 @@
 package org.tamx.termigate.data.repository
 
+import android.content.Context
 import android.util.Base64
 import android.util.Log
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.launch
 import org.tamx.termigate.data.network.ChannelEvent
+import org.tamx.termigate.data.network.ConnectionState
 import org.tamx.termigate.data.network.JoinResult
 import org.tamx.termigate.data.network.PhoenixChannel
 import org.tamx.termigate.data.network.PhoenixSocket
+import org.tamx.termigate.service.TerminalForegroundService
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,19 +38,45 @@ data class TerminalConnection(
 
 @Singleton
 class TerminalRepository @Inject constructor(
-    private val phoenixSocket: PhoenixSocket
+    private val phoenixSocket: PhoenixSocket,
+    @ApplicationContext private val context: Context
 ) {
     companion object {
         private const val TAG = "TerminalRepository"
         private const val MAX_JOIN_RETRIES = 3
         private const val RETRY_DELAY_MS = 1000L
+        private const val DISCONNECT_NOTIFY_DELAY_MS = 60_000L
     }
 
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val activeChannels = mutableMapOf<String, PhoenixChannel>()
+    private var disconnectNotifyJob: Job? = null
+
+    init {
+        // Watch for prolonged disconnection to notify user
+        scope.launch {
+            phoenixSocket.connectionState.collect { state ->
+                when (state) {
+                    ConnectionState.Connected -> {
+                        disconnectNotifyJob?.cancel()
+                        disconnectNotifyJob = null
+                    }
+                    ConnectionState.Reconnecting -> {
+                        if (activeChannels.isNotEmpty() && disconnectNotifyJob == null) {
+                            disconnectNotifyJob = scope.launch {
+                                delay(DISCONNECT_NOTIFY_DELAY_MS)
+                                TerminalForegroundService.notifyDisconnected(context)
+                            }
+                        }
+                    }
+                    ConnectionState.Disconnected -> { /* no-op */ }
+                }
+            }
+        }
+    }
 
     /** Convert target "session:window.pane" to channel topic "terminal:session:window:pane" */
     private fun targetToTopic(target: String): String {
-        // target format: "session:window.pane" → "terminal:session:window:pane"
         val colonIdx = target.indexOf(':')
         if (colonIdx == -1) return "terminal:$target:0:0"
         val session = target.substring(0, colonIdx)
@@ -57,7 +91,6 @@ class TerminalRepository @Inject constructor(
     suspend fun connect(target: String, cols: Int, rows: Int): Result<TerminalConnection> {
         val topic = targetToTopic(target)
 
-        // Join with retry for pane_not_ready
         var lastError: String? = null
         for (attempt in 0 until MAX_JOIN_RETRIES) {
             val channel = phoenixSocket.channel(topic)
@@ -67,8 +100,8 @@ class TerminalRepository @Inject constructor(
             when (result) {
                 is JoinResult.Ok -> {
                     activeChannels[target] = channel
+                    updateServiceState(target)
 
-                    // Decode base64 history from join reply
                     val historyB64 = result.payload["history"] as? String ?: ""
                     val history = if (historyB64.isNotEmpty()) {
                         Base64.decode(historyB64, Base64.DEFAULT)
@@ -76,10 +109,9 @@ class TerminalRepository @Inject constructor(
                         ByteArray(0)
                     }
 
-                    // Create event flow from channel events
                     val events = channel.events.mapNotNull { event ->
                         when (event) {
-                            is ChannelEvent.Message -> parseTerminalEvent(event)
+                            is ChannelEvent.Message -> parseTerminalEvent(event, target)
                         }
                     }
 
@@ -111,6 +143,7 @@ class TerminalRepository @Inject constructor(
     suspend fun disconnect(target: String) {
         val channel = activeChannels.remove(target)
         channel?.leave()
+        updateServiceState(null)
     }
 
     suspend fun sendInput(target: String, data: ByteArray) {
@@ -124,15 +157,28 @@ class TerminalRepository @Inject constructor(
         channel.push("resize", mapOf("cols" to cols, "rows" to rows))
     }
 
-    @Suppress("UNCHECKED_CAST")
-    private fun parseTerminalEvent(event: ChannelEvent.Message): TerminalEvent? {
+    private fun updateServiceState(newTarget: String?) {
+        val count = activeChannels.size
+        if (count == 0) {
+            TerminalForegroundService.stop(context)
+        } else if (count == 1 && newTarget != null) {
+            TerminalForegroundService.start(context, "Connected to $newTarget")
+        } else {
+            TerminalForegroundService.updateCount(context, count)
+        }
+    }
+
+    private fun parseTerminalEvent(event: ChannelEvent.Message, target: String): TerminalEvent? {
         return when (event.event) {
             "output" -> {
                 val b64 = event.payload["data"] as? String ?: return null
                 val decoded = Base64.decode(b64, Base64.DEFAULT)
                 TerminalEvent.Output(decoded)
             }
-            "pane_dead" -> TerminalEvent.PaneDead
+            "pane_dead" -> {
+                TerminalForegroundService.notifyPaneDead(context, target)
+                TerminalEvent.PaneDead
+            }
             "reconnected" -> {
                 val b64 = event.payload["data"] as? String ?: return null
                 val decoded = Base64.decode(b64, Base64.DEFAULT)
