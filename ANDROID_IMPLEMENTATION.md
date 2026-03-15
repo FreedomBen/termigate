@@ -21,17 +21,17 @@ No server changes are needed for the Android app.
 
 ## Phase Overview
 
-| Phase | Name | Description | Effort |
-|-------|------|-------------|--------|
-| 1 | Project Setup & Dependencies | Gradle project, Termux library fork, Hilt DI shell | Medium |
-| 2 | Network Layer | Phoenix Channel client, REST API client (Ktor), auth | Large |
-| 3 | Login Screen | Auth flow, token storage, server URL config | Small |
-| 4 | Session List Screen | Session/pane listing via Channel + REST, CRUD actions | Medium |
-| 5 | Terminal Screen (Core) | Termux TerminalView + Channel integration, keyboard input | Large |
-| 6 | Terminal Toolbars | Special key toolbar, quick action bar | Medium |
-| 7 | Settings Screen | Quick actions CRUD, display preferences, connection settings | Small |
-| 8 | Foreground Service & Notifications | Background connection persistence, pane death alerts | Medium |
-| 9 | Polish & Distribution | ProGuard, CI/CD, Play Store, F-Droid, direct APK | Medium |
+| Phase | Name | Description | Effort | Status |
+|-------|------|-------------|--------|--------|
+| 1 | Project Setup & Dependencies | Gradle project, Termux library fork, Hilt DI shell | Medium | Done |
+| 2 | Network Layer | Phoenix Channel client, REST API client (Ktor), auth | Large | Done |
+| 3 | Login Screen | Auth flow, token storage, server URL config | Small | |
+| 4 | Session List Screen | Session/pane listing via Channel + REST, CRUD actions | Medium | |
+| 5 | Terminal Screen (Core) | Termux TerminalView + Channel integration, keyboard input | Large | |
+| 6 | Terminal Toolbars | Special key toolbar, quick action bar | Medium | |
+| 7 | Settings Screen | Quick actions CRUD, display preferences, connection settings | Small | |
+| 8 | Foreground Service & Notifications | Background connection persistence, pane death alerts | Medium | |
+| 9 | Polish & Distribution | ProGuard, CI/CD, Play Store, F-Droid, direct APK | Medium | |
 
 ---
 
@@ -179,10 +179,17 @@ org/tamx/termigate/
   service/
 ```
 
-### Verification
-- Project builds and installs on a device/emulator
-- Hilt compiles without errors
-- `terminal-lib` module compiles (Termux classes available in app module)
+### Checklist
+
+- [x] 1.1 Create Gradle project (`android/` directory structure, root `build.gradle.kts`, `settings.gradle.kts`, `gradle.properties`, Gradle wrapper)
+- [x] 1.2 Version catalog (`gradle/libs.versions.toml`)
+- [x] 1.3 Fork Termux terminal library (`terminal-lib/` module with `com.termux.terminal` and `com.termux.view`)
+- [x] 1.4 App module setup (`app/build.gradle.kts` with Compose, Hilt, KSP, serialization, `implementation(project(":terminal-lib"))`)
+- [x] 1.5 Hilt application class (`App.kt` with `@HiltAndroidApp`)
+- [x] 1.6 Create package structure (`di/`, `data/{network,repository,model}/`, `ui/{login,sessions,terminal,settings,navigation,theme}/`, `service/`)
+- [x] Verification: Project builds (`./gradlew assembleDebug` passes)
+- [x] Verification: Hilt compiles without errors
+- [x] Verification: `terminal-lib` module compiles (Termux classes available in app module)
 
 ---
 
@@ -375,10 +382,18 @@ data class LoginResponse(
 
 **`created` field**: Both the REST API and Session Channel serialize `created` as a Unix timestamp (integer seconds). The field is nullable because tmux sessions may have no creation time.
 
-### Verification
-- Unit test PhoenixSocket/Channel with a mock WebSocket (verify JSON framing, heartbeat, reconnect)
-- Unit test ApiClient with mock HTTP responses (verify serialization, auth header injection, error handling)
-- Integration test: connect to a running termigate server, authenticate, join a session channel, receive session list
+### Checklist
+
+- [x] 2.1 Phoenix Channel client (`data/network/PhoenixSocket.kt` — v2 protocol, heartbeat, reconnect, ref counter)
+- [x] 2.2 Phoenix Channel abstraction (`data/network/PhoenixChannel.kt` — join/leave/push, event flow, reply correlation)
+- [x] 2.3 REST API client (`data/network/ApiClient.kt` — Ktor + OkHttp, all endpoints, response unwrapping)
+- [x] 2.4 Auth plugin (`data/network/AuthInterceptor.kt` — bearer token injection, 401/429 handling)
+- [x] 2.5 Hilt network module (`di/NetworkModule.kt` — shared OkHttpClient, Ktor HttpClient, ApiClient)
+- [x] 2.6 Data models (`data/model/Session.kt` — Session, Pane, QuickAction, LoginResponse, request/response wrappers)
+- [x] 2.6+ App preferences (`data/repository/AppPreferences.kt` — EncryptedSharedPreferences for token, regular prefs for URL/username)
+- [ ] Verification: Unit test PhoenixSocket/Channel with mock WebSocket
+- [ ] Verification: Unit test ApiClient with mock HTTP responses
+- [ ] Verification: Integration test against running termigate server
 
 ---
 
@@ -476,14 +491,19 @@ Material 3 dark theme (matches termigate web dark terminal aesthetic):
 - Terminal-green accent
 - Monospace font for terminal-related text
 
-### Verification
-- Login with valid credentials → token stored, navigates to sessions
-- Login with invalid credentials → error shown, stays on login
-- Login with unreachable server → timeout error
-- App restart with valid token → skips login, goes to sessions
-- App restart with expired token → shows login
-- Server with auth disabled → skips login, goes directly to sessions
-- Rate-limited login attempt → shows "too many attempts" error
+### Checklist
+
+- [ ] 3.1 Auth repository (`data/repository/AuthRepository.kt` — login, token storage, probe auth, clear token)
+- [ ] 3.2 Login ViewModel (`ui/login/LoginViewModel.kt`)
+- [ ] 3.3 Login screen (`ui/login/LoginScreen.kt` — server URL, username, password fields, error display)
+- [ ] 3.4 Navigation setup (`ui/navigation/AppNavigation.kt` — login/sessions/terminal/settings routes, start destination logic)
+- [ ] 3.5 Theme (`ui/theme/` — Material 3 dark theme, terminal-green accent)
+- [ ] Verification: Login with valid credentials → token stored, navigates to sessions
+- [ ] Verification: Login with invalid credentials → error shown
+- [ ] Verification: Login with unreachable server → timeout error
+- [ ] Verification: App restart with valid token → skips login
+- [ ] Verification: Server with auth disabled → skips login
+- [ ] Verification: Rate-limited login attempt → shows "too many attempts" error
 
 ---
 
@@ -578,15 +598,18 @@ Session name validation: `^[a-zA-Z0-9_-]+$` — enforced in the create/rename di
 
 Implement `SwipeToDismiss` on session cards for quick delete, with a confirmation dialog.
 
-### Verification
-- Sessions appear from Channel join reply
-- Real-time updates when sessions change (create/kill from another client)
-- Create session → appears in list immediately
-- Delete session → removed from list, confirmation shown first
-- Rename session → name updates in list
-- Split pane → new pane appears under the session
-- Pull-to-refresh works when Channel is disconnected
-- Tap pane → navigates to terminal screen
+### Checklist
+
+- [ ] 4.1 Session repository (`data/repository/SessionRepository.kt` — Channel-based real-time sessions, REST mutations, fallback refresh)
+- [ ] 4.2 Session list ViewModel (`ui/sessions/SessionListViewModel.kt`)
+- [ ] 4.3 Session list screen (`ui/sessions/SessionListScreen.kt` — session cards, pane list, FAB, dialogs)
+- [ ] 4.4 Swipe-to-delete on session cards
+- [ ] Verification: Sessions appear from Channel join reply
+- [ ] Verification: Real-time updates when sessions change
+- [ ] Verification: Create/delete/rename session works
+- [ ] Verification: Split pane → new pane appears
+- [ ] Verification: Pull-to-refresh works
+- [ ] Verification: Tap pane → navigates to terminal screen
 
 ---
 
@@ -779,14 +802,20 @@ When receiving `"resized"` from the server (another viewer resized): reconfigure
 
 Top bar shows session target and back button. Hides after 3 seconds of inactivity. Tap top edge of screen to reveal. Implemented with `AnimatedVisibility` + `LaunchedEffect` timer.
 
-### Verification
-- Join terminal → history renders in TerminalView
-- Type on soft keyboard → characters appear in terminal
-- Server output streams in real-time (run `ls`, `top`, etc.)
-- Rotate device → terminal state preserved (ViewModel survives)
-- Pane killed externally → "Session ended" overlay appears
-- Session renamed → superseded event navigates to new target
-- Back button → returns to session list, leaves channel
+### Checklist
+
+- [ ] 5.1 Terminal repository (`data/repository/TerminalRepository.kt` — connect/disconnect, sendInput, sendResize, event Flow)
+- [ ] 5.2 Terminal session bridge (`ui/terminal/TerminalSession.kt` — TerminalEmulator ↔ Channel bridge)
+- [ ] 5.3 Terminal ViewModel (`ui/terminal/TerminalViewModel.kt`)
+- [ ] 5.4 Terminal screen (`ui/terminal/TerminalScreen.kt` — AndroidView wrapping TerminalView, keyboard input)
+- [ ] 5.5 Resize behavior (join params, debounced resize events, server-initiated resize)
+- [ ] 5.6 Auto-hide top bar
+- [ ] Verification: Join terminal → history renders
+- [ ] Verification: Keyboard input → characters appear
+- [ ] Verification: Server output streams in real-time
+- [ ] Verification: Rotate device → terminal state preserved
+- [ ] Verification: Pane killed externally → overlay appears
+- [ ] Verification: Back button → returns to session list
 
 ---
 
@@ -858,14 +887,19 @@ Material 3 `AlertDialog` with the command text in a monospace code block.
 - When the soft keyboard closes: hide the toolbar (tap the terminal to bring up keyboard + toolbar together)
 - Detect keyboard state via `WindowInsets.ime` (Compose) or `ViewTreeObserver.OnGlobalLayoutListener`
 
-### Verification
-- Esc, Tab, arrow keys produce correct terminal behavior
-- Ctrl+C cancels a running process
-- Sticky Ctrl: tap Ctrl, tap C → sends Ctrl+C, Ctrl deactivates
-- Paste inserts clipboard content into terminal
-- Quick action tap sends command + Enter
-- Confirmation dialog appears for `confirm: true` actions
-- Toolbar appears when soft keyboard opens, hides when keyboard closes
+### Checklist
+
+- [ ] 6.1 Special key toolbar (`ui/terminal/SpecialKeyToolbar.kt` — Esc, Tab, Ctrl, Alt, arrows, Paste, extended keys)
+- [ ] 6.2 Quick action bar (`ui/terminal/QuickActionBar.kt` — scrollable pills, color-coded, confirm indicator)
+- [ ] 6.3 Confirmation dialog (for `confirm: true` quick actions)
+- [ ] 6.4 Toolbar visibility with soft keyboard (show toolbar when keyboard open, hide when closed)
+- [ ] Verification: Esc, Tab, arrow keys produce correct behavior
+- [ ] Verification: Ctrl+C cancels a running process
+- [ ] Verification: Sticky Ctrl works (tap Ctrl, tap C → Ctrl+C)
+- [ ] Verification: Paste inserts clipboard content
+- [ ] Verification: Quick action tap sends command + Enter
+- [ ] Verification: Confirmation dialog for `confirm: true` actions
+- [ ] Verification: Toolbar appears/hides with soft keyboard
 
 ---
 
@@ -955,12 +989,15 @@ Wrapper around `SharedPreferences` for local display/connection settings:
 - Server URL
 - Last username
 
-### Verification
-- Add a quick action → appears in Settings list and Terminal quick action bar
-- Edit a quick action → changes persist to server and update UI
-- Delete a quick action → removed from both views
-- Font size change → reflected in terminal on next render
-- Logout → clears token, navigates to login, clears back stack
+### Checklist
+
+- [ ] 7.1 Config repository (`data/repository/ConfigRepository.kt` — quick actions CRUD, local cache)
+- [ ] 7.2 Settings ViewModel (`ui/settings/SettingsViewModel.kt`)
+- [ ] 7.3 Settings screen (`ui/settings/SettingsScreen.kt` — quick actions, display prefs, connection, about)
+- [ ] 7.4 App preferences (`data/AppPreferences.kt` — font size, keep screen on, vibrate)
+- [ ] Verification: Quick action CRUD works (add/edit/delete)
+- [ ] Verification: Font size change reflected in terminal
+- [ ] Verification: Logout clears token and navigates to login
 
 ---
 
@@ -1018,12 +1055,17 @@ When WebSocket disconnects and cannot reconnect after 60 seconds while in backgr
 <uses-permission android:name="android.permission.INTERNET" />
 ```
 
-### Verification
-- Background the app while terminal is open → notification appears
-- Return to app → notification dismissed
-- Kill a pane while app is backgrounded → event notification appears
-- Tap notification → returns to app
-- No terminal sessions active → no foreground service running
+### Checklist
+
+- [ ] 8.1 Foreground service (`service/TerminalForegroundService.kt`)
+- [ ] 8.2 Notification channels (create in `App.onCreate()` — `terminal_connection`, `terminal_events`)
+- [ ] 8.3 Pane death notification (background `pane_dead` event → notification)
+- [ ] 8.4 Connection lost notification (WebSocket disconnect after 60s → notification)
+- [ ] 8.5 Manifest permissions (`FOREGROUND_SERVICE_DATA_SYNC`, `POST_NOTIFICATIONS`)
+- [ ] Verification: Background app → notification appears
+- [ ] Verification: Return to app → notification dismissed
+- [ ] Verification: Pane killed in background → event notification
+- [ ] Verification: No active sessions → no foreground service
 
 ---
 
@@ -1125,12 +1167,19 @@ Requirements for F-Droid:
 
 TBD — placeholder icon for initial release.
 
-### Verification
-- Release APK installs and runs correctly (ProGuard doesn't break anything)
-- CI builds pass on push to main
-- Tagged release creates GitHub Release with APK
-- F-Droid metadata validates
-- Direct APK sideloads and runs
+### Checklist
+
+- [ ] 9.1 ProGuard rules (`app/proguard-rules.pro` — keep rules for serialization, Ktor, OkHttp, Termux)
+- [ ] 9.2 Build variants (release with minify, debug with `.debug` suffix)
+- [ ] 9.3 CI/CD (`.github/workflows/android.yml` — build, test, lint, release)
+- [ ] 9.4 F-Droid metadata (`metadata/android/en-US/`)
+- [ ] 9.5 Signing (debug keystore, release keystore as GitHub secret)
+- [ ] 9.6 App icon (final design)
+- [ ] Verification: Release APK installs and runs correctly
+- [ ] Verification: CI builds pass on push to main
+- [ ] Verification: Tagged release creates GitHub Release with APK
+- [ ] Verification: F-Droid metadata validates
+- [ ] Verification: Direct APK sideloads and runs
 
 ---
 
