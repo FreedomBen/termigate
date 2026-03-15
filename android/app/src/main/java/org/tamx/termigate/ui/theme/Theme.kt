@@ -8,15 +8,35 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
-private val DarkColorScheme = darkColorScheme()
-private val LightColorScheme = lightColorScheme()
+private val TerminalGreen = Color(0xFF4EC94E)
+private val TerminalGreenDark = Color(0xFF3AA33A)
+private val DarkBackground = Color(0xFF121212)
+private val DarkSurface = Color(0xFF1E1E1E)
+
+private val DarkColorScheme = darkColorScheme(
+    primary = TerminalGreen,
+    onPrimary = Color.Black,
+    primaryContainer = TerminalGreenDark,
+    onPrimaryContainer = Color.White,
+    background = DarkBackground,
+    surface = DarkSurface,
+    onBackground = Color(0xFFE0E0E0),
+    onSurface = Color(0xFFE0E0E0),
+    error = Color(0xFFCF6679)
+)
+
+private val LightColorScheme = lightColorScheme(
+    primary = TerminalGreenDark,
+    onPrimary = Color.White
+)
 
 @Composable
 fun TermigateTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {

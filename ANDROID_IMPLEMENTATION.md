@@ -25,7 +25,7 @@ No server changes are needed for the Android app.
 |-------|------|-------------|--------|--------|
 | 1 | Project Setup & Dependencies | Gradle project, Termux library fork, Hilt DI shell | Medium | Done |
 | 2 | Network Layer | Phoenix Channel client, REST API client (Ktor), auth | Large | Done |
-| 3 | Login Screen | Auth flow, token storage, server URL config | Small | |
+| 3 | Login Screen | Auth flow, token storage, server URL config | Small | Done |
 | 4 | Session List Screen | Session/pane listing via Channel + REST, CRUD actions | Medium | |
 | 5 | Terminal Screen (Core) | Termux TerminalView + Channel integration, keyboard input | Large | |
 | 6 | Terminal Toolbars | Special key toolbar, quick action bar | Medium | |
@@ -493,11 +493,11 @@ Material 3 dark theme (matches termigate web dark terminal aesthetic):
 
 ### Checklist
 
-- [ ] 3.1 Auth repository (`data/repository/AuthRepository.kt` — login, token storage, probe auth, clear token)
-- [ ] 3.2 Login ViewModel (`ui/login/LoginViewModel.kt`)
-- [ ] 3.3 Login screen (`ui/login/LoginScreen.kt` — server URL, username, password fields, error display)
-- [ ] 3.4 Navigation setup (`ui/navigation/AppNavigation.kt` — login/sessions/terminal/settings routes, start destination logic)
-- [ ] 3.5 Theme (`ui/theme/` — Material 3 dark theme, terminal-green accent)
+- [x] 3.1 Auth repository (`data/repository/AuthRepository.kt` — login, token storage, probe auth, clear token)
+- [x] 3.2 Login ViewModel (`ui/login/LoginViewModel.kt`)
+- [x] 3.3 Login screen (`ui/login/LoginScreen.kt` — server URL, username, password fields, error display)
+- [x] 3.4 Navigation setup (`ui/navigation/AppNavigation.kt` — login/sessions/terminal/settings routes, start destination logic)
+- [x] 3.5 Theme (`ui/theme/` — Material 3 dark theme, terminal-green accent)
 - [ ] Verification: Login with valid credentials → token stored, navigates to sessions
 - [ ] Verification: Login with invalid credentials → error shown
 - [ ] Verification: Login with unreachable server → timeout error
