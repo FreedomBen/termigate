@@ -18,6 +18,10 @@ class AppPreferences @Inject constructor(
         private const val KEY_SERVER_URL = "server_url"
         private const val KEY_LAST_USERNAME = "last_username"
         private const val KEY_AUTH_TOKEN = "auth_token"
+        private const val KEY_FONT_SIZE = "font_size"
+        private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
+        private const val KEY_VIBRATE_ON_KEY = "vibrate_on_key"
+        private const val KEY_QUICK_ACTIONS_CACHE = "quick_actions_cache"
     }
 
     private val prefs: SharedPreferences by lazy {
@@ -54,4 +58,20 @@ class AppPreferences @Inject constructor(
                 encryptedPrefs.edit().remove(KEY_AUTH_TOKEN).apply()
             }
         }
+
+    var fontSize: Int
+        get() = prefs.getInt(KEY_FONT_SIZE, 14)
+        set(value) = prefs.edit().putInt(KEY_FONT_SIZE, value).apply()
+
+    var keepScreenOn: Boolean
+        get() = prefs.getBoolean(KEY_KEEP_SCREEN_ON, true)
+        set(value) = prefs.edit().putBoolean(KEY_KEEP_SCREEN_ON, value).apply()
+
+    var vibrateOnKey: Boolean
+        get() = prefs.getBoolean(KEY_VIBRATE_ON_KEY, true)
+        set(value) = prefs.edit().putBoolean(KEY_VIBRATE_ON_KEY, value).apply()
+
+    var quickActionsCache: String?
+        get() = prefs.getString(KEY_QUICK_ACTIONS_CACHE, null)
+        set(value) = prefs.edit().putString(KEY_QUICK_ACTIONS_CACHE, value).apply()
 }

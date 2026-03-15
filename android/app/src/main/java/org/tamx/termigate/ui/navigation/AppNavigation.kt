@@ -11,6 +11,7 @@ import org.tamx.termigate.data.network.AuthEvent
 import org.tamx.termigate.data.repository.AuthRepository
 import org.tamx.termigate.ui.login.LoginScreen
 import org.tamx.termigate.ui.sessions.SessionListScreen
+import org.tamx.termigate.ui.settings.SettingsScreen
 import org.tamx.termigate.ui.terminal.TerminalScreen
 
 object Routes {
@@ -79,7 +80,14 @@ fun AppNavigation(
             )
         }
         composable(Routes.SETTINGS) {
-            // Placeholder until Phase 7
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onLoggedOut = {
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
         }
     }
 }

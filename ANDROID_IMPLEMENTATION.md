@@ -29,7 +29,7 @@ No server changes are needed for the Android app.
 | 4 | Session List Screen | Session/pane listing via Channel + REST, CRUD actions | Medium | Done |
 | 5 | Terminal Screen (Core) | Termux TerminalView + Channel integration, keyboard input | Large | Done |
 | 6 | Terminal Toolbars | Special key toolbar, quick action bar | Medium | Done |
-| 7 | Settings Screen | Quick actions CRUD, display preferences, connection settings | Small | |
+| 7 | Settings Screen | Quick actions CRUD, display preferences, connection settings | Small | Done |
 | 8 | Foreground Service & Notifications | Background connection persistence, pane death alerts | Medium | |
 | 9 | Polish & Distribution | ProGuard, CI/CD, Play Store, F-Droid, direct APK | Medium | |
 
@@ -991,10 +991,10 @@ Wrapper around `SharedPreferences` for local display/connection settings:
 
 ### Checklist
 
-- [ ] 7.1 Config repository (`data/repository/ConfigRepository.kt` — quick actions CRUD, local cache)
-- [ ] 7.2 Settings ViewModel (`ui/settings/SettingsViewModel.kt`)
-- [ ] 7.3 Settings screen (`ui/settings/SettingsScreen.kt` — quick actions, display prefs, connection, about)
-- [ ] 7.4 App preferences (`data/AppPreferences.kt` — font size, keep screen on, vibrate)
+- [x] 7.1 Config repository (`data/repository/ConfigRepository.kt` — quick actions CRUD, local cache)
+- [x] 7.2 Settings ViewModel (`ui/settings/SettingsViewModel.kt`)
+- [x] 7.3 Settings screen (`ui/settings/SettingsScreen.kt` — quick actions, display prefs, connection, about)
+- [x] 7.4 App preferences (`data/repository/AppPreferences.kt` — font size, keep screen on, vibrate, quick actions cache)
 - [ ] Verification: Quick action CRUD works (add/edit/delete)
 - [ ] Verification: Font size change reflected in terminal
 - [ ] Verification: Logout clears token and navigates to login
