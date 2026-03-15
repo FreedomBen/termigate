@@ -6,8 +6,6 @@ Left on on Mar 14th.  Pickup the 15th or 16th:  We reviewed the android implemen
 
 - Let's write an external test for the MCP server.
 
-- Let's begin implementation of the Android app.  Read ANDROID_IMPLEMENTATION.md and start with the first phase.
-
 - Let's continue implementation for the Android app.  Read ANDROID_IMPLEMENTATION.md and continue with the next task.
 
 - In mobile 
@@ -21,6 +19,8 @@ Left on on Mar 14th.  Pickup the 15th or 16th:  We reviewed the android implemen
 - Let's ensure we have full support for auth tokens, such that if the user wants to setup an auth token and disallow username/password auth, they can.  When auth token is enabled, the server should respond with a 401 or 403 to all requests that don't have the auth token included, even the home page. Does this request make sense?
 
 # Already Run
+
+- Let's begin implementation of the Android app.  Read ANDROID_IMPLEMENTATION.md and start with the first phase.
 
 - Let's continue implementing the MCP server according to MCP_DESIGN.md.  (Implemented MCP resources: tmux://sessions, tmux://session/{name}/panes, tmux://pane/{target}/screen.  Added readOnlyHint annotations to read-only tools.  72 MCP tests passing.)
 
