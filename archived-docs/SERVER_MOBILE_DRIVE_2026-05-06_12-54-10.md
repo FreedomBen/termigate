@@ -361,7 +361,7 @@ Key:
 
 - [x] F1 — Settings page overflows horizontally on mobile (resolved by `ab4eaad`)
 - [x] F8 — Settings overflow reproduces at 320 / 412 px (same root cause as F1, resolved by `ab4eaad`)
-- [ ] F4 — Mobile single-pane gating: collapse the card when there is exactly one pane
+- [x] F4 — Mobile single-pane gating: collapse the card when there is exactly one pane (resolved by `c758494`)
 - [ ] F10 — Terminal top bar `Close window` is an 18 × 18 tap target
 - [ ] F2 — Sub-44 px touch targets on the Settings page (selects, inputs, native checkboxes/radios)
 - [ ] F6 — Login form inputs and primary `Sign in` button at 40 px
