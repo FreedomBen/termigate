@@ -27,6 +27,19 @@ defmodule TermigateWeb.MultiPaneLiveTest do
     }
   ]
 
+  @single_pane [
+    %{
+      pane_id: "%0",
+      target: "test:0.0",
+      left: 0,
+      top: 0,
+      width: 80,
+      height: 24,
+      index: 0,
+      command: "bash"
+    }
+  ]
+
   describe "mount with window" do
     test "renders multi-pane view with session name", %{conn: conn} do
       {:ok, _view, html} = live(conn, "/sessions/test/windows/0")
@@ -99,6 +112,39 @@ defmodule TermigateWeb.MultiPaneLiveTest do
     test "resize event is ignored (passive mode)", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
       render_hook(view, "resize", %{"cols" => 120, "rows" => 40})
+    end
+  end
+
+  describe "single-pane mobile gating" do
+    test "single pane renders full-bleed without the mobile card-list", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+
+      send(view.pid, {:layout_updated, @single_pane})
+      html = render(view)
+
+      # The grid is no longer gated behind `sm:` for a single pane, so the
+      # user lands directly on the terminal at every viewport (F4).
+      refute html =~ "hidden sm:grid"
+
+      # The mobile card-list fallback is not rendered when there is only
+      # one pane — no extra "tap to maximize" friction.
+      refute html =~ "mobile-pane-card"
+      refute html =~ "sm:hidden"
+
+      # The pane itself is still mounted with multi-mode terminal data.
+      assert html =~ ~s(data-target="test:0.0")
+      assert html =~ ~s(data-mode="multi")
+    end
+
+    test "two or more panes still gate the grid behind sm: and show the card-list",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+
+      send(view.pid, {:layout_updated, @test_panes})
+      html = render(view)
+
+      assert html =~ "hidden sm:grid"
+      assert html =~ "mobile-pane-card"
     end
   end
 

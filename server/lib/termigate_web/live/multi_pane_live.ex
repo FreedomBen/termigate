@@ -320,7 +320,10 @@ defmodule TermigateWeb.MultiPaneLive do
         :if={@panes != []}
         id="multi-pane-grid"
         phx-hook="PaneResizeHook"
-        class={["flex-1 min-h-0 relative", if(@maximized, do: "grid", else: "hidden sm:grid")]}
+        class={[
+          "flex-1 min-h-0 relative",
+          if(@maximized || length(@panes) == 1, do: "grid", else: "hidden sm:grid")
+        ]}
         style={"grid-template-columns: #{@grid.cols}; grid-template-rows: #{@grid.rows}; gap: 1px;"}
         data-panes={
           Jason.encode!(
@@ -459,9 +462,11 @@ defmodule TermigateWeb.MultiPaneLive do
         </div>
       </div>
 
-      <%!-- Mobile pane list — tappable cards maximize the pane --%>
+      <%!-- Mobile pane list — tappable cards maximize the pane.
+           Skip when there's only one pane: the grid is rendered full-bleed
+           in that case so the user lands directly on the terminal (F4). --%>
       <div
-        :if={@panes != [] and @maximized == nil}
+        :if={length(@panes) > 1 and @maximized == nil}
         class="flex-1 overflow-y-auto sm:hidden p-3 space-y-2"
       >
         <div
