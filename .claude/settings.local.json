@@ -154,7 +154,8 @@
       "Bash(gh run *)",
       "Bash(LOGGER_LEVEL=info mix test --repeat-until-failure 30 --max-cases 8)",
       "Bash(podman stop *)",
-      "Bash(podman rm *)"
+      "Bash(podman rm *)",
+      "Bash(npx vitest *)"
     ]
   }
 }
