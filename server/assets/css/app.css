@@ -998,6 +998,31 @@ body {
   transform: scale(0.93);
 }
 
+/* Top-bar controls: meet the 44 × 44 tap-target floor on mobile (F10).
+   Desktop keeps its smaller, hover-revealed close button. */
+@media (max-width: 639px) {
+  .window-tab {
+    padding-right: 3rem;
+  }
+
+  .window-close-btn {
+    width: 44px;
+    height: 44px;
+    opacity: 1;
+    font-size: 18px;
+  }
+
+  .new-window-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .bars-toggle-btn {
+    width: 44px;
+    height: 44px;
+  }
+}
+
 /* === Empty state === */
 .empty-state {
   display: flex;
