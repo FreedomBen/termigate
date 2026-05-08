@@ -53,6 +53,22 @@ defmodule TermigateWeb.SettingsLiveTest do
       assert html =~ "Shell integration"
     end
 
+    test "Detection Mode option descriptions are wrapped to prevent mobile overflow",
+         %{conn: conn} do
+      # F1 (archived-docs/SERVER_MOBILE_DRIVE_2026-05-06_12-54-10.md): the helper
+      # text under each Detection Mode radio must live inside a flex-constrained
+      # wrapper (flex-1 + min-w-0) so it wraps within the radio's label rather
+      # than forcing the settings page out to ~668px on a 375px mobile viewport.
+      {:ok, view, _html} = live(conn, "/settings")
+
+      for mode_label <- ["Activity-based", "Shell integration"] do
+        assert has_element?(view, "label div.flex-1.min-w-0", mode_label),
+               "Detection Mode option '#{mode_label}' must be wrapped in a " <>
+                 "div.flex-1.min-w-0 so the helper text wraps on mobile " <>
+                 "(see F1 in the 2026-05-06 mobile drive report)."
+      end
+    end
+
     test "changing mode to activity shows idle threshold", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/settings")
 
