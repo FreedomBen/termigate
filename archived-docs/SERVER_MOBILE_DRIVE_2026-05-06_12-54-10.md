@@ -363,7 +363,7 @@ Key:
 - [x] F8 — Settings overflow reproduces at 320 / 412 px (same root cause as F1, resolved by `ab4eaad`)
 - [x] F4 — Mobile single-pane gating: collapse the card when there is exactly one pane (resolved by `c758494`)
 - [x] F10 — Terminal top bar `Close window` is an 18 × 18 tap target (resolved by `3102d61`)
-- [ ] F2 — Sub-44 px touch targets on the Settings page (selects, inputs, native checkboxes/radios)
+- [x] F2 — Sub-44 px touch targets on the Settings page (selects, inputs, native checkboxes/radios) (resolved by `e1d05e2`)
 - [ ] F6 — Login form inputs and primary `Sign in` button at 40 px
 - [ ] F15 — Multi-pane mobile layout: redundant card tap when only one pane (overlaps F4)
 - [ ] F7 — Add a password-visibility toggle to the login form
