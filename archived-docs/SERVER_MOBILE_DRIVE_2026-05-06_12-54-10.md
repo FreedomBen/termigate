@@ -346,6 +346,34 @@
    also small at 320 px width, and a destructive control next to a
    creation control is exactly the place to widen the hit area.
 
+### Progress checklist
+
+Outstanding actionable findings, ordered by severity. Items marked done link
+to the resolving commit; accepted / by-design items are listed for visibility
+only and need no follow-up.
+
+Key:
+
+[x] — fixed / resolved
+[~] — partial fix or mitigation
+[/] - acknowledged but no fix (e.g. by design, or deferred for a future drive)
+[ ] — open / unresolved
+
+- [x] F1 — Settings page overflows horizontally on mobile (resolved by `ab4eaad`)
+- [x] F8 — Settings overflow reproduces at 320 / 412 px (same root cause as F1, resolved by `ab4eaad`)
+- [ ] F4 — Mobile single-pane gating: collapse the card when there is exactly one pane
+- [ ] F10 — Terminal top bar `Close window` is an 18 × 18 tap target
+- [ ] F2 — Sub-44 px touch targets on the Settings page (selects, inputs, native checkboxes/radios)
+- [ ] F6 — Login form inputs and primary `Sign in` button at 40 px
+- [ ] F15 — Multi-pane mobile layout: redundant card tap when only one pane (overlaps F4)
+- [ ] F7 — Add a password-visibility toggle to the login form
+- [ ] F5 — Mobile scrollback / copy-mode UX (currently disabled by design — decide whether to surface)
+
+Accepted / by design (no action required):
+
+- F3 — Terminal does not resize to mobile viewport (held at 120×40)
+- F9 — Terminal still 120×40 at every tested mobile viewport
+
 ### Verdict
 
 **yes-with-caveats** — the streaming pipeline, multi-tab mirroring,
