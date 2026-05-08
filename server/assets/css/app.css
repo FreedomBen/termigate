@@ -842,6 +842,19 @@ body {
     padding-top: 0.75rem;
     padding-bottom: 0.75rem;
   }
+
+  /* Settings page form rows: bump native inputs and selects to a
+     44 px tap floor (F2). The 20 × 20 native checkbox / radio chips
+     stay at their OS-rendered size, but the wrapping <label> row
+     gets a 44 px min-height so the whole row is hittable. */
+  .settings-section .input.input-sm,
+  .settings-section .select.select-sm {
+    min-height: 44px;
+  }
+
+  .settings-section .label.cursor-pointer {
+    min-height: 44px;
+  }
 }
 
 /* === Collapsible bars wrapper (window tabs + control signal bar) === */
