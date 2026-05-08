@@ -92,7 +92,14 @@ defmodule Termigate.MixProject do
         "esbuild termigate --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"],
+      "assets.test": ["cmd --cd assets npm test --silent"],
+      precommit: [
+        "compile --warnings-as-errors",
+        "deps.unlock --unused",
+        "format",
+        "test",
+        "assets.test"
+      ],
       "termigate.setup": ["termigate.setup"],
       "termigate.reset": ["termigate.reset"],
       "termigate.passwd": ["termigate.change_password"]

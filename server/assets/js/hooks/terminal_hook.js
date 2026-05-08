@@ -4,6 +4,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Socket } from "phoenix";
 import { serverToLocal, localToServer, resolveTheme } from "../preferences";
 import * as PreferencesPanel from "../preferences_panel";
+import { shouldAutoFit } from "./should_auto_fit";
 
 // --- Mobile detection ---
 function isMobile() {
@@ -199,13 +200,15 @@ const TerminalHook = {
         }, 300);
       });
       this._resizeObserver.observe(this.el);
-    } else if (!this._isMobile) {
+    } else if (shouldAutoFit({ isMobile: this._isMobile, isMultiPane: this._isMultiPane })) {
       // Multi-pane (non-mobile): fit terminal to container on mount and on
       // browser resize/zoom. We use the window "resize" event rather than a
       // ResizeObserver because ResizeObserver also fires when the LiveView
       // re-renders the CSS Grid (after LayoutPoller updates), which creates
       // a feedback loop (fit → tmux resize → layout update → grid change →
       // observer fires → fit again).
+      // Mobile multi-pane intentionally skips this listener — see
+      // shouldAutoFit().
       this._initialFitDone = false;
       this._multiPaneFit = () => {
         clearTimeout(this._resizeTimer);
@@ -280,14 +283,13 @@ const TerminalHook = {
         }
       });
 
-      // Re-fit when a pane is maximized (mobile: container goes from
-      // hidden to visible, so the terminal needs to fit the real size).
+      // Re-fit when a pane is maximized. Mobile multi-pane intentionally
+      // does not auto-fit (see shouldAutoFit()) — we just repaint the
+      // terminal so the previously-hidden cells render at tmux's
+      // existing dimensions.
       this.handleEvent("pane_maximized", ({ target }) => {
         if (target === this.el.dataset.target) {
-          if (this._isMobile) {
-            // Mobile: keep tmux's native dimensions, just refresh the display
-            this.term?.refresh(0, this.term.rows - 1);
-          } else {
+          if (shouldAutoFit({ isMobile: this._isMobile, isMultiPane: this._isMultiPane })) {
             setTimeout(() => {
               const prevCols = this.term.cols;
               const prevRows = this.term.rows;
@@ -297,6 +299,8 @@ const TerminalHook = {
                 this.channel.push("resize", { cols: this.term.cols, rows: this.term.rows });
               }
             }, 50);
+          } else {
+            this.term?.refresh(0, this.term.rows - 1);
           }
         }
       });
@@ -322,7 +326,7 @@ const TerminalHook = {
     this.term.options.theme = resolveTheme(local);
     this.term.options.cursorStyle = local.cursorStyle;
     this.term.options.cursorBlink = local.cursorBlink;
-    if (!(this._isMobile && this._isMultiPane)) {
+    if (shouldAutoFit({ isMobile: this._isMobile, isMultiPane: this._isMultiPane })) {
       this.fitAddon?.fit();
     }
     if (this._toolbar) {
