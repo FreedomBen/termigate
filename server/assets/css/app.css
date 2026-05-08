@@ -855,6 +855,15 @@ body {
   .settings-section .label.cursor-pointer {
     min-height: 44px;
   }
+
+  /* Login / setup form fields and primary action (F6). Both
+     /login and /setup share the .auth-card wrapper, so a single
+     scoped rule lifts the 40 px daisyUI defaults to the 44 px
+     tap floor on phone-class viewports. */
+  .auth-card .input,
+  .auth-card .btn {
+    min-height: 44px;
+  }
 }
 
 /* === Collapsible bars wrapper (window tabs + control signal bar) === */
