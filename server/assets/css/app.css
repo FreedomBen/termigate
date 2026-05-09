@@ -1134,6 +1134,16 @@ body {
   background: oklch(30% 0.02 260);
 }
 
+.pane-overlay-btn-danger:hover {
+  background: oklch(30% 0.06 25 / 90%);
+  color: oklch(80% 0.15 25);
+  border-color: oklch(40% 0.1 25 / 90%);
+}
+
+.pane-overlay-btn-danger:active {
+  background: oklch(35% 0.08 25);
+}
+
 .pane-overlay-separator {
   width: 1px;
   height: 20px;
@@ -1356,8 +1366,15 @@ body {
   display: none;
 }
 
+.pane-tab-wrapper {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
 .pane-tab {
-  padding: 0.4rem 0.75rem;
+  padding: 0.4rem 1.5rem 0.4rem 0.75rem;
   font-size: 0.75rem;
   font-family: var(--font-mono, ui-monospace, monospace);
   white-space: nowrap;
@@ -1372,6 +1389,34 @@ body {
   display: flex;
   align-items: center;
   gap: 0.375rem;
+}
+
+.pane-close-btn {
+  position: absolute;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: oklch(45% 0.01 260);
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 13px;
+  line-height: 1;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.pane-close-btn:hover {
+  background: oklch(30% 0.06 25);
+  color: oklch(75% 0.15 25);
+}
+
+.pane-close-btn:active {
+  background: oklch(35% 0.08 25);
+  transform: scale(0.9);
 }
 
 .pane-tab-active {
@@ -1392,8 +1437,15 @@ body {
 @media (max-width: 639px) {
   .pane-tab {
     min-height: 44px;
-    padding: 0.5rem 0.875rem;
+    padding: 0.5rem 2.25rem 0.5rem 0.875rem;
     font-size: 0.8125rem;
+  }
+
+  .pane-close-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+    right: 4px;
   }
 }
 

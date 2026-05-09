@@ -568,6 +568,52 @@ defmodule TermigateWeb.MultiPaneLiveTest do
     end
   end
 
+  describe "close_pane" do
+    test "renders a close (X) button per pane chip wired to close_pane",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @test_panes})
+      html = render(view)
+
+      # One pane-close-btn per pane wrapper.
+      assert html =~ "pane-close-btn"
+      # Each fires close_pane with its target.
+      assert html =~ ~r/phx-click="close_pane"[^>]*phx-value-target="test:0\.0"/
+      assert html =~ ~r/phx-click="close_pane"[^>]*phx-value-target="test:0\.1"/
+    end
+
+    test "renders an X in the pane overlay (desktop) wired to close_pane",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @test_panes})
+      html = render(view)
+
+      # The overlay-side close button shares the close_pane event and uses
+      # the danger-styled overlay variant. The whole overlay is hidden on
+      # mobile via CSS (see .pane-overlay rule).
+      assert html =~ "pane-overlay-btn-danger"
+    end
+
+    test "close_pane invokes tmux kill-pane on the requested target", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @test_panes})
+      render(view)
+
+      original = Application.get_env(:termigate, :command_runner)
+      Application.put_env(:termigate, :command_runner, Termigate.MockCommandRunner)
+      on_exit(fn -> Application.put_env(:termigate, :command_runner, original) end)
+
+      Mox.stub_with(Termigate.MockCommandRunner, Termigate.StubCommandRunner)
+
+      Termigate.MockCommandRunner
+      |> expect(:run, fn ["kill-pane", "-t", "test:0.1"] -> {:ok, ""} end)
+
+      render_click(view, "close_pane", %{"target" => "test:0.1"})
+
+      verify!(Termigate.MockCommandRunner)
+    end
+  end
+
   describe "fit_pane_width" do
     test "invokes tmux resize-pane with the requested column count", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/sessions/test/windows/0")

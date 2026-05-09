@@ -211,23 +211,35 @@ defmodule TermigateWeb.MultiPaneLive do
             phx-click-away={@show_new_pane_menu && "close_new_pane_menu"}
           >
             <div class="flex items-center gap-0.5 px-2 flex-1">
-              <button
-                :for={pane <- @panes}
-                type="button"
-                class={[
-                  "pane-tab",
-                  if(@active_pane == pane.target,
-                    do: "pane-tab-active",
-                    else: "pane-tab-inactive"
-                  )
-                ]}
-                phx-click="focus_pane"
-                phx-value-pane={pane.target}
-                aria-label={"Switch to #{pane_chip_label(pane)}"}
-                onmousedown="event.preventDefault()"
-              >
-                {pane_chip_label(pane)}
-              </button>
+              <div :for={pane <- @panes} class="pane-tab-wrapper">
+                <button
+                  type="button"
+                  class={[
+                    "pane-tab",
+                    if(@active_pane == pane.target,
+                      do: "pane-tab-active",
+                      else: "pane-tab-inactive"
+                    )
+                  ]}
+                  phx-click="focus_pane"
+                  phx-value-pane={pane.target}
+                  aria-label={"Switch to #{pane_chip_label(pane)}"}
+                  onmousedown="event.preventDefault()"
+                >
+                  {pane_chip_label(pane)}
+                </button>
+                <button
+                  type="button"
+                  class="pane-close-btn tooltip tooltip-bottom"
+                  phx-click="close_pane"
+                  phx-value-target={pane.target}
+                  data-tip="Close pane"
+                  aria-label={"Close #{pane_chip_label(pane)}"}
+                  onmousedown="event.preventDefault()"
+                >
+                  &times;
+                </button>
+              </div>
               <button
                 type="button"
                 class="new-pane-btn tooltip tooltip-bottom"
@@ -462,6 +474,15 @@ defmodule TermigateWeb.MultiPaneLive do
                 <svg viewBox="0 0 20 20" fill="currentColor" class="size-4">
                   <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zM4 9V4.5a.5.5 0 01.5-.5h11a.5.5 0 01.5.5V9H4zm0 2v4.5a.5.5 0 00.5.5h11a.5.5 0 00.5-.5V11H4z" />
                 </svg>
+              </button>
+              <button
+                class="pane-overlay-btn pane-overlay-btn-danger tooltip tooltip-bottom"
+                phx-click="close_pane"
+                phx-value-target={pane.target}
+                data-tip="Close pane"
+                aria-label="Close pane"
+              >
+                <.icon name="hero-x-mark-micro" class="size-4" />
               </button>
               <%= if length(@panes) > 1 and @maximized == nil do %>
                 <span class="pane-overlay-separator"></span>
@@ -928,6 +949,11 @@ defmodule TermigateWeb.MultiPaneLive do
     dir = if direction == "vertical", do: :vertical, else: :horizontal
     TmuxManager.split_pane(target, dir)
     {:noreply, assign(socket, :show_new_pane_menu, false)}
+  end
+
+  def handle_event("close_pane", %{"target" => target}, socket) do
+    TmuxManager.kill_pane(target)
+    {:noreply, socket}
   end
 
   def handle_event("toggle_new_pane_menu", _params, socket) do
