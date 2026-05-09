@@ -39,8 +39,7 @@ describe("terminal_hook.js mobile tap-vs-scroll keyboard logic", () => {
     const captureTouchstarts = hookSrc.match(
       /addEventListener\(\s*["']touchstart["'][\s\S]*?capture:\s*true/g,
     ) || [];
-    // One in single-pane (_setupSoftKeyboard), one in multi-pane.
-    expect(captureTouchstarts.length).toBeGreaterThanOrEqual(2);
+    expect(captureTouchstarts.length).toBeGreaterThanOrEqual(1);
   });
 
   it("touchmove clears _tapPending so a drag never opens the keyboard", () => {
@@ -69,7 +68,7 @@ describe("terminal_hook.js mobile tap-vs-scroll keyboard logic", () => {
         /addEventListener\(\s*["']touchend["']\s*,\s*\(\s*\)\s*=>\s*\{([\s\S]*?)\}\s*,/g,
       ),
     ];
-    expect(touchendBlocks.length).toBeGreaterThanOrEqual(2);
+    expect(touchendBlocks.length).toBeGreaterThanOrEqual(1);
     for (const [, body] of touchendBlocks) {
       if (!/this\._tapPending/.test(body) || !/\.focus\(\)/.test(body)) continue;
       const clearIdx = body.indexOf("this._tapPending = false");

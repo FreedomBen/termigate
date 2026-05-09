@@ -2,17 +2,11 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Socket } from "phoenix";
-import { serverToLocal, localToServer, resolveTheme } from "../preferences";
-import * as PreferencesPanel from "../preferences_panel";
+import { serverToLocal, resolveTheme } from "../preferences";
 import { shouldAutoFit } from "./should_auto_fit";
 
-// --- Mobile detection ---
 function isMobile() {
   return window.innerWidth < 640;
-}
-
-function isTablet() {
-  return window.innerWidth >= 640 && window.innerWidth <= 1024;
 }
 
 const TerminalHook = {
@@ -24,39 +18,34 @@ const TerminalHook = {
     this._serverPrefs = serverPrefs;
     const prefs = serverToLocal(serverPrefs);
 
-    // Track mobile state and multi-pane mode early (needed for terminal setup)
     this._isMobile = isMobile();
-    this._isMultiPane = this.el.dataset.mode === "multi";
 
     console.log("[TerminalHook] mounted", {
       target,
-      isMultiPane: this._isMultiPane,
       isMobile: this._isMobile,
-      dataMode: this.el.dataset.mode,
       dataCols: this.el.dataset.cols,
       dataRows: this.el.dataset.rows,
       elWidth: this.el.offsetWidth,
       elHeight: this.el.offsetHeight,
     });
 
-    // In multi-pane mode, use the tmux pane's actual dimensions so that
-    // captured scrollback renders correctly. Otherwise let FitAddon decide.
+    // Use the tmux pane's actual dimensions so captured scrollback renders
+    // correctly; xterm's own scrollback is set to 0 because tmux already
+    // owns the history.
     const termOpts = {
       fontSize: prefs.fontSize,
       fontFamily: prefs.fontFamily,
       cursorStyle: prefs.cursorStyle,
       cursorBlink: prefs.cursorBlink,
-      scrollback: this._isMultiPane ? 0 : 1000,
+      scrollback: 0,
       theme: resolveTheme(prefs),
     };
 
-    if (this._isMultiPane) {
-      const tmuxCols = parseInt(this.el.dataset.cols, 10);
-      const tmuxRows = parseInt(this.el.dataset.rows, 10);
-      if (tmuxCols && tmuxRows) {
-        termOpts.cols = tmuxCols;
-        termOpts.rows = tmuxRows;
-      }
+    const tmuxCols = parseInt(this.el.dataset.cols, 10);
+    const tmuxRows = parseInt(this.el.dataset.rows, 10);
+    if (tmuxCols && tmuxRows) {
+      termOpts.cols = tmuxCols;
+      termOpts.rows = tmuxRows;
     }
 
     // Create xterm.js terminal
@@ -111,12 +100,9 @@ const TerminalHook = {
       });
     }
 
-    // In multi-pane mode, skip the synchronous fit() so that the initial
-    // history renders at tmux's dimensions. The ResizeObserver below will
-    // re-fit shortly after mount once the CSS Grid layout has settled.
-    if (!this._isMultiPane) {
-      this.fitAddon.fit();
-    }
+    // Skip the synchronous fit() so the initial history renders at tmux's
+    // dimensions. The window-resize-driven fit below re-fits once the CSS
+    // Grid layout has settled.
 
     console.log("[TerminalHook] after setup", {
       target,
@@ -146,28 +132,17 @@ const TerminalHook = {
       }
     });
 
-    // Resize handling with debounce
+    // Resize handling with debounce. On non-mobile, fit the terminal to its
+    // container on mount and on browser resize/zoom. We use the window
+    // "resize" event rather than a ResizeObserver because ResizeObserver
+    // also fires when the LiveView re-renders the CSS Grid (after
+    // LayoutPoller updates), which creates a feedback loop (fit → tmux
+    // resize → layout update → grid change → observer fires → fit again).
+    // Mobile intentionally skips this listener — see shouldAutoFit().
     this._resizeTimer = null;
-    if (!this._isMultiPane) {
-      // Single-pane: fitAddon handles everything
-      this._resizeObserver = new ResizeObserver(() => {
-        clearTimeout(this._resizeTimer);
-        this._resizeTimer = setTimeout(() => {
-          this.fitAddon.fit();
-        }, 300);
-      });
-      this._resizeObserver.observe(this.el);
-    } else if (shouldAutoFit({ isMobile: this._isMobile, isMultiPane: this._isMultiPane })) {
-      // Multi-pane (non-mobile): fit terminal to container on mount and on
-      // browser resize/zoom. We use the window "resize" event rather than a
-      // ResizeObserver because ResizeObserver also fires when the LiveView
-      // re-renders the CSS Grid (after LayoutPoller updates), which creates
-      // a feedback loop (fit → tmux resize → layout update → grid change →
-      // observer fires → fit again).
-      // Mobile multi-pane intentionally skips this listener — see
-      // shouldAutoFit().
+    if (shouldAutoFit({ isMobile: this._isMobile })) {
       this._initialFitDone = false;
-      this._multiPaneFit = () => {
+      this._paneFit = () => {
         clearTimeout(this._resizeTimer);
         this._resizeTimer = setTimeout(() => {
           const prevCols = this.term.cols;
@@ -182,10 +157,8 @@ const TerminalHook = {
           this._initialFitDone = true;
         }, 300);
       };
-      // Initial fit once CSS Grid layout has settled
-      this._multiPaneFit();
-      // Re-fit on browser window resize or zoom changes
-      window.addEventListener("resize", this._multiPaneFit);
+      this._paneFit();
+      window.addEventListener("resize", this._paneFit);
     }
 
     // Handle pane_resized from other viewers or layout changes (via LiveView)
@@ -203,14 +176,6 @@ const TerminalHook = {
       }
     });
 
-    // --- Mobile features (skip in multi-pane mode) ---
-    if (!this._isMultiPane) {
-      this._setupSoftKeyboard();
-      this._setupTouchGestures();
-      this._setupAutoHidingHeader();
-      this._setupPreferencesPanel();
-    }
-
     this._setupMobileKeyboardToggle();
     this._setupBarsToggle();
 
@@ -226,75 +191,72 @@ const TerminalHook = {
       if (meta && scope) meta.setAttribute("content", scope);
     });
 
-    // --- Multi-pane: notify LiveView when this pane gets focus ---
-    if (this._isMultiPane) {
-      this.term.textarea?.addEventListener("focus", () => {
-        this.pushEvent("pane_focused", { target: this.el.dataset.target });
-      });
-      this.el.addEventListener("mousedown", () => {
-        this.pushEvent("pane_focused", { target: this.el.dataset.target });
-      });
-      // Mirror the single-pane tap-vs-scroll detection: pane_focused fires
-      // on touchstart (so the active pane switches immediately), but the
-      // soft keyboard only opens on a confirmed tap (touchend with no
-      // movement). Capture phase so we set _tapPending before xterm's
-      // bubble-phase touchstart focuses the textarea.
-      this.el.addEventListener("touchstart", (e) => {
-        this.pushEvent("pane_focused", { target: this.el.dataset.target });
-        if (e.touches.length === 1) {
-          this._tapPending = true;
-        }
-      }, { passive: true, capture: true });
+    // Notify LiveView when this pane gets focus.
+    this.term.textarea?.addEventListener("focus", () => {
+      this.pushEvent("pane_focused", { target: this.el.dataset.target });
+    });
+    this.el.addEventListener("mousedown", () => {
+      this.pushEvent("pane_focused", { target: this.el.dataset.target });
+    });
+    // Tap-vs-scroll detection: pane_focused fires on touchstart (so the
+    // active pane switches immediately), but the soft keyboard only opens
+    // on a confirmed tap (touchend with no movement). Capture phase so we
+    // set _tapPending before xterm's bubble-phase touchstart focuses the
+    // textarea.
+    this.el.addEventListener("touchstart", (e) => {
+      this.pushEvent("pane_focused", { target: this.el.dataset.target });
+      if (e.touches.length === 1) {
+        this._tapPending = true;
+      }
+    }, { passive: true, capture: true });
 
-      this.el.addEventListener("touchmove", () => {
-        if (this._tapPending) {
-          this._tapPending = false;
-          if (document.activeElement === this.term?.textarea) {
-            this.term.textarea.blur();
-          }
+    this.el.addEventListener("touchmove", () => {
+      if (this._tapPending) {
+        this._tapPending = false;
+        if (document.activeElement === this.term?.textarea) {
+          this.term.textarea.blur();
         }
-      }, { passive: true });
+      }
+    }, { passive: true });
 
-      this.el.addEventListener("touchend", () => {
-        if (this._tapPending) {
-          this._tapPending = false;
-          this.term?.focus();
-        }
-      }, { passive: true });
-
-      // Listen for server-initiated focus (e.g. after creating a new window)
-      this.handleEvent("focus_terminal", ({ pane }) => {
-        if (pane === this.el.dataset.target) {
-          this.term?.focus();
-        }
-      });
-
-      // Re-fit when a pane is maximized. Mobile multi-pane intentionally
-      // does not auto-fit (see shouldAutoFit()) — we just repaint the
-      // terminal so the previously-hidden cells render at tmux's
-      // existing dimensions.
-      this.handleEvent("pane_maximized", ({ target }) => {
-        if (target === this.el.dataset.target) {
-          if (shouldAutoFit({ isMobile: this._isMobile, isMultiPane: this._isMultiPane })) {
-            setTimeout(() => {
-              const prevCols = this.term.cols;
-              const prevRows = this.term.rows;
-              this.fitAddon.fit();
-              if (this.channel && this.term &&
-                  (this.term.cols !== prevCols || this.term.rows !== prevRows)) {
-                this.channel.push("resize", { cols: this.term.cols, rows: this.term.rows });
-              }
-            }, 50);
-          } else {
-            this.term?.refresh(0, this.term.rows - 1);
-          }
-        }
-      });
-
-      // Auto-focus if this is the only pane (new window)
-      if (document.querySelectorAll('[data-mode="multi"]').length === 1) {
+    this.el.addEventListener("touchend", () => {
+      if (this._tapPending) {
+        this._tapPending = false;
         this.term?.focus();
       }
+    }, { passive: true });
+
+    // Listen for server-initiated focus (e.g. after creating a new window)
+    this.handleEvent("focus_terminal", ({ pane }) => {
+      if (pane === this.el.dataset.target) {
+        this.term?.focus();
+      }
+    });
+
+    // Re-fit when a pane is maximized. Mobile intentionally does not
+    // auto-fit (see shouldAutoFit()) — we just repaint the terminal so the
+    // previously-hidden cells render at tmux's existing dimensions.
+    this.handleEvent("pane_maximized", ({ target }) => {
+      if (target === this.el.dataset.target) {
+        if (shouldAutoFit({ isMobile: this._isMobile })) {
+          setTimeout(() => {
+            const prevCols = this.term.cols;
+            const prevRows = this.term.rows;
+            this.fitAddon.fit();
+            if (this.channel && this.term &&
+                (this.term.cols !== prevCols || this.term.rows !== prevRows)) {
+              this.channel.push("resize", { cols: this.term.cols, rows: this.term.rows });
+            }
+          }, 50);
+        } else {
+          this.term?.refresh(0, this.term.rows - 1);
+        }
+      }
+    });
+
+    // Auto-focus if this is the only terminal on the page (new window).
+    if (document.querySelectorAll('[phx-hook="TerminalHook"]').length === 1) {
+      this.term?.focus();
     }
   },
 
@@ -312,7 +274,7 @@ const TerminalHook = {
     this.term.options.theme = resolveTheme(local);
     this.term.options.cursorStyle = local.cursorStyle;
     this.term.options.cursorBlink = local.cursorBlink;
-    if (shouldAutoFit({ isMobile: this._isMobile, isMultiPane: this._isMultiPane })) {
+    if (shouldAutoFit({ isMobile: this._isMobile })) {
       this.fitAddon?.fit();
     }
   },
@@ -398,17 +360,6 @@ const TerminalHook = {
     });
   },
 
-  // --- Preferences Panel ---
-  _setupPreferencesPanel() {
-    const gearBtn = document.querySelector(".terminal-prefs-btn");
-    if (!gearBtn) return;
-
-    gearBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      PreferencesPanel.open(this.term, this.fitAddon, () => {}, this);
-    });
-  },
-
   // --- Paste from clipboard ---
   _pasteFromClipboard() {
     if (!navigator.clipboard || !navigator.clipboard.readText) {
@@ -423,141 +374,6 @@ const TerminalHook = {
     }).catch(() => {
       // Permission denied or other error — silently ignore
     });
-  },
-
-  // --- Soft Keyboard Handling ---
-  _setupSoftKeyboard() {
-    if (!isMobile()) return;
-
-    this._keyboardOpen = false;
-
-    if (window.visualViewport) {
-      this._onViewportResize = () => {
-        const heightRatio = window.visualViewport.height / window.innerHeight;
-        const wasOpen = this._keyboardOpen;
-        this._keyboardOpen = heightRatio < 0.75;
-
-        if (this._keyboardOpen !== wasOpen) {
-          if (this._keyboardOpen) {
-            // Shrink terminal to fit above the keyboard
-            this.el.style.maxHeight = `${window.visualViewport.height - 90}px`;
-          } else {
-            this.el.style.maxHeight = "";
-          }
-          // Refit terminal after layout change
-          setTimeout(() => this.fitAddon?.fit(), 100);
-        }
-      };
-      window.visualViewport.addEventListener("resize", this._onViewportResize);
-    }
-
-    // Tap to focus (opens the soft keyboard), but not on scroll/drag.
-    // _tapPending is read by the textarea focus listener in mounted() to
-    // block xterm's focus-on-touchstart. Cleared in touchmove (so a drag
-    // never opens the keyboard) and explicitly cleared in touchend right
-    // before we call focus() ourselves (so a tap still does).
-    // Capture phase: xterm registers its bubble-phase touchstart handler
-    // first (during term.open()), so without capture it would focus the
-    // textarea before _tapPending is set, defeating the block.
-    this._tapPending = false;
-
-    this.el.addEventListener("touchstart", (e) => {
-      if (e.touches.length === 1) {
-        this._tapPending = true;
-      }
-    }, { passive: true, capture: true });
-
-    this.el.addEventListener("touchmove", () => {
-      if (this._tapPending) {
-        this._tapPending = false;
-        if (document.activeElement === this.term?.textarea) {
-          this.term.textarea.blur();
-        }
-      }
-    }, { passive: true });
-
-    this.el.addEventListener("touchend", () => {
-      if (this._tapPending) {
-        this._tapPending = false;
-        this.term?.focus();
-      }
-    }, { passive: true });
-  },
-
-  // --- Touch Gestures ---
-  _setupTouchGestures() {
-    if (!isMobile() && !isTablet()) return;
-
-    // Two-finger pinch to zoom (font size)
-    this._initialPinchDistance = null;
-    this._initialFontSize = null;
-
-    this.el.addEventListener("touchstart", (e) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        this._initialPinchDistance = Math.sqrt(dx * dx + dy * dy);
-        this._initialFontSize = this.term?.options.fontSize || 14;
-      }
-    }, { passive: false });
-
-    this.el.addEventListener("touchmove", (e) => {
-      if (e.touches.length === 2 && this._initialPinchDistance) {
-        e.preventDefault();
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const scale = dist / this._initialPinchDistance;
-        const newSize = Math.round(Math.min(Math.max(this._initialFontSize * scale, 8), 32));
-        if (this.term && newSize !== this.term.options.fontSize) {
-          this.term.options.fontSize = newSize;
-          this.fitAddon?.fit();
-        }
-      }
-    }, { passive: false });
-
-    this.el.addEventListener("touchend", (e) => {
-      if (this._initialPinchDistance && e.touches.length < 2) {
-        // Save final font size to server
-        if (this.term) {
-          const updated = this.getLocalPrefs();
-          updated.fontSize = this.term.options.fontSize;
-          this.pushEvent("update_terminal_prefs", localToServer(updated));
-        }
-        this._initialPinchDistance = null;
-        this._initialFontSize = null;
-      }
-    }, { passive: true });
-
-    // Swipe from left edge → navigate back to session list
-    this._swipeStartX = null;
-    this._swipeStartY = null;
-
-    document.addEventListener("touchstart", (e) => {
-      if (e.touches.length === 1 && e.touches[0].clientX < 20) {
-        this._swipeStartX = e.touches[0].clientX;
-        this._swipeStartY = e.touches[0].clientY;
-      }
-    }, { passive: true });
-
-    document.addEventListener("touchend", (e) => {
-      if (this._swipeStartX !== null && e.changedTouches.length === 1) {
-        const dx = e.changedTouches[0].clientX - this._swipeStartX;
-        const dy = Math.abs(e.changedTouches[0].clientY - this._swipeStartY);
-        // Swipe right from left edge: at least 80px horizontal, less than 50px vertical
-        if (dx > 80 && dy < 50) {
-          window.history.back();
-        }
-      }
-      this._swipeStartX = null;
-      this._swipeStartY = null;
-    }, { passive: true });
-  },
-
-  // --- Auto-Hiding Header (disabled — keep header always visible) ---
-  _setupAutoHidingHeader() {
-    // Header stays static/visible at all times so controls are always reachable.
   },
 
   _connectChannel(target) {
@@ -587,17 +403,10 @@ const TerminalHook = {
     // tmux session. The LiveView refreshes the meta tag periodically and
     // pushes "channel_scope_refreshed" to keep this rejoin-safe after long
     // idle periods (mobile background, screen-lock).
-    //
-    // For non-multi-pane mode, also send the current browser dims so tmux
-    // resizes the pane to match on each join.
     const buildJoinParams = () => {
       const params = {};
       const meta = document.querySelector("meta[name='channel-scope']");
       if (meta && meta.content) params.scope = meta.content;
-      if (!this._isMultiPane && this.term.cols > 0 && this.term.rows > 0) {
-        params.cols = this.term.cols;
-        params.rows = this.term.rows;
-      }
       return params;
     };
     this.channel = window.userSocket.channel(topic, buildJoinParams);
@@ -671,23 +480,14 @@ const TerminalHook = {
       this.channel.leave();
       this.channel = null;
     }
-    if (this._resizeObserver) {
-      this._resizeObserver.disconnect();
-    }
-    if (this._multiPaneFit) {
-      window.removeEventListener("resize", this._multiPaneFit);
+    if (this._paneFit) {
+      window.removeEventListener("resize", this._paneFit);
     }
     if (this._resizeTimer) {
       clearTimeout(this._resizeTimer);
     }
     if (this._inputTimer) {
       cancelAnimationFrame(this._inputTimer);
-    }
-    if (this._headerHideTimer) {
-      clearTimeout(this._headerHideTimer);
-    }
-    if (this._onViewportResize && window.visualViewport) {
-      window.visualViewport.removeEventListener("resize", this._onViewportResize);
     }
 
     if (this.term) {

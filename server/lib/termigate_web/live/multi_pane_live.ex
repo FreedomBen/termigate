@@ -423,7 +423,6 @@ defmodule TermigateWeb.MultiPaneLive do
               phx-hook="TerminalHook"
               phx-update="ignore"
               data-target={pane.target}
-              data-mode="multi"
               data-cols={to_string(pane.width)}
               data-rows={to_string(pane.height)}
               data-terminal-prefs={Jason.encode!(@terminal_prefs)}

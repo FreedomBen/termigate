@@ -109,15 +109,6 @@ defmodule TermigateWeb.MultiPaneLiveTest do
       assert html =~ ~s(phx-value-pane="test:0.1")
     end
 
-    test "pane containers have data-mode=multi", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
-
-      send(view.pid, {:layout_updated, @test_panes})
-      html = render(view)
-
-      assert html =~ ~s(data-mode="multi")
-    end
-
     test "resize event is ignored (passive mode)", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
       render_hook(view, "resize", %{"cols" => 120, "rows" => 40})
@@ -141,11 +132,11 @@ defmodule TermigateWeb.MultiPaneLiveTest do
       # The legacy mobile card list is gone for good.
       refute html =~ "mobile-pane-card"
 
-      # The grid is always rendered (no more `hidden sm:grid`); the pane
-      # itself mounts as a multi-mode terminal.
+      # The grid is always rendered (no more `hidden sm:grid`) and the
+      # pane mounts a TerminalHook terminal.
       refute html =~ "hidden sm:grid"
       assert html =~ ~s(data-target="test:0.0")
-      assert html =~ ~s(data-mode="multi")
+      assert html =~ ~s(phx-hook="TerminalHook")
     end
 
     test "multi-pane: grid is always rendered (no more `hidden sm:grid`)", %{conn: conn} do
