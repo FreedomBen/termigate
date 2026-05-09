@@ -125,15 +125,18 @@ defmodule TermigateWeb.MultiPaneLiveTest do
   end
 
   describe "mobile pane switching" do
-    test "single pane: no pane-tabs row and no mobile card list", %{conn: conn} do
+    test "single pane: pane-tabs row stays rendered for the new-pane (+) menu",
+         %{conn: conn} do
       {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
 
       send(view.pid, {:layout_updated, @single_pane})
       html = render(view)
 
-      # The pane-tabs switcher is suppressed when there's only one pane —
-      # there's nothing to switch to.
-      refute html =~ "pane-tabs"
+      # The pane-tabs row is rendered whenever there's at least one pane so
+      # the trailing "+" menu (used to add panes on mobile, where the
+      # per-pane overlay is hidden) stays available.
+      assert html =~ "pane-tabs"
+      assert html =~ "new-pane-menu"
 
       # The legacy mobile card list is gone for good.
       refute html =~ "mobile-pane-card"
@@ -458,6 +461,57 @@ defmodule TermigateWeb.MultiPaneLiveTest do
       assert html =~ "grid-template-rows"
       assert html =~ "t:0.0"
       assert html =~ "t:0.1"
+    end
+  end
+
+  describe "new-pane (+) menu" do
+    test "renders both split options wired to split_pane on the active pane",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @test_panes})
+      html = render(view)
+
+      assert html =~ "new-pane-menu"
+      assert html =~ "Split Pane Horizontally"
+      assert html =~ "Split Pane Vertically"
+
+      # Both menu items invoke the existing split_pane event with the
+      # active pane as their target and the right direction.
+      assert html =~ ~s(phx-value-direction="horizontal")
+      assert html =~ ~s(phx-value-direction="vertical")
+      assert html =~ ~r/phx-click="split_pane"[^>]*phx-value-target="test:0\.0"/
+    end
+
+    test "renders even with a single pane", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @single_pane})
+      html = render(view)
+
+      assert html =~ "new-pane-menu"
+      assert html =~ "Split Pane Horizontally"
+      assert html =~ "Split Pane Vertically"
+    end
+
+    test "split_pane handler invokes tmux split-window with the right flag",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @test_panes})
+      render(view)
+
+      original = Application.get_env(:termigate, :command_runner)
+      Application.put_env(:termigate, :command_runner, Termigate.MockCommandRunner)
+      on_exit(fn -> Application.put_env(:termigate, :command_runner, original) end)
+
+      Mox.stub_with(Termigate.MockCommandRunner, Termigate.StubCommandRunner)
+
+      Termigate.MockCommandRunner
+      |> expect(:run, fn ["split-window", "-h", "-t", "test:0.0"] -> {:ok, ""} end)
+      |> expect(:run, fn ["split-window", "-v", "-t", "test:0.0"] -> {:ok, ""} end)
+
+      render_click(view, "split_pane", %{"target" => "test:0.0", "direction" => "horizontal"})
+      render_click(view, "split_pane", %{"target" => "test:0.0", "direction" => "vertical"})
+
+      verify!(Termigate.MockCommandRunner)
     end
   end
 

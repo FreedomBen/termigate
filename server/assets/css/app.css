@@ -1146,6 +1146,14 @@ body {
     height: 44px;
     border-radius: 8px;
   }
+
+  /* On mobile, hide the per-pane overlay controls (maximize, split,
+     equalize). Their tap targets are awkward at phone widths and
+     duplicate functionality is provided by the "+" menu next to the
+     pane-tabs row. */
+  .pane-overlay {
+    display: none;
+  }
 }
 
 /* === Multi-pane: scrollbar thin to save space === */
@@ -1243,8 +1251,109 @@ body {
   background: oklch(10% 0.005 260);
   border-bottom: 1px solid oklch(25% 0.01 260);
   flex-shrink: 0;
-  overflow-x: auto;
+  /* Scroll lives on .pane-tabs-scroll so the trailing "+" menu popup
+     is not clipped by overflow on the row container. */
+}
+
+.pane-tabs-scroll {
   -webkit-overflow-scrolling: touch;
+  min-width: 0;
+}
+
+/* New-pane (+) menu next to pane tabs.
+   Native <details>/<summary> pattern (matches .ctl-overflow). The popup is
+   absolutely positioned below/above the trigger and right-anchored so it
+   stays inside the viewport on mobile. */
+.new-pane-menu {
+  position: relative;
+  flex-shrink: 0;
+  margin-right: 0.25rem;
+}
+
+.new-pane-menu > summary {
+  list-style: none;
+}
+
+.new-pane-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.new-pane-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  color: oklch(50% 0.01 260);
+  border: 1px dashed oklch(30% 0.01 260);
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.new-pane-btn:hover {
+  color: var(--color-primary);
+  border-color: oklch(from var(--color-primary) l c h / 50%);
+  background: oklch(from var(--color-primary) l c h / 8%);
+}
+
+.new-pane-menu[open] > .new-pane-btn {
+  color: var(--color-primary);
+  border-color: oklch(from var(--color-primary) l c h / 60%);
+  background: oklch(from var(--color-primary) l c h / 15%);
+}
+
+.new-pane-menu-popup {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 220px;
+  background: oklch(12% 0.005 260);
+  border: 1px solid oklch(28% 0.01 260);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 30;
+  box-shadow: 0 8px 24px oklch(0% 0 0 / 50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.new-pane-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  background: transparent;
+  border: none;
+  color: oklch(85% 0.01 80);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  text-align: left;
+  white-space: nowrap;
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.new-pane-menu-item:hover {
+  background: oklch(20% 0.01 260);
+  color: oklch(95% 0.01 80);
+}
+
+@media (max-width: 639px) {
+  .new-pane-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .new-pane-menu-item {
+    padding: 0.75rem 0.875rem;
+    font-size: 0.875rem;
+    min-height: 44px;
+  }
 }
 
 .bars-group.bars-collapsed .pane-tabs {

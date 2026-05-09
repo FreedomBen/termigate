@@ -196,9 +196,13 @@ defmodule TermigateWeb.MultiPaneLive do
              On mobile this is the primary pane-switching UI — only the
              active pane fills the viewport. On desktop the same row is a
              redundant shortcut for activating a pane (clicking a pane in
-             the grid still works too). Hidden when there's only one pane. --%>
-        <div :if={length(@panes) > 1} class="pane-tabs">
-          <div class="flex items-center gap-0.5 px-2 flex-1">
+             the grid still works too). Always rendered when there is at
+             least one pane so the trailing "+" button (which opens the
+             split-pane menu) stays available — on mobile the per-pane
+             overlay split buttons are hidden, so this is the only way
+             to add a pane. --%>
+        <div :if={@panes != []} class="pane-tabs">
+          <div class="pane-tabs-scroll flex items-center gap-0.5 px-2 flex-1 overflow-x-auto">
             <button
               :for={pane <- @panes}
               type="button"
@@ -217,6 +221,46 @@ defmodule TermigateWeb.MultiPaneLive do
               {pane_chip_label(pane)}
             </button>
           </div>
+          <details class="new-pane-menu">
+            <summary
+              class="new-pane-btn tooltip tooltip-bottom"
+              aria-label="New pane"
+              data-tip="New pane"
+              onmousedown="event.preventDefault()"
+            >
+              <.icon name="hero-plus-micro" class="size-3.5" />
+            </summary>
+            <div class="new-pane-menu-popup" role="menu">
+              <button
+                type="button"
+                class="new-pane-menu-item"
+                role="menuitem"
+                phx-click="split_pane"
+                phx-value-target={@active_pane}
+                phx-value-direction="horizontal"
+                onclick="this.closest('details').open = false"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" class="size-4 shrink-0">
+                  <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zM9 4H4.5A.5.5 0 004 4.5v11a.5.5 0 00.5.5H9V4zm2 12h4.5a.5.5 0 00.5-.5v-11a.5.5 0 00-.5-.5H11v12z" />
+                </svg>
+                Split Pane Horizontally
+              </button>
+              <button
+                type="button"
+                class="new-pane-menu-item"
+                role="menuitem"
+                phx-click="split_pane"
+                phx-value-target={@active_pane}
+                phx-value-direction="vertical"
+                onclick="this.closest('details').open = false"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" class="size-4 shrink-0">
+                  <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zM4 9V4.5a.5.5 0 01.5-.5h11a.5.5 0 01.5.5V9H4zm0 2v4.5a.5.5 0 00.5.5h11a.5.5 0 00.5-.5V11H4z" />
+                </svg>
+                Split Pane Vertically
+              </button>
+            </div>
+          </details>
         </div>
       </div>
 
