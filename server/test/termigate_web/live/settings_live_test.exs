@@ -54,21 +54,20 @@ defmodule TermigateWeb.SettingsLiveTest do
       :ok
     end
 
-    test "renders the section header and toggle", %{conn: conn} do
+    test "renders the section header, toggle, and Save button", %{conn: conn} do
       {:ok, _view, html} = live(conn, "/settings")
       assert html =~ "Mobile Control Bar"
       assert html =~ "Show the control bar"
+      assert html =~ ~s(form id="mobile-control-bar-form")
+      assert html =~ ~s(<button type="submit" class="btn btn-primary btn-sm">Save</button>)
     end
 
     test "submitting form with show_toolbar=false persists false", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/settings")
 
       view
-      |> form(
-        ~s(form[phx-change="update_mobile_control_bar"]),
-        %{"show_toolbar" => "false"}
-      )
-      |> render_change()
+      |> form("#mobile-control-bar-form", %{"show_toolbar" => "false"})
+      |> render_submit()
 
       assert Termigate.Config.get()["terminal"]["show_toolbar"] == false
     end
@@ -81,24 +80,33 @@ defmodule TermigateWeb.SettingsLiveTest do
       {:ok, view, _html} = live(conn, "/settings")
 
       view
-      |> form(
-        ~s(form[phx-change="update_mobile_control_bar"]),
-        %{"show_toolbar" => "true"}
-      )
-      |> render_change()
+      |> form("#mobile-control-bar-form", %{"show_toolbar" => "true"})
+      |> render_submit()
 
       assert Termigate.Config.get()["terminal"]["show_toolbar"] == true
     end
   end
 
   describe "notifications section" do
-    test "renders notification mode selector", %{conn: conn} do
+    setup do
+      Termigate.Config.update(fn config -> Map.delete(config, "notifications") end)
+
+      on_exit(fn ->
+        Termigate.Config.update(fn config -> Map.delete(config, "notifications") end)
+      end)
+
+      :ok
+    end
+
+    test "renders notification mode selector and Save button", %{conn: conn} do
       {:ok, _view, html} = live(conn, "/settings")
       assert html =~ "Notifications"
       assert html =~ "Detection Mode"
       assert html =~ "Disabled"
       assert html =~ "Activity-based"
       assert html =~ "Shell integration"
+      assert html =~ ~s(form id="notifications-form")
+      assert html =~ ~s(<button type="submit" class="btn btn-primary btn-sm">Save</button>)
     end
 
     test "Detection Mode option descriptions are wrapped to prevent mobile overflow",
@@ -117,16 +125,28 @@ defmodule TermigateWeb.SettingsLiveTest do
       end
     end
 
+    test "validate updates draft state without persisting", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/settings")
+
+      html =
+        render_change(view, "validate_notifications", %{
+          "notifications" => %{"mode" => "activity"}
+        })
+
+      # UI reflects the draft mode...
+      assert html =~ "Idle threshold"
+
+      # ...but config is unchanged until Save is clicked.
+      assert Termigate.Config.get()["notifications"]["mode"] == "disabled"
+    end
+
     test "changing mode to activity shows idle threshold", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/settings")
 
-      render_click(view, "update_notification_setting", %{
-        "key" => "mode",
-        "value" => "activity"
-      })
-
-      # Config change propagates via PubSub — re-render to pick it up
-      html = render(view)
+      html =
+        render_change(view, "validate_notifications", %{
+          "notifications" => %{"mode" => "activity"}
+        })
 
       assert html =~ "Idle threshold"
       assert html =~ "Play sound"
@@ -136,12 +156,10 @@ defmodule TermigateWeb.SettingsLiveTest do
     test "changing mode to shell shows min duration and snippets", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/settings")
 
-      render_click(view, "update_notification_setting", %{
-        "key" => "mode",
-        "value" => "shell"
-      })
-
-      html = render(view)
+      html =
+        render_change(view, "validate_notifications", %{
+          "notifications" => %{"mode" => "shell"}
+        })
 
       assert html =~ "Minimum command duration"
       assert html =~ "Shell setup instructions"
@@ -155,57 +173,42 @@ defmodule TermigateWeb.SettingsLiveTest do
 
       {:ok, view, _html} = live(conn, "/settings")
 
-      render_click(view, "update_notification_setting", %{
-        "key" => "mode",
-        "value" => "disabled"
-      })
-
-      html = render(view)
+      html =
+        render_change(view, "validate_notifications", %{
+          "notifications" => %{"mode" => "disabled"}
+        })
 
       refute html =~ "Idle threshold"
       refute html =~ "Request permission"
     end
 
-    test "persists notification settings to config", %{conn: conn} do
+    test "Save persists notification settings to config", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/settings")
 
-      render_click(view, "update_notification_setting", %{
-        "key" => "mode",
-        "value" => "activity"
+      render_submit(view, "save_notifications", %{
+        "notifications" => %{"mode" => "activity"}
       })
 
       config = Termigate.Config.get()
       assert config["notifications"]["mode"] == "activity"
     end
 
-    test "updates idle threshold", %{conn: conn} do
+    test "Save persists idle threshold", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/settings")
 
-      render_click(view, "update_notification_setting", %{
-        "key" => "mode",
-        "value" => "activity"
-      })
-
-      render_click(view, "update_notification_setting", %{
-        "key" => "idle_threshold",
-        "value" => "30"
+      render_submit(view, "save_notifications", %{
+        "notifications" => %{"mode" => "activity", "idle_threshold" => "30"}
       })
 
       config = Termigate.Config.get()
       assert config["notifications"]["idle_threshold"] == 30
     end
 
-    test "toggles sound setting", %{conn: conn} do
+    test "Save persists sound setting", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/settings")
 
-      render_click(view, "update_notification_setting", %{
-        "key" => "mode",
-        "value" => "activity"
-      })
-
-      render_click(view, "update_notification_setting", %{
-        "key" => "sound",
-        "value" => "true"
+      render_submit(view, "save_notifications", %{
+        "notifications" => %{"mode" => "activity", "sound" => "true"}
       })
 
       config = Termigate.Config.get()
@@ -215,71 +218,60 @@ defmodule TermigateWeb.SettingsLiveTest do
     test "test_notification event does not crash", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/settings")
 
-      render_click(view, "update_notification_setting", %{
-        "key" => "mode",
-        "value" => "activity"
+      render_change(view, "validate_notifications", %{
+        "notifications" => %{"mode" => "activity"}
       })
 
       # Should not crash
       render_click(view, "test_notification")
     end
 
-    test "invalid numeric idle_threshold defaults to 10", %{conn: conn} do
+    test "Save with invalid numeric idle_threshold falls back to default", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/settings")
 
-      render_click(view, "update_notification_setting", %{
-        "key" => "idle_threshold",
-        "value" => "abc"
+      render_submit(view, "save_notifications", %{
+        "notifications" => %{"idle_threshold" => "abc"}
       })
 
+      # parse_int fails → falls back to current draft (default 10 on fresh mount)
       config = Termigate.Config.get()
       assert config["notifications"]["idle_threshold"] == 10
     end
 
-    test "out-of-range idle_threshold is clamped", %{conn: conn} do
+    test "Save clamps out-of-range idle_threshold", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/settings")
 
-      # Above max (120)
-      render_click(view, "update_notification_setting", %{
-        "key" => "idle_threshold",
-        "value" => "999"
+      render_submit(view, "save_notifications", %{
+        "notifications" => %{"idle_threshold" => "999"}
       })
 
-      config = Termigate.Config.get()
-      assert config["notifications"]["idle_threshold"] == 120
+      assert Termigate.Config.get()["notifications"]["idle_threshold"] == 120
 
-      # Below min (3)
-      render_click(view, "update_notification_setting", %{
-        "key" => "idle_threshold",
-        "value" => "1"
+      render_submit(view, "save_notifications", %{
+        "notifications" => %{"idle_threshold" => "1"}
       })
 
-      config = Termigate.Config.get()
-      assert config["notifications"]["idle_threshold"] == 3
+      assert Termigate.Config.get()["notifications"]["idle_threshold"] == 3
     end
 
-    test "out-of-range min_duration is clamped", %{conn: conn} do
+    test "Save clamps out-of-range min_duration", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/settings")
 
-      render_click(view, "update_notification_setting", %{
-        "key" => "min_duration",
-        "value" => "9999"
+      render_submit(view, "save_notifications", %{
+        "notifications" => %{"min_duration" => "9999"}
       })
 
-      config = Termigate.Config.get()
-      assert config["notifications"]["min_duration"] == 600
+      assert Termigate.Config.get()["notifications"]["min_duration"] == 600
     end
 
-    test "invalid mode falls back to disabled", %{conn: conn} do
+    test "Save with invalid mode falls back to disabled", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/settings")
 
-      render_click(view, "update_notification_setting", %{
-        "key" => "mode",
-        "value" => "invalid_mode"
+      render_submit(view, "save_notifications", %{
+        "notifications" => %{"mode" => "invalid_mode"}
       })
 
-      config = Termigate.Config.get()
-      assert config["notifications"]["mode"] == "disabled"
+      assert Termigate.Config.get()["notifications"]["mode"] == "disabled"
     end
   end
 

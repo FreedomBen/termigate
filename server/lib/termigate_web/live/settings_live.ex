@@ -293,14 +293,17 @@ defmodule TermigateWeb.SettingsLive do
     end
   end
 
-  def handle_event("update_mobile_control_bar", params, socket) do
+  def handle_event("save_mobile_control_bar", params, socket) do
     terminal =
       socket.assigns.terminal
       |> maybe_put_bool("show_toolbar", params)
 
     case Config.update(fn config -> Map.put(config, "terminal", terminal) end) do
       {:ok, _} ->
-        {:noreply, assign(socket, :terminal, terminal)}
+        {:noreply,
+         socket
+         |> assign(:terminal, terminal)
+         |> put_flash(:info, "Mobile control bar setting saved.")}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Failed to save: #{inspect(reason)}")}
@@ -340,30 +343,33 @@ defmodule TermigateWeb.SettingsLive do
     end
   end
 
-  def handle_event("update_notification_setting", %{"key" => key, "value" => value}, socket) do
-    value =
-      case key do
-        "idle_threshold" -> parse_int(value) || 10
-        "min_duration" -> parse_int(value) || 5
-        "sound" -> value in ["true", true]
-        "mode" -> if value in ~w(disabled activity shell), do: value, else: "disabled"
-        _ -> value
+  def handle_event("validate_notifications", params, socket) do
+    socket = apply_notification_params(socket, params)
+
+    socket =
+      if socket.assigns.notification_mode == "shell" and
+           is_nil(socket.assigns.bash_shell_integration_ok) do
+        check_bash_version(socket)
+      else
+        socket
       end
 
-    case Config.update(fn config ->
-           notif = Map.get(config, "notifications", %{})
-           Map.put(config, "notifications", Map.put(notif, key, value))
-         end) do
-      {:ok, _} ->
-        # Check bash version when switching to shell mode
-        socket =
-          if key == "mode" and value == "shell" do
-            check_bash_version(socket)
-          else
-            socket
-          end
+    {:noreply, socket}
+  end
 
-        {:noreply, socket}
+  def handle_event("save_notifications", params, socket) do
+    socket = apply_notification_params(socket, params)
+
+    notifications = %{
+      "mode" => socket.assigns.notification_mode,
+      "idle_threshold" => socket.assigns.notification_idle_threshold,
+      "min_duration" => socket.assigns.notification_min_duration,
+      "sound" => socket.assigns.notification_sound
+    }
+
+    case Config.update(fn config -> Map.put(config, "notifications", notifications) end) do
+      {:ok, _} ->
+        {:noreply, put_flash(socket, :info, "Notification settings saved.")}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Failed to save: #{inspect(reason)}")}
@@ -476,6 +482,36 @@ defmodule TermigateWeb.SettingsLive do
 
   defp maybe_put_bool(map, key, params) do
     Map.put(map, key, params[key] in [true, "true", "on"])
+  end
+
+  defp apply_notification_params(socket, params) do
+    notif = Map.get(params, "notifications", %{})
+
+    current = %{
+      "mode" => socket.assigns.notification_mode,
+      "idle_threshold" => socket.assigns.notification_idle_threshold,
+      "min_duration" => socket.assigns.notification_min_duration,
+      "sound" => socket.assigns.notification_sound
+    }
+
+    merged = Map.merge(current, notif)
+
+    mode =
+      if merged["mode"] in ~w(disabled activity shell), do: merged["mode"], else: "disabled"
+
+    idle_threshold =
+      parse_int(merged["idle_threshold"]) || socket.assigns.notification_idle_threshold
+
+    min_duration =
+      parse_int(merged["min_duration"]) || socket.assigns.notification_min_duration
+
+    sound = merged["sound"] in [true, "true", "on"]
+
+    socket
+    |> assign(:notification_mode, mode)
+    |> assign(:notification_idle_threshold, idle_threshold)
+    |> assign(:notification_min_duration, min_duration)
+    |> assign(:notification_sound, sound)
   end
 
   defp check_bash_version(socket) do
