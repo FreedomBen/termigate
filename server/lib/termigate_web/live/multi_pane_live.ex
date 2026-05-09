@@ -218,47 +218,6 @@ defmodule TermigateWeb.MultiPaneLive do
             </button>
           </div>
         </div>
-
-        <%!-- Control signal bar (mobile/tablet only) --%>
-        <div class="control-signal-bar">
-          <div class="ctl-group">
-            <button
-              :for={
-                {label, key} <- [{"^C", "c"}, {"^D", "d"}, {"^Z", "z"}, {"^L", "l"}, {"^\\", "\\"}]
-              }
-              class={"ctl-btn #{if key == "\\", do: "ctl-btn-danger"}"}
-              phx-click="send_control"
-              phx-value-key={key}
-              disabled={@active_pane == nil}
-              onmousedown="event.preventDefault()"
-            >
-              <kbd>{label}</kbd>
-            </button>
-          </div>
-
-          <span class="ctl-separator">|</span>
-
-          <div class="ctl-group">
-            <button
-              :for={
-                {label, key} <- [
-                  {"Tab", "tab"},
-                  {raw("&#x2191;"), "up"},
-                  {raw("&#x2193;"), "down"},
-                  {raw("&#x2190;"), "left"},
-                  {raw("&#x2192;"), "right"}
-                ]
-              }
-              class="ctl-btn"
-              phx-click="send_special_key"
-              phx-value-key={key}
-              disabled={@active_pane == nil}
-              onmousedown="event.preventDefault()"
-            >
-              <kbd>{label}</kbd>
-            </button>
-          </div>
-        </div>
       </div>
 
       <%!-- Quick action bar --%>
@@ -501,6 +460,47 @@ defmodule TermigateWeb.MultiPaneLive do
           <.icon name="hero-rectangle-group" class="empty-state-icon" />
           <p class="text-lg font-semibold mb-2">No panes in this window</p>
           <.link navigate={~p"/"} class="btn btn-primary btn-sm">Back to Sessions</.link>
+        </div>
+      </div>
+
+      <%!-- Control signal bar (mobile/tablet only). Sits at the bottom of
+           the flex column so it ends up just above the soft keyboard
+           where thumbs naturally rest. Hidden on desktop via CSS. --%>
+      <div class="control-signal-bar">
+        <div class="ctl-group">
+          <button
+            :for={{label, key} <- [{"^C", "c"}, {"^D", "d"}, {"^Z", "z"}, {"^L", "l"}, {"^\\", "\\"}]}
+            class={"ctl-btn #{if key == "\\", do: "ctl-btn-danger"}"}
+            phx-click="send_control"
+            phx-value-key={key}
+            disabled={@active_pane == nil}
+            onmousedown="event.preventDefault()"
+          >
+            <kbd>{label}</kbd>
+          </button>
+        </div>
+
+        <span class="ctl-separator">|</span>
+
+        <div class="ctl-group">
+          <button
+            :for={
+              {label, key} <- [
+                {"Tab", "tab"},
+                {raw("&#x2191;"), "up"},
+                {raw("&#x2193;"), "down"},
+                {raw("&#x2190;"), "left"},
+                {raw("&#x2192;"), "right"}
+              ]
+            }
+            class="ctl-btn"
+            phx-click="send_special_key"
+            phx-value-key={key}
+            disabled={@active_pane == nil}
+            onmousedown="event.preventDefault()"
+          >
+            <kbd>{label}</kbd>
+          </button>
         </div>
       </div>
 

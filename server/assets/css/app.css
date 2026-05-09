@@ -328,14 +328,17 @@ body {
   background: oklch(100% 0 0 / 8%);
 }
 
-/* === Control signal bar === */
+/* === Control signal bar ===
+   Lives at the bottom of the flex column on mobile so it sits just above
+   the soft keyboard (thumb-zone). Hidden on desktop. */
 .control-signal-bar {
   display: flex;
   align-items: center;
   gap: 1px;
   padding: 3px 0.75rem;
+  padding-bottom: calc(3px + env(safe-area-inset-bottom, 0px));
   background: oklch(11% 0.005 260);
-  border-bottom: 1px solid oklch(22% 0.008 260);
+  border-top: 1px solid oklch(22% 0.008 260);
   flex-shrink: 0;
   z-index: 20;
 }
@@ -896,8 +899,7 @@ body {
   color: oklch(85% 0.01 80);
 }
 
-.bars-group.bars-collapsed .window-tabs,
-.bars-group.bars-collapsed .control-signal-bar {
+.bars-group.bars-collapsed .window-tabs {
   display: none;
 }
 
