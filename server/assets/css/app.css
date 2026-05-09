@@ -1331,6 +1331,9 @@ body {
     display: block !important;
     grid-column: 1 / -1 !important;
     grid-row: 1 / -1 !important;
+    /* Drop the active-pane outline: with a single pane filling the
+       viewport there's nothing to distinguish from. */
+    border: none !important;
   }
 
   /* Hide the pane-resize divider overlay: only one pane is visible at a
