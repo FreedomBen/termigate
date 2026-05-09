@@ -1239,9 +1239,11 @@ In multi-pane view, all panes are **passive resizers** — they read the current
 
 #### Mobile Behavior
 
-- Multi-pane view is desktop/tablet only (>640px)
-- On mobile, the session view shows window tabs at the top and a list of panes for the selected window — tap a pane to open full-viewport
-- Alternatively: horizontal swipe between panes in the same window
+- The multi-pane route is the same at every viewport — mobile renders the same `MultiPaneLive` and the same xterm.js hooks; only the chrome and grid layout differ.
+- A **pane-tabs** strip below the window tabs lists every pane in the current window as a chip (`<index> <command>`). Tapping a chip fires `focus_pane`, which sets `active_pane` and clears any maximize state.
+- On mobile (`max-width: 639px`), CSS collapses the multi-pane grid to a single 1fr cell and hides every pane wrapper except the one tagged `data-mobile-visible="true"` — so users see one terminal at a time and switch via the pane-tabs.
+- The pane-tabs row is suppressed when the window has a single pane (nothing to switch to). The per-pane "Maximize" overlay button is hidden on mobile (it would be a no-op).
+- `active_pane` defaults to the first pane on mount and after each `:layout_updated` broadcast, so the mobile control bar (`Send Ctrl+C`, quick actions) is wired to the visible pane without an extra "tap to activate" step.
 
 ### Quick Actions (Command Buttons)
 

@@ -76,7 +76,7 @@ defmodule TermigateWeb.MultiPaneLive do
       |> assign(:maximized, nil)
       |> assign(:channel_scope, channel_scope)
       |> assign(:page_title, "#{session}:#{window}")
-      |> assign(:active_pane, nil)
+      |> assign(:active_pane, default_active_pane(layout))
       |> assign(:quick_actions, quick_actions)
       |> assign(:quick_actions_enabled, config["quick_actions_enabled"] != false)
       |> assign(:show_actions, true)
@@ -188,6 +188,33 @@ defmodule TermigateWeb.MultiPaneLive do
               aria-label="New window"
             >
               <.icon name="hero-plus-micro" class="size-3.5" />
+            </button>
+          </div>
+        </div>
+
+        <%!-- Pane tabs (active pane switcher).
+             On mobile this is the primary pane-switching UI — only the
+             active pane fills the viewport. On desktop the same row is a
+             redundant shortcut for activating a pane (clicking a pane in
+             the grid still works too). Hidden when there's only one pane. --%>
+        <div :if={length(@panes) > 1} class="pane-tabs">
+          <div class="flex items-center gap-0.5 px-2 flex-1">
+            <button
+              :for={pane <- @panes}
+              type="button"
+              class={[
+                "pane-tab",
+                if(@active_pane == pane.target,
+                  do: "pane-tab-active",
+                  else: "pane-tab-inactive"
+                )
+              ]}
+              phx-click="focus_pane"
+              phx-value-pane={pane.target}
+              aria-label={"Switch to #{pane_chip_label(pane)}"}
+              onmousedown="event.preventDefault()"
+            >
+              {pane_chip_label(pane)}
             </button>
           </div>
         </div>
@@ -315,15 +342,16 @@ defmodule TermigateWeb.MultiPaneLive do
         </div>
       </div>
 
-      <%!-- Multi-pane grid (desktop/tablet) --%>
+      <%!-- Multi-pane grid.
+           Renders at every viewport. On desktop the inline grid template
+           lays panes out side-by-side; on mobile a CSS rule collapses the
+           grid to a single cell and shows only the pane tagged
+           `data-mobile-visible="true"` (driven by the pane-tabs row above). --%>
       <div
         :if={@panes != []}
         id="multi-pane-grid"
         phx-hook="PaneResizeHook"
-        class={[
-          "flex-1 min-h-0 relative",
-          if(@maximized || length(@panes) == 1, do: "grid", else: "hidden sm:grid")
-        ]}
+        class="flex-1 min-h-0 relative grid"
         style={"grid-template-columns: #{@grid.cols}; grid-template-rows: #{@grid.rows}; gap: 1px;"}
         data-panes={
           Jason.encode!(
@@ -339,6 +367,9 @@ defmodule TermigateWeb.MultiPaneLive do
         <%= for pane <- @panes do %>
           <div
             id={"pane-wrapper-#{pane.target}"}
+            data-mobile-visible={
+              if pane.target == (@maximized || @active_pane), do: "true", else: "false"
+            }
             class={[
               "relative group min-h-0 overflow-hidden",
               if(@maximized == pane.target,
@@ -389,8 +420,10 @@ defmodule TermigateWeb.MultiPaneLive do
                   <.icon name="hero-arrows-pointing-in-micro" class="size-4" />
                 </button>
               <% else %>
+                <%!-- Hidden on mobile: with one pane shown at a time,
+                     "maximize" has no visible effect. --%>
                 <button
-                  class="pane-overlay-btn tooltip tooltip-bottom"
+                  class="pane-overlay-btn tooltip tooltip-bottom hidden sm:flex"
                   phx-click="maximize_pane"
                   phx-value-target={pane.target}
                   data-tip="Maximize"
@@ -462,30 +495,6 @@ defmodule TermigateWeb.MultiPaneLive do
         </div>
       </div>
 
-      <%!-- Mobile pane list — tappable cards maximize the pane.
-           Skip when there's only one pane: the grid is rendered full-bleed
-           in that case so the user lands directly on the terminal (F4). --%>
-      <div
-        :if={length(@panes) > 1 and @maximized == nil}
-        class="flex-1 overflow-y-auto sm:hidden p-3 space-y-2"
-      >
-        <div
-          :for={pane <- @panes}
-          class="pane-row rounded-xl mobile-pane-card cursor-pointer"
-          phx-click="maximize_pane"
-          phx-value-target={pane.target}
-        >
-          <.icon name="hero-command-line-micro" class="size-4 text-base-content/25 shrink-0" />
-          <div class="flex-1 min-w-0">
-            <div class="text-sm font-mono text-base-content/70">{pane.target}</div>
-            <div class="text-xs text-base-content/40 mt-0.5">
-              {pane.command} &middot; {pane.width}&times;{pane.height}
-            </div>
-          </div>
-          <.icon name="hero-arrows-pointing-out-micro" class="size-4 text-base-content/20 shrink-0" />
-        </div>
-      </div>
-
       <%!-- Empty state --%>
       <div :if={@panes == []} class="flex-1 flex items-center justify-center">
         <div class="empty-state">
@@ -534,13 +543,18 @@ defmodule TermigateWeb.MultiPaneLive do
         end
       end)
 
-    # If the active pane no longer exists, clear it
+    # If the active pane no longer exists, fall back to whatever pane is now
+    # the natural default. Keeping `active_pane` populated whenever the window
+    # has any panes is what makes the mobile pane-tabs row actually drive the
+    # control bar (`Send Ctrl+C`, quick actions) without an extra tap.
     active_pane =
-      if socket.assigns.active_pane &&
-           not Enum.any?(panes, &(&1.target == socket.assigns.active_pane)) do
-        nil
-      else
-        socket.assigns.active_pane
+      cond do
+        socket.assigns.active_pane &&
+            Enum.any?(panes, &(&1.target == socket.assigns.active_pane)) ->
+          socket.assigns.active_pane
+
+        true ->
+          default_active_pane(panes)
       end
 
     # Manage per-pane PubSub subscriptions for notifications
@@ -973,4 +987,16 @@ defmodule TermigateWeb.MultiPaneLive do
   defp action_icon(action) do
     Map.get(@icon_map, action["icon"])
   end
+
+  defp default_active_pane([]), do: nil
+  defp default_active_pane([first | _]), do: first.target
+
+  defp pane_chip_label(%{target: target, command: command}) do
+    index = target |> String.split(".") |> List.last() || ""
+    cmd = (command || "") |> String.trim() |> truncate(8)
+    if cmd == "", do: index, else: "#{index} #{cmd}"
+  end
+
+  defp truncate(s, max) when byte_size(s) <= max, do: s
+  defp truncate(s, max), do: String.slice(s, 0, max)
 end

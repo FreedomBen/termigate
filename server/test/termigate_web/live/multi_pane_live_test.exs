@@ -87,17 +87,26 @@ defmodule TermigateWeb.MultiPaneLiveTest do
       assert html =~ "multi-pane-grid"
     end
 
-    test "renders mobile pane list after pane update", %{conn: conn} do
+    test "renders pane-tabs chips with index + command labels", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
 
       send(view.pid, {:layout_updated, @test_panes})
       html = render(view)
 
-      # Mobile list with maximize buttons
-      assert html =~ "sm:hidden"
-      assert html =~ "test:0.0"
-      assert html =~ "test:0.1"
-      assert html =~ "maximize_pane"
+      # Pane-tabs row exists with one chip per pane.
+      assert html =~ "pane-tabs"
+      assert html =~ "pane-tab-active"
+      assert html =~ "pane-tab-inactive"
+
+      # Chip labels are "<index> <command>" derived from the pane target's
+      # last segment and the running command (truncated).
+      assert html =~ "0 bash"
+      assert html =~ "1 vim"
+
+      # Each chip wires up focus_pane with its target.
+      assert html =~ ~s(phx-click="focus_pane")
+      assert html =~ ~s(phx-value-pane="test:0.0")
+      assert html =~ ~s(phx-value-pane="test:0.1")
     end
 
     test "pane containers have data-mode=multi", %{conn: conn} do
@@ -115,36 +124,64 @@ defmodule TermigateWeb.MultiPaneLiveTest do
     end
   end
 
-  describe "single-pane mobile gating" do
-    test "single pane renders full-bleed without the mobile card-list", %{conn: conn} do
+  describe "mobile pane switching" do
+    test "single pane: no pane-tabs row and no mobile card list", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
 
       send(view.pid, {:layout_updated, @single_pane})
       html = render(view)
 
-      # The grid is no longer gated behind `sm:` for a single pane, so the
-      # user lands directly on the terminal at every viewport (F4).
-      refute html =~ "hidden sm:grid"
+      # The pane-tabs switcher is suppressed when there's only one pane —
+      # there's nothing to switch to.
+      refute html =~ "pane-tabs"
 
-      # The mobile card-list fallback is not rendered when there is only
-      # one pane — no extra "tap to maximize" friction.
+      # The legacy mobile card list is gone for good.
       refute html =~ "mobile-pane-card"
-      refute html =~ "sm:hidden"
 
-      # The pane itself is still mounted with multi-mode terminal data.
+      # The grid is always rendered (no more `hidden sm:grid`); the pane
+      # itself mounts as a multi-mode terminal.
+      refute html =~ "hidden sm:grid"
       assert html =~ ~s(data-target="test:0.0")
       assert html =~ ~s(data-mode="multi")
     end
 
-    test "two or more panes still gate the grid behind sm: and show the card-list",
-         %{conn: conn} do
+    test "multi-pane: grid is always rendered (no more `hidden sm:grid`)", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
 
       send(view.pid, {:layout_updated, @test_panes})
       html = render(view)
 
-      assert html =~ "hidden sm:grid"
-      assert html =~ "mobile-pane-card"
+      # The grid container is present at every viewport — mobile uses CSS
+      # to collapse it to a single visible cell rather than hiding it.
+      assert html =~ ~s(id="multi-pane-grid")
+      refute html =~ "hidden sm:grid"
+      refute html =~ "mobile-pane-card"
+    end
+
+    test "active_pane defaults to first pane after layout update", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+
+      send(view.pid, {:layout_updated, @test_panes})
+      html = render(view)
+
+      # First pane's wrapper is the one tagged data-mobile-visible="true";
+      # the others are "false".
+      assert html =~ ~s(id="pane-wrapper-test:0.0")
+      assert html =~ ~r/pane-wrapper-test:0\.0[^>]*data-mobile-visible="true"/
+      assert html =~ ~r/pane-wrapper-test:0\.1[^>]*data-mobile-visible="false"/
+    end
+
+    test "clicking a chip switches the active (and mobile-visible) pane", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @test_panes})
+      render(view)
+
+      render_click(view, "focus_pane", %{"pane" => "test:0.1"})
+      html = render(view)
+
+      # The visible-pane data attribute moves with the active pane.
+      assert html =~ ~r/pane-wrapper-test:0\.1[^>]*data-mobile-visible="true"/
+      assert html =~ ~r/pane-wrapper-test:0\.0[^>]*data-mobile-visible="false"/
     end
   end
 
