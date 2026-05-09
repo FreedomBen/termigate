@@ -1242,6 +1242,7 @@ In multi-pane view, all panes are **passive resizers** — they read the current
 - The multi-pane route is the same at every viewport — mobile renders the same `MultiPaneLive` and the same xterm.js hooks; only the chrome and grid layout differ.
 - A **pane-tabs** strip below the window tabs lists every pane in the current window as a chip (`<index> <command>`). Tapping a chip fires `focus_pane`, which sets `active_pane` and clears any maximize state.
 - On mobile (`max-width: 639px`), CSS collapses the multi-pane grid to a single 1fr cell and hides every pane wrapper except the one tagged `data-mobile-visible="true"` — so users see one terminal at a time and switch via the pane-tabs.
+- The visible pane wrapper gets `overflow: auto` and its inner xterm host gets `width: max-content; min-width: 100%` (with the matching height pair) so the terminal preserves tmux's native cols × rows on mobile and the user can pan horizontally/vertically when xterm renders past the viewport edge. `fitAddon.fit()` is intentionally skipped on mobile multi-pane (see `shouldAutoFit`).
 - The pane-tabs row is suppressed when the window has a single pane (nothing to switch to). The per-pane "Maximize" overlay button is hidden on mobile (it would be a no-op).
 - `active_pane` defaults to the first pane on mount and after each `:layout_updated` broadcast, so the mobile control bar (`Send Ctrl+C`, quick actions) is wired to the visible pane without an extra "tap to activate" step.
 

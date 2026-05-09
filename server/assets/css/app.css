@@ -1167,20 +1167,6 @@ body {
   border: none;
 }
 
-/* Mobile: preserve tmux's native dimensions and scroll to view */
-@media (max-width: 639px) {
-  .pane-maximized {
-    overflow: auto !important;
-    scrollbar-width: thin;
-  }
-  .pane-maximized > [data-mode="multi"] {
-    width: max-content !important;
-    height: max-content !important;
-    min-width: 100%;
-    min-height: 100%;
-  }
-}
-
 /* === Pane resize dividers === */
 .pane-divider {
   position: absolute;
@@ -1334,6 +1320,24 @@ body {
     /* Drop the active-pane outline: with a single pane filling the
        viewport there's nothing to distinguish from. */
     border: none !important;
+    /* Allow horizontal/vertical scrolling within the visible pane: on
+       mobile multi-pane the terminal stays at tmux's native cols × rows
+       (fitAddon is skipped — see shouldAutoFit), so xterm can render
+       wider than the viewport. The wrapper's `overflow-hidden` Tailwind
+       class would otherwise clip the right side of the terminal. */
+    overflow: auto !important;
+    scrollbar-width: thin;
+  }
+
+  #multi-pane-grid > [data-mobile-visible="true"] > [data-mode="multi"] {
+    /* The xterm host is `w-full h-full` so the desktop grid sizes it.
+       On mobile we want it to keep its natural rendered size (xterm's
+       cols × charWidth) so the wrapper above can scroll to it, while
+       still filling the viewport when the terminal is narrower. */
+    width: max-content !important;
+    height: max-content !important;
+    min-width: 100%;
+    min-height: 100%;
   }
 
   /* Hide the pane-resize divider overlay: only one pane is visible at a
