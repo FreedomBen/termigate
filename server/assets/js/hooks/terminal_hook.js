@@ -226,9 +226,12 @@ const TerminalHook = {
       }
     }, { passive: true });
 
-    // Listen for server-initiated focus (e.g. after creating a new window)
+    // Listen for server-initiated focus (e.g. after creating a new window).
+    // On mobile, skip the focus call so the soft keyboard doesn't pop up just
+    // from switching panes via a tab click — the keyboard should only appear
+    // when the user taps the terminal directly (handled by touchend above).
     this.handleEvent("focus_terminal", ({ pane }) => {
-      if (pane === this.el.dataset.target) {
+      if (pane === this.el.dataset.target && !this._isMobile) {
         this.term?.focus();
       }
     });
