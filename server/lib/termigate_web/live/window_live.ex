@@ -114,7 +114,11 @@ defmodule TermigateWeb.WindowLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="flex flex-col h-dvh bg-black overflow-x-hidden">
+    <div
+      id="window-root"
+      phx-hook="EdgeSwipeBack"
+      class="flex flex-col h-dvh bg-black overflow-x-hidden"
+    >
       <meta name="channel-scope" content={@channel_scope} />
 
       <%!-- Header bar --%>
@@ -786,6 +790,10 @@ defmodule TermigateWeb.WindowLive do
   # --- Event handlers ---
 
   @impl true
+  def handle_event("swipe_back", _params, socket) do
+    {:noreply, push_navigate(socket, to: ~p"/")}
+  end
+
   def handle_event("maximize_pane", %{"target" => target}, socket) do
     socket =
       socket

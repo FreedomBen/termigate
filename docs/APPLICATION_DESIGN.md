@@ -651,7 +651,7 @@ A fixed bottom bar (`.control-signal-bar`, rendered server-side in `window_live.
 - Tap: focus terminal (opens soft keyboard)
 - Long press: text selection (native xterm.js behavior)
 - Two-finger pinch: zoom/font size adjustment (CSS transform on the terminal container)
-- Swipe from left edge: back to session list (via browser back or custom gesture handler)
+- Swipe from left edge: back to session list (`EdgeSwipeBackHook` on the `WindowLive` root pushes `swipe_back`, which `push_navigate`s to `/`)
 
 ### Responsive Breakpoints
 - `< 640px`: Mobile layout (single column, bottom control signal bar, full-viewport terminal)
