@@ -38,6 +38,29 @@ function ruleBody(source, selector) {
   return source.slice(start, i - 1);
 }
 
+// Pull every body of `@media (max-width: 639px) { ... }` so we can
+// look up rules that only apply on phones.
+function extractMaxWidth639Bodies(source) {
+  const bodies = [];
+  const opener = /@media\s*\(\s*max-width:\s*639px\s*\)\s*\{/g;
+  let m;
+  while ((m = opener.exec(source))) {
+    let depth = 1;
+    let i = m.index + m[0].length;
+    const start = i;
+    while (i < source.length && depth > 0) {
+      const c = source[i];
+      if (c === "{") depth++;
+      else if (c === "}") depth--;
+      i++;
+    }
+    bodies.push(source.slice(start, i - 1));
+  }
+  return bodies.join("\n");
+}
+
+const mobileBlock = extractMaxWidth639Bodies(css);
+
 describe(".control-signal-bar pins to the bottom on mobile", () => {
   it("uses border-top, not border-bottom (it's at the bottom edge now)", () => {
     const body = ruleBody(css, ".control-signal-bar");
@@ -50,6 +73,23 @@ describe(".control-signal-bar pins to the bottom on mobile", () => {
     const body = ruleBody(css, ".control-signal-bar");
     expect(body).not.toBeNull();
     expect(/env\(safe-area-inset-bottom/.test(body)).toBe(true);
+  });
+
+  it("fits on a single row on mobile (nowrap + flex-1 buttons, no horizontal scroll)", () => {
+    // The 10 control buttons (5 control keys + Tab + 4 arrows) need
+    // to share one row without overflow. That requires `flex-wrap:
+    // nowrap` on the bar and `flex: 1` on the buttons so they can
+    // shrink to share available width. A regression to `flex-wrap:
+    // wrap` (the original behavior) breaks the bottom-keyboard
+    // experience the way it was designed.
+    const bar = ruleBody(mobileBlock, ".control-signal-bar");
+    const btn = ruleBody(mobileBlock, ".ctl-btn");
+    expect(bar, "expected mobile .control-signal-bar rule").not.toBeNull();
+    expect(btn, "expected mobile .ctl-btn rule").not.toBeNull();
+    expect(/flex-wrap:\s*nowrap/.test(bar)).toBe(true);
+    expect(/flex-wrap:\s*wrap/.test(bar)).toBe(false);
+    expect(/flex:\s*1/.test(btn)).toBe(true);
+    expect(/min-width:\s*0/.test(btn)).toBe(true);
   });
 
   it("is rendered as a sibling of #multi-pane-grid, not nested inside #bars-group", () => {

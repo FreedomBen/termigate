@@ -422,8 +422,14 @@ body {
 
 @media (max-width: 639px) {
   .control-signal-bar {
-    flex-wrap: wrap;
-    gap: 3px;
+    /* Single row, no horizontal scroll. Larger gap *between* groups
+       than between buttons within a group, so the two halves
+       (control keys vs Tab+arrows) still read as grouped without
+       a separator. */
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
   }
 
   .ctl-separator {
@@ -431,16 +437,21 @@ body {
   }
 
   .ctl-group {
-    width: 100%;
+    /* Two groups split the row evenly; buttons inside each group
+       share their group's width. min-width: 0 lets flex children
+       actually shrink past their content size. */
+    flex: 1 1 0;
+    min-width: 0;
     justify-content: flex-start;
     gap: 3px;
   }
 
   .ctl-btn {
+    flex: 1 1 0;
+    min-width: 0;
     min-height: 40px;
-    min-width: 44px;
-    padding: 6px 12px;
-    font-size: 13px;
+    padding: 4px 4px;
+    font-size: 11px;
   }
 }
 
