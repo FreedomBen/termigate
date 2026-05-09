@@ -51,3 +51,48 @@ describe("terminal_hook.js fit gates", () => {
     expect(offenders, JSON.stringify(offenders, null, 2)).toEqual([]);
   });
 });
+
+describe("terminal_hook.js leak / API surface", () => {
+  it("registers a window 'resize' listener and removes it in destroyed() (no leak)", () => {
+    // The multi-pane fit path attaches a window resize listener; if
+    // destroyed() ever stops removing it, navigating between panes
+    // leaks one listener per mount and a stale `this` keeps the dead
+    // hook alive. Catch that drift here.
+    expect(hookSrc).toMatch(/window\.addEventListener\(\s*["']resize["']/);
+    expect(hookSrc).toMatch(/window\.removeEventListener\(\s*["']resize["']/);
+  });
+
+  it("disposes the xterm Terminal in destroyed()", () => {
+    // term.dispose() releases xterm-internal listeners and the
+    // canvas/webgl context. Forgetting it causes a memory leak that
+    // only shows up after long sessions.
+    expect(hookSrc).toMatch(/this\.term\.dispose\(\)/);
+  });
+
+  it("exposes viewportFitCols() on the hook surface (RestoreOrFitHook depends on it)", () => {
+    // RestoreOrFitHook reads `paneEl._termHook.viewportFitCols?.()` to
+    // decide whether to push fit_pane_width on mobile. Renaming /
+    // removing this method silently downgrades the mobile Restore
+    // button to a desktop restore — the user-visible bug is that the
+    // pane no longer shrinks to viewport width.
+    expect(hookSrc).toMatch(/viewportFitCols\s*\(\s*\)\s*\{/);
+    expect(hookSrc).toMatch(/this\.el\._termHook\s*=\s*this/);
+  });
+
+  it("declares the expected handleEvent topics", () => {
+    // Smoke test: the set of server→client topics the hook listens on.
+    // If you add a topic here you almost certainly need a matching
+    // server-side push (and vice versa). This is a list-of-names
+    // sanity check, not a cross-language check.
+    const topics = [...hookSrc.matchAll(/handleEvent\(\s*["']([^"']+)["']/g)].map(
+      (m) => m[1],
+    );
+    expect(topics).toEqual(
+      expect.arrayContaining(["pane_resized", "terminal_prefs"]),
+    );
+    // No empty topic strings slipped in.
+    for (const t of topics) {
+      expect(t.length).toBeGreaterThan(0);
+    }
+  });
+});

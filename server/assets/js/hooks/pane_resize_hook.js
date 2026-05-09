@@ -11,7 +11,7 @@
  * tracks and place dividers on them.
  */
 
-function getPointer(e, isEnd = false) {
+export function getPointer(e, isEnd = false) {
   if (e.type.startsWith("touch")) {
     const t = isEnd ? e.changedTouches[0] : e.touches[0];
     return { x: t.clientX, y: t.clientY };
