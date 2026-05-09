@@ -560,17 +560,23 @@
       The bottom control bar on mobile and tablet that surfaces ^C, ^D, Tab, and arrow keys above the soft keyboard.
     </p>
 
-    <label class="label cursor-pointer justify-start gap-3 py-1">
-      <input
-        type="checkbox"
-        checked={@terminal["show_toolbar"] != false}
-        class="checkbox checkbox-sm"
-        phx-click="update_mobile_control_bar"
-        phx-value-key="show_toolbar"
-        phx-value-value={to_string(@terminal["show_toolbar"] == false)}
-      />
-      <span class="text-sm">Show the control bar</span>
-    </label>
+    <form phx-change="update_mobile_control_bar">
+      <label class="label cursor-pointer justify-start gap-3 py-1">
+        <%!-- The hidden input ensures the server receives show_toolbar=false
+             when the checkbox is unchecked. Without it, browsers omit
+             unchecked checkboxes from form submissions and the server
+             can't tell "off" apart from "field missing entirely". --%>
+        <input type="hidden" name="show_toolbar" value="false" />
+        <input
+          type="checkbox"
+          name="show_toolbar"
+          value="true"
+          checked={@terminal["show_toolbar"] != false}
+          class="checkbox checkbox-sm"
+        />
+        <span class="text-sm">Show the control bar</span>
+      </label>
+    </form>
   </div>
 
   <%!-- Authentication --%>

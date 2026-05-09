@@ -60,17 +60,20 @@ defmodule TermigateWeb.SettingsLiveTest do
       assert html =~ "Show the control bar"
     end
 
-    test "toggling the checkbox persists show_toolbar=false", %{conn: conn} do
+    test "submitting form with show_toolbar=false persists false", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/settings")
 
       view
-      |> element(~s(input[phx-click="update_mobile_control_bar"]))
-      |> render_click()
+      |> form(
+        ~s(form[phx-change="update_mobile_control_bar"]),
+        %{"show_toolbar" => "false"}
+      )
+      |> render_change()
 
       assert Termigate.Config.get()["terminal"]["show_toolbar"] == false
     end
 
-    test "toggling again flips show_toolbar back to true", %{conn: conn} do
+    test "submitting form with show_toolbar=true flips it back to true", %{conn: conn} do
       Termigate.Config.update(fn config ->
         put_in(config, ["terminal", "show_toolbar"], false)
       end)
@@ -78,8 +81,11 @@ defmodule TermigateWeb.SettingsLiveTest do
       {:ok, view, _html} = live(conn, "/settings")
 
       view
-      |> element(~s(input[phx-click="update_mobile_control_bar"]))
-      |> render_click()
+      |> form(
+        ~s(form[phx-change="update_mobile_control_bar"]),
+        %{"show_toolbar" => "true"}
+      )
+      |> render_change()
 
       assert Termigate.Config.get()["terminal"]["show_toolbar"] == true
     end

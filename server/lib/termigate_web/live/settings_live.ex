@@ -293,9 +293,10 @@ defmodule TermigateWeb.SettingsLive do
     end
   end
 
-  def handle_event("update_mobile_control_bar", %{"key" => key, "value" => value}, socket) do
-    value = value in ["true", true]
-    terminal = Map.put(socket.assigns.terminal, key, value)
+  def handle_event("update_mobile_control_bar", params, socket) do
+    terminal =
+      socket.assigns.terminal
+      |> maybe_put_bool("show_toolbar", params)
 
     case Config.update(fn config -> Map.put(config, "terminal", terminal) end) do
       {:ok, _} ->
