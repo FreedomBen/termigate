@@ -236,9 +236,9 @@ The `:shutting_down` status prevents the Port exit (triggered by step 2 closing 
 
 **PaneStream crash recovery (primary cleanup mechanism)**: There are two distinct recovery paths:
 1. **Port crash (cat dies, GenServer alive)**: Handled *inside* the running GenServer via `handle_info({port, {:exit_status, n}})` — the GenServer checks if the pane is still alive and restarts the pipeline (FIFO + Port + pipe-pane) without restarting the GenServer process itself. See "Port exit with non-zero status" above. Viewers are unaware.
-2. **GenServer crash (unhandled exception)**: The supervisor restarts the GenServer process (PaneStream children use `restart: :transient`, so only abnormal exits trigger restart). The `init/1` callback runs the full startup sequence above — steps 0-9 — which inherently handles cleanup: step 1 detaches any stale pipe-pane, step 2 removes any stale FIFO. Viewers detect the crash via their monitor `:DOWN` message and re-subscribe to the new PaneStream (see TerminalLive `:DOWN` handler). This per-PaneStream cleanup is the primary safety net — it runs on every start, whether after a crash, a restart, or first boot.
+2. **GenServer crash (unhandled exception)**: The supervisor restarts the GenServer process (PaneStream children use `restart: :transient`, so only abnormal exits trigger restart). The `init/1` callback runs the full startup sequence above — steps 0-9 — which inherently handles cleanup: step 1 detaches any stale pipe-pane, step 2 removes any stale FIFO. Viewers detect the crash via their monitor `:DOWN` message and re-subscribe to the new PaneStream (see WindowLive `:DOWN` handler). This per-PaneStream cleanup is the primary safety net — it runs on every start, whether after a crash, a restart, or first boot.
 
-**tmux server restart / mass pane death**: If the tmux server is killed or restarted, all PaneStream Ports receive EOF simultaneously. Each PaneStream independently follows its normal death path (set `:dead`, broadcast `:pane_dead`, terminate normally). Since `restart: :transient` does not restart normal exits, the DynamicSupervisor does not restart any of them — there is no thundering herd of restarts. Each TerminalLive viewer receives its own `:pane_dead` message and shows "Session ended." SessionListLive's polling (every 3s) will naturally show an empty session list, reflecting the correct state. No special mass-death detection is needed.
+**tmux server restart / mass pane death**: If the tmux server is killed or restarted, all PaneStream Ports receive EOF simultaneously. Each PaneStream independently follows its normal death path (set `:dead`, broadcast `:pane_dead`, terminate normally). Since `restart: :transient` does not restart normal exits, the DynamicSupervisor does not restart any of them — there is no thundering herd of restarts. Each WindowLive viewer receives its own `:pane_dead` message and shows "Session ended." SessionListLive's polling (every 3s) will naturally show an empty session list, reflecting the correct state. No special mass-death detection is needed.
 
 **Application startup cleanup (defense-in-depth)**: In `Application.start/2`, before the supervision tree starts: clear the FIFO directory (`File.rm_rf(fifo_dir)` then `File.mkdir_p(fifo_dir)`). This removes stale FIFOs left by a hard kill (SIGKILL) of the entire application, where no cleanup callbacks run. Stale pipe-pane attachments are **not** detached globally at startup — doing so would interfere with any pipe-pane the user has attached independently (e.g., for logging). Instead, each PaneStream detaches any existing pipe-pane on its specific pane during its own startup sequence (step 1), scoping cleanup to only panes the application actively manages. The application should behave like a remote `tmux attach` — it should never surprise the host operator by modifying panes it isn't actively streaming.
 
@@ -271,7 +271,7 @@ This ensures the buffer automatically scales to match what tmux is retaining, wi
 **Solution**: Use `tmux send-keys -H` (hex mode) for all input. The full encoding pipeline:
 
 1. **Client (JS)**: xterm.js `onData` emits a JavaScript string (UTF-16). Encode to UTF-8 bytes via `new TextEncoder().encode(data)`, then base64-encode the result. Send via `pushEvent("key_input", {data: base64String})`.
-2. **Server (Elixir)**: `Base.decode64/1` recovers the raw UTF-8 bytes (invalid base64 is logged and ignored — see `handle_event` in TerminalLive). Convert each byte to its two-character hex representation. Pass to `tmux send-keys -H`.
+2. **Server (Elixir)**: `Base.decode64/1` recovers the raw UTF-8 bytes (invalid base64 is logged and ignored — see `handle_event` in WindowLive). Convert each byte to its two-character hex representation. Pass to `tmux send-keys -H`.
 
 This mirrors the output path (server base64-encodes, client decodes) for symmetry.
 
@@ -291,7 +291,7 @@ Example: User types "hi" then Ctrl+C
 
 **Performance**: For typical interactive use, `send-keys -H` with a handful of hex bytes per keystroke is negligible overhead. For bulk paste operations, `PaneStream.send_keys/2` chunks the input bytes into groups of up to 65,536 bytes (well under Linux's default `ARG_MAX` of ~2MB, accounting for hex encoding doubling the size and argument overhead) and sends them as sequential `send-keys -H` calls within the GenServer. This briefly blocks output processing during large pastes, which is acceptable for a single-user tool — large pastes are rare, each `System.cmd` call completes in milliseconds, and output resumes immediately after. If needed, chunked sends could be offloaded to a Task without changing the public interface.
 
-**Input size limit**: `TerminalLive.handle_event("key_input", ...)` validates that the decoded payload does not exceed 128KB. Payloads exceeding this limit are logged and dropped. This prevents a buggy or malicious client from sending arbitrarily large input in a single event. A single `handle_event` can deliver up to 128KB decoded, which `PaneStream.send_keys/2` splits into at most two 64KB chunks for the tmux CLI.
+**Input size limit**: `WindowLive.handle_event("key_input", ...)` validates that the decoded payload does not exceed 128KB. Payloads exceeding this limit are logged and dropped. This prevents a buggy or malicious client from sending arbitrarily large input in a single event. A single `handle_event` can deliver up to 128KB decoded, which `PaneStream.send_keys/2` splits into at most two 64KB chunks for the tmux CLI.
 
 **Input rate limiting**: The client-side input batching (every 16ms, described in Bandwidth Optimization) provides natural throttling. On the server side, `PaneStream.send_keys/2` does not rate-limit — each call executes a `tmux send-keys` command immediately. If a misbehaving client floods `send_keys` calls, the tmux process is the bottleneck (each `send-keys` is a short-lived fork). This is acceptable for a single-user tool; if needed, a per-viewer token bucket could be added in `PaneStream`.
 
@@ -309,7 +309,7 @@ Example: User types "hi" then Ctrl+C
 - Mobile layout: full-width card list, large touch targets
 - Empty state: friendly message when no tmux sessions exist, with prominent "Create Session" CTA
 
-#### `TermigateWeb.TerminalLive`
+#### `TermigateWeb.WindowLive`
 - Route: `/sessions/:session/:window/:pane`
 - Full-viewport xterm.js terminal
 - **LiveView Hook (`TerminalHook`)**:
@@ -329,7 +329,7 @@ Example: User types "hi" then Ctrl+C
   - Pushes history to client via `push_event(socket, "history", %{data: ...})`
   - `handle_info({:pane_output, data})` → `push_event(socket, "output", %{data: data})`
   - `handle_info({:pane_dead, _target})` → `push_event(socket, "pane_dead", %{})`
-  - `handle_info({:pane_superseded, _old_target, new_target})` — session/window was renamed. Calls `PaneStream.unsubscribe(target)`, parses `new_target` by splitting on `:` and `.` (e.g., `"new-name:0.1"` → `session = "new-name"`, `window = "0"`, `pane = "1"`), then redirects to the new URL via `push_navigate(socket, to: ~p"/sessions/#{session}/#{window}/#{pane}")`. The new `TerminalLive` mount re-subscribes under the new target, receiving full history from the (new) PaneStream's ring buffer. The user sees a seamless redirect — the terminal briefly reloads with the correct URL.
+  - `handle_info({:pane_superseded, _old_target, new_target})` — session/window was renamed. Calls `PaneStream.unsubscribe(target)`, parses `new_target` by splitting on `:` and `.` (e.g., `"new-name:0.1"` → `session = "new-name"`, `window = "0"`, `pane = "1"`), then redirects to the new URL via `push_navigate(socket, to: ~p"/sessions/#{session}/#{window}/#{pane}")`. The new `WindowLive` mount re-subscribes under the new target, receiving full history from the (new) PaneStream's ring buffer. The user sees a seamless redirect — the terminal briefly reloads with the correct URL.
   - `handle_info({:DOWN, ref, :process, _pid, _reason})` — PaneStream crashed. The viewer demonitors the old ref, then calls `PaneStream.subscribe(target)` again (which starts or finds the restarted PaneStream). If successful, pushes fresh history to the client (xterm.js `term.reset()` + `term.write(history)` via a `"reconnected"` push event) and monitors the new PID. If the pane no longer exists, transitions to the pane-dead UI. This recovery is transparent to the user — output briefly pauses, then the terminal refreshes with full history.
   - `handle_event("key_input", %{"data" => b64})` → `Base.decode64/1` with error handling (invalid base64 is logged and ignored, not crashed on) → `PaneStream.send_keys(target, bytes)`
   - `handle_event("resize", %{"cols" => c, "rows" => r})` → forwards to `PaneStream` which calls `tmux resize-pane -t {pane_id} -x {cols} -y {rows}` and broadcasts `{:pane_resized, cols, rows}` to all viewers. See Resize Conflict Resolution below.
@@ -346,7 +346,7 @@ For native Android client only. Not used by the web UI.
 - **Auth**: Token-based authentication verified in `UserSocket.connect/3` (see Auth Flow — Phoenix Channel below). Channel `join/3` does not re-verify — a valid socket implies a valid user.
 - **Join handler**:
   1. Parse topic into target: `"terminal:foo:0:1"` → `"foo:0.1"`.
-  2. Call `PaneStream.subscribe/1` — same path as TerminalLive.
+  2. Call `PaneStream.subscribe/1` — same path as WindowLive.
   3. Monitor the returned `pane_stream_pid`.
   4. On success, reply `{:ok, %{"history" => base64_string, "cols" => int, "rows" => int}}` — history is the ring buffer contents (base64-encoded, because join replies are JSON text frames), cols/rows are the pane's current dimensions.
   5. On `{:error, :pane_not_found}`, reply `{:error, %{"reason" => "pane_not_found"}}`.
@@ -387,7 +387,7 @@ For native Android client only. Provides real-time session list updates, mirrori
 
 ### Event Reference
 
-#### LiveView Events (TerminalLive ↔ TerminalHook)
+#### LiveView Events (WindowLive ↔ TerminalHook)
 
 | Direction | Event | Payload | Description |
 |-----------|-------|---------|-------------|
@@ -452,7 +452,7 @@ For native Android client only. Provides real-time session list updates, mirrori
 1. tmux writes output → `pipe-pane` writes to FIFO
 2. `cat` Port reads from FIFO → Elixir receives `{port, {:data, bytes}}`
 3. PaneStream appends to ring buffer, broadcasts `{:pane_output, bytes}` via PubSub topic `"pane:#{target}"`. Rapid Port messages are coalesced via a short timer (default 3ms) before broadcasting — see Server-Side Output Coalescing in Bandwidth Optimization. All messages on this topic are tagged tuples — subscribers must pattern-match on the first element: `:pane_output` for streaming data, `:pane_dead` for pane death, `:pane_resized` for dimension changes
-4. `TerminalLive` receives via `handle_info`, calls `push_event(socket, "output", %{data: Base.encode64(bytes)})`
+4. `WindowLive` receives via `handle_info`, calls `push_event(socket, "output", %{data: Base.encode64(bytes)})`
 5. `TerminalHook` decodes base64, calls `term.write(bytes)` on xterm.js instance
 
 Note: Both input and output are base64-encoded for LiveView transport since LiveView events are JSON-serialized. Output: server encodes, client decodes. Input: client encodes (via `TextEncoder` + base64), server decodes. The Channel implementation uses raw binary frames instead (see Binary Frames on Phoenix Channel).
@@ -465,7 +465,7 @@ Note: Both input and output are base64-encoded for LiveView transport since Live
    b. `pipe-pane` attached (unblocks `cat`)
    c. `capture-pane` captures scrollback, writes into ring buffer (brief overlap with pipe stream is accepted — see Scrollback Overlap)
 3. PaneStream returns `{:ok, history, pane_stream_pid}` — ring buffer contents + PID for monitoring
-4. TerminalLive monitors `pane_stream_pid` and pushes history to client as `"history"` event
+4. WindowLive monitors `pane_stream_pid` and pushes history to client as `"history"` event
 5. Client writes history to xterm.js, then streaming output follows
 
 All viewers — first or late — follow the same path. The ring buffer always contains contiguous history (initial scrollback plus all subsequent streaming output, with old content rolling off as the buffer fills). No separate scrollback handling is needed.
@@ -475,14 +475,14 @@ All viewers — first or late — follow the same path. The ring buffer always c
 1. xterm.js `onData` callback fires with a JavaScript string
 2. Hook encodes to UTF-8 via `TextEncoder`, then base64-encodes the bytes
 3. Hook calls `this.pushEvent("key_input", {data: base64String})`
-4. `TerminalLive.handle_event("key_input", %{"data" => b64})` decodes base64 via `Base.decode64/1` (invalid base64 is logged and ignored), calls `PaneStream.send_keys(target, bytes)`
+4. `WindowLive.handle_event("key_input", %{"data" => b64})` decodes base64 via `Base.decode64/1` (invalid base64 is logged and ignored), calls `PaneStream.send_keys(target, bytes)`
 5. PaneStream converts bytes to hex, executes `tmux send-keys -H -t {pane_id} {hex_bytes}`
 
 ### Pane Resize
 
 1. xterm.js / FitAddon reports new dimensions after browser resize or orientation change
 2. Hook debounces (300ms), sends `this.pushEvent("resize", {cols, rows})`
-3. TerminalLive receives `handle_event("resize", ...)` — see Resize Conflict Resolution below
+3. WindowLive receives `handle_event("resize", ...)` — see Resize Conflict Resolution below
 
 ### Pane Death
 
@@ -491,7 +491,7 @@ All viewers — first or late — follow the same path. The ring buffer always c
 3. `cat` Port receives EOF, exits with status 0
 4. PaneStream receives `{port, {:exit_status, 0}}` in `handle_info`
 5. PaneStream sets status to `:dead`, broadcasts `{:pane_dead, target}` via PubSub, cleans up FIFO, terminates. Logged at `info` level.
-6. All TerminalLive viewers receive `handle_info({:pane_dead, _})`, push `"pane_dead"` event to client
+6. All WindowLive viewers receive `handle_info({:pane_dead, _})`, push `"pane_dead"` event to client
 7. Client shows "Session ended" overlay with link back to session list
 
 **Port crash (non-zero exit, pane may still be alive)**:
@@ -662,15 +662,15 @@ A fixed bottom bar (`.control-signal-bar`, rendered server-side in `window_live.
 
 | Component          | Choice              | Rationale                                              |
 |--------------------|---------------------|--------------------------------------------------------|
-| Language           | Elixir >= 1.17      | User preference; excellent for concurrent I/O          |
+| Language           | Elixir >= 1.19      | User preference; excellent for concurrent I/O          |
 | Runtime            | OTP >= 27           | Required by modern Phoenix/LiveView                    |
-| Web framework      | Phoenix 1.7+        | Standard Elixir web framework                          |
-| Real-time UI       | Phoenix LiveView 1.0+  | WebSocket-based, no separate API needed             |
+| Web framework      | Phoenix 1.8+        | Standard Elixir web framework                          |
+| Real-time UI       | Phoenix LiveView 1.1+  | WebSocket-based, no separate API needed             |
 | Terminal rendering | @xterm/xterm 5.x    | Battle-tested terminal emulator; handles ANSI, cursor. Assumes 256-color support — compatible with `tmux-256color`, `screen-256color`, and `xterm-256color` TERM values. See TERM note below. |
 | xterm.js addons    | @xterm/addon-fit    | Required — auto-sizes terminal to container            |
 |                    | @xterm/addon-web-links | Nice-to-have — makes URLs clickable in terminal     |
-| CSS                | Tailwind CSS 3.x    | Ships with Phoenix 1.7+; utility-first, good for responsive |
-| Auth               | bcrypt_elixir 3.x   | Password hashing via bcrypt (+ comeonin interface). Standard in Phoenix ecosystem. |
+| CSS                | Tailwind CSS 4      | CSS-first config (`@theme` directive); utility-first, good for responsive |
+| Auth               | pbkdf2_elixir 2.x   | Password hashing via PBKDF2-HMAC-SHA512 (+ comeonin interface). Pure Elixir, no native compile step. |
 | Terminal backend   | tmux pipe-pane      | True streaming, lower latency than polling              |
 | Process registry   | Elixir Registry     | Built-in, lightweight process lookup by key            |
 | Process management | DynamicSupervisor   | One child per active pane stream                       |
@@ -723,8 +723,6 @@ termigate/
           auth_live.html.heex         # Login template
           session_list_live.ex        # Session listing + creation page
           session_list_live.html.heex # Template
-          terminal_live.ex            # Terminal view page
-          terminal_live.html.heex     # Template
           window_live.ex              # Window view: panes in a CSS Grid
           window_live.html.heex       # Template
           settings_live.ex            # Settings panel (quick actions CRUD)
@@ -901,7 +899,7 @@ config :termigate,
 
 ### Integration Tests
 - **PaneStream + tmux**: Start a real tmux session in test setup, attach PaneStream, send keys, verify output arrives. Requires tmux installed in CI.
-- **LiveView**: Use `Phoenix.LiveViewTest` — mount `TerminalLive`, simulate events, verify `push_event` calls. Mock PaneStream for isolation.
+- **LiveView**: Use `Phoenix.LiveViewTest` — mount `WindowLive`, simulate events, verify `push_event` calls. Mock PaneStream for isolation.
 - **SessionListLive**: Mount, verify session listing renders. Test "New Session" form submission.
 
 ### Test Helpers (`server/test/support/tmux_helpers.ex`)
@@ -937,7 +935,7 @@ config :termigate,
 - **Stale PaneStream detection and cleanup**: When a viewer navigates to the new name, `subscribe/1` starts a new PaneStream under the new target. During init, the new PaneStream resolves `pane_id` and attempts to register `{:pane_id, pane_id}` in the Registry. This collides with the old PaneStream's registration, triggering the supersede flow:
     1. The new PaneStream sends `{:superseded, new_target}` to the old PaneStream.
     2. The old PaneStream detaches its `pipe-pane`, cleans up its FIFO, broadcasts `{:pane_superseded, old_target, new_target}` to its viewers, and terminates normally.
-    3. Viewers of the old PaneStream receive the `{:pane_superseded, old_target, new_target}` message. **Web (LiveView)**: `TerminalLive.handle_info` calls `push_navigate(socket, to: ~p"/terminal/#{new_target}")` to redirect to the new URL. **Channel (Android)**: `TerminalChannel` pushes a `"pane_superseded"` event with the new target; the client leaves the old topic and re-joins under the new one (see Android Terminal Screen lifecycle step 8). Viewers that don't handle this message recover via the `:DOWN` monitor.
+    3. Viewers of the old PaneStream receive the `{:pane_superseded, old_target, new_target}` message. **Web (LiveView)**: `WindowLive.handle_info` calls `push_navigate(socket, to: ~p"/terminal/#{new_target}")` to redirect to the new URL. **Channel (Android)**: `TerminalChannel` pushes a `"pane_superseded"` event with the new target; the client leaves the old topic and re-joins under the new one (see Android Terminal Screen lifecycle step 8). Viewers that don't handle this message recover via the `:DOWN` monitor.
     4. The new PaneStream retries its `{:pane_id, pane_id}` registration, succeeds, and proceeds with normal startup.
   This ensures at most one PaneStream per underlying tmux pane, with no duplicate `pipe-pane`/FIFO pipelines.
 
@@ -977,9 +975,9 @@ config :termigate,
 12. **Pane targeting → stable pane_id with dual registration**: PaneStream resolves tmux's stable `pane_id` (e.g., `%0`) during startup and uses it for all tmux commands (`send-keys`, `pipe-pane`, `capture-pane`, existence checks). The human-readable `target` (`session:window.pane`) is used only for the primary Registry key, PubSub topics, display, and URL routing. A secondary Registry key `{:pane_id, pane_id}` detects stale PaneStreams after session/window renames — the new PaneStream supersedes the old one, ensuring at most one PaneStream per underlying tmux pane.
 
     **PubSub topics** (complete list):
-    - `"pane:{target}"` — per-pane events: `{:pane_output, bytes}`, `{:pane_reconnected, target, buffer_binary}`, `{:pane_resized, cols, rows}`, `{:pane_dead, target}`, `{:pane_superseded, old_target, new_target}`. Subscribed by `TerminalLive` and `TerminalChannel`.
+    - `"pane:{target}"` — per-pane events: `{:pane_output, bytes}`, `{:pane_reconnected, target, buffer_binary}`, `{:pane_resized, cols, rows}`, `{:pane_dead, target}`, `{:pane_superseded, old_target, new_target}`. Subscribed by `WindowLive` and `TerminalChannel`.
     - `"sessions"` — session list changes: `{:sessions_updated, sessions}`. Published by `SessionPoller`, subscribed by `SessionListLive` and `SessionChannel`.
-    - `"config"` — config file changes: `{:config_changed, config}`. Published by `Config` GenServer, subscribed by `TerminalLive` and `SettingsLive`.
+    - `"config"` — config file changes: `{:config_changed, config}`. Published by `Config` GenServer, subscribed by `WindowLive` and `SettingsLive`.
 
 ## Scope
 
@@ -1012,12 +1010,12 @@ This application is **fully stateless from a storage perspective**. No database 
 | Session/pane state     | tmux itself (source of truth)                          |
 | Streaming state        | PaneStream GenServer memory (ephemeral)                |
 | Viewer tracking        | PaneStream GenServer memory (ephemeral)                |
-| Auth credentials       | `~/.config/termigate/credentials` (bcrypt hash) or `TERMIGATE_AUTH_TOKEN` env var |
+| Auth credentials       | `~/.config/termigate/credentials` (PBKDF2-HMAC-SHA512 hash) or `TERMIGATE_AUTH_TOKEN` env var |
 | Quick actions          | YAML config file, cached in `Config` GenServer memory      |
 | User preferences       | Browser `localStorage` (client-side)                   |
 | Layout preferences     | Browser `localStorage` (client-side)                   |
 
-**Rationale**: tmux is the source of truth for all terminal state. Runtime coordination lives in GenServer memory and PubSub. Auth is single-user, handled by a bcrypt-hashed credentials file (or optional static token for headless setups). User preferences (font size, theme, layout) are per-device and belong in the browser. There is no data that requires durable server-side storage.
+**Rationale**: tmux is the source of truth for all terminal state. Runtime coordination lives in GenServer memory and PubSub. Auth is single-user, handled by a PBKDF2-hashed credentials file (or optional static token for headless setups). User preferences (font size, theme, layout) are per-device and belong in the browser. There is no data that requires durable server-side storage.
 
 **Implications**:
 - No Ecto dependency, no migrations, no database process to manage
@@ -1035,14 +1033,14 @@ This application is **fully stateless from a storage perspective**. No database 
 
 #### Username + Password Authentication
 
-- **Credentials**: Username and bcrypt-hashed password stored in `~/.config/termigate/credentials`. The username defaults to the system user running the application. The user chooses a memorable password — no random tokens to transfer between devices.
+- **Credentials**: Username and PBKDF2-HMAC-SHA512-hashed password stored in `~/.config/termigate/credentials`. Hashes use the self-identifying `$pbkdf2-sha512$<iters>$<salt>$<hash>` envelope so the algorithm and work factor can be migrated in the future without ambiguity. The username defaults to the system user running the application. The user chooses a memorable password — no random tokens to transfer between devices.
 - **Setup**: `mix termigate.setup` Mix task (also triggered on first launch if no credentials file exists):
   1. Prompts for username (pre-filled with `whoami` output)
   2. Prompts for password (with confirmation)
-  3. Hashes password via `Bcrypt.hash_pwd_salt/1`
+  3. Hashes password via `Pbkdf2.hash_pwd_salt/1`
   4. Writes `username:hash` to `~/.config/termigate/credentials` (plain text, one line, colon-delimited — human-inspectable and easy to parse via `String.split(line, ":", parts: 2)`)
 - **Password change**: `mix termigate.change_password` — prompts for current password (verified against stored hash), then new password with confirmation.
-- **Dependencies**: `bcrypt_elixir` (+ `comeonin`) — the standard password hashing library in the Phoenix ecosystem.
+- **Dependencies**: `pbkdf2_elixir` (+ `comeonin`) — pure-Elixir password hashing, no NIF compile step, supports the `$pbkdf2-sha512$…` envelope used by termigate.
 
 #### Fallback: Static Token (for headless/automated setups)
 
@@ -1055,7 +1053,7 @@ This application is **fully stateless from a storage perspective**. No database 
 2. `/login` page shows username and password fields.
 3. On submit, server checks:
    a. If `TERMIGATE_AUTH_TOKEN` is set and the password matches (constant-time compare), authenticate.
-   b. Otherwise, look up the stored username. If the username doesn't match, call `Bcrypt.no_user_verify/0` (performs a dummy hash to prevent timing-based username enumeration) and reject. If the username matches, verify the password via `Bcrypt.verify_pass/2`.
+   b. Otherwise, look up the stored username. If the username doesn't match, call `Pbkdf2.no_user_verify/0` (performs a dummy hash to prevent timing-based username enumeration) and reject. If the username matches, verify the password via `Pbkdf2.verify_pass/2`.
 4. On success, set a signed session cookie (`Plug.Session` with `:cookie` store, signed with `secret_key_base`). Store `authenticated_at: System.system_time(:second)` in the session data. Session lifetime is configured via `auth.session_ttl_hours` in `config.yaml` (default 168 hours / 7 days) and read through `Termigate.Auth.session_ttl_seconds/0`.
 5. Both `RequireAuth` (HTTP requests) and `AuthHook` (LiveView mounts) read `authenticated_at` from the session and compare it against `Termigate.Auth.session_ttl_seconds/0`. `AuthHook` additionally attaches `handle_event` and `handle_info` hooks that recheck the TTL on every interaction, plus a periodic timer so idle sockets are also disconnected once the TTL passes. If the timestamp is missing or expired, the user is redirected to `/login` with a flash message ("Session expired. Please log in again." for expired). This gives the server authoritative control over session lifetime — config changes take effect immediately for all existing sessions.
 6. **Logout**: `DELETE /logout` (handled by `AuthController`) clears the session cookie and redirects to `/login`. A "Logout" link is shown in the settings panel. For the Android app, logout clears the stored token from `EncryptedSharedPreferences` and navigates to the Login Screen — no server call needed since Phoenix.Token is stateless (the server doesn't track issued tokens).
@@ -1076,7 +1074,7 @@ This application is **fully stateless from a storage perspective**. No database 
 - `TermigateWeb.AuthLive` — LiveView for the web login page (username + password form, submits via `handle_event`). The REST API login (`POST /api/login`) is handled by `AuthController` — a separate path for native clients.
 - `TermigateWeb.AuthController` — handles `POST /api/login` (returns Phoenix.Token for native clients) and `DELETE /logout` (clears session cookie, redirects to `/login`)
 - `TermigateWeb.AuthHook` — `on_mount` hook for LiveView auth checks (used in `live_session` block in router)
-- `Termigate.Auth` — module that handles credential verification (bcrypt check, token fallback, credentials file I/O)
+- `Termigate.Auth` — module that handles credential verification (PBKDF2 check, token fallback, credentials file I/O)
 
 #### HTTPS
 
@@ -1233,7 +1231,7 @@ In multi-pane view, all panes are **passive resizers** — they read the current
 
 #### Single-Pane Fallback
 
-- Clicking a specific pane from the session list still opens the full-viewport single-pane view (existing `TerminalLive`)
+- Clicking a specific pane from the session list still opens the full-viewport single-pane view (existing `WindowLive`)
 - The multi-pane view is a new route/LiveView that manages multiple `TerminalHook` instances
 
 #### Mobile Behavior
@@ -1617,7 +1615,7 @@ A horizontally-scrollable toolbar rendered above the terminal, below the session
 
 #### LiveView Integration
 
-`TerminalLive` reads config from the GenServer on mount and subscribes to changes:
+`WindowLive` reads config from the GenServer on mount and subscribes to changes:
 
 ```elixir
 # terminal_live.ex
@@ -1991,7 +1989,7 @@ scope "/", TermigateWeb do
 
   live_session :authenticated, on_mount: [TermigateWeb.AuthHook] do
     live "/", SessionListLive
-    live "/terminal/:target", TerminalLive
+    live "/terminal/:target", WindowLive
     live "/sessions/:session", WindowLive  # redirects to active window
     live "/sessions/:session/windows/:window", WindowLive
     live "/settings", SettingsLive

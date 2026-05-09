@@ -4,7 +4,7 @@
 
 termigate has two ways to authenticate today:
 
-1. **Username + password** — bcrypt-style PBKDF2-HMAC-SHA256 hash stored under
+1. **Username + password** — PBKDF2-HMAC-SHA512 hash stored under
    `auth.password_hash` in `config.yaml`. Used by the web LiveView login.
 2. **Static token via `TERMIGATE_AUTH_TOKEN` env var** — when set, this string
    is accepted as the *password* at both `/login` (web) and `/api/login`
@@ -60,7 +60,7 @@ leaked token is functionally equivalent to a leaked password.
 
 Mitigations:
 
-- Tokens are stored hashed (PBKDF2-HMAC-SHA256, same primitive as
+- Tokens are stored hashed (PBKDF2-HMAC-SHA512, same primitive as
   `auth.password_hash`) so a `config.yaml` leak does not leak tokens.
 - Plaintext is shown exactly once, in a modal, with a "copy" button and
   a "I've copied it" confirmation that closes the modal and zeroes the
@@ -80,7 +80,7 @@ A new section in `config.yaml`:
 api_tokens:
   - id: "tk_8f2a"            # short random prefix shown in UI/logs
     label: "Android — Pixel 8"
-    hash: "<base64 salt>$<base64 dk>"  # same format as password_hash
+    hash: "$pbkdf2-sha512$<iters>$<salt>$<hash>"  # same format as password_hash
     created_at: 1714492800   # unix seconds
     last_used_at: 1714579200 # unix seconds, or nil if never used
 ```
@@ -93,8 +93,9 @@ Choices and rationale:
   unique in a single deployment (4–6 hex chars) and short enough to be
   a useful log/UI identifier. The full token is the prefix plus a
   longer secret half: `tk_8f2a_<32-byte-base64url-secret>`.
-- **`hash`** uses the same `salt$dk` PBKDF2 envelope as
-  `auth.password_hash` so verification reuses `Auth.verify_password/2`.
+- **`hash`** uses the same `$pbkdf2-sha512$<iters>$<salt>$<hash>` PBKDF2
+  envelope as `auth.password_hash` so verification reuses
+  `Auth.verify_password/2`.
 - **`last_used_at`** is updated on every successful verification but
   only persisted to disk on a debounce (e.g. flush at most every 30s
   per token) to avoid YAML churn.

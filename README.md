@@ -50,7 +50,7 @@ Then open [http://localhost:8888](http://localhost:8888). On first launch you'll
 
 termigate supports two auth methods:
 
-- **Username/password** — set up during initial setup, stored as a bcrypt hash
+- **Username/password** — set up during initial setup, stored as a PBKDF2-HMAC-SHA512 hash
 - **Token-based** — set the `TERMIGATE_AUTH_TOKEN` environment variable for headless/scripted access
 
 ## Configuration

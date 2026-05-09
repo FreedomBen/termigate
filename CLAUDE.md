@@ -66,7 +66,7 @@ Frontend assets use npm (`server/assets/package.json`).
 
 ### Auth
 
-Dual auth: username/password (bcrypt) and token-based (`TERMIGATE_AUTH_TOKEN` env var).
+Dual auth: username/password (PBKDF2-HMAC-SHA512 via `pbkdf2_elixir`) and token-based (`TERMIGATE_AUTH_TOKEN` env var).
 
 ## Naming
 
