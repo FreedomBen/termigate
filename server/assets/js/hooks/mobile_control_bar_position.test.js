@@ -92,6 +92,47 @@ describe(".control-signal-bar pins to the bottom on mobile", () => {
     expect(/min-width:\s*0/.test(btn)).toBe(true);
   });
 
+  it("declares a container query context so chips can adapt to the bar's own width", () => {
+    // The bar must opt in to container queries (container-type +
+    // container-name) so the @container rule below can match against
+    // its width. Without this, hiding priority-2 chips when the bar
+    // narrows simply doesn't fire.
+    const body = ruleBody(css, ".control-signal-bar");
+    expect(body).not.toBeNull();
+    expect(/container-type:\s*inline-size/.test(body)).toBe(true);
+    expect(/container-name:\s*ctl-bar/.test(body)).toBe(true);
+  });
+
+  it("hides priority=2 chips and reveals the overflow popover when narrow", () => {
+    // Pin the @container rule that drives the responsive overflow.
+    // Don't strip out comments here — but we already strip them at the
+    // top, so this matches against the cleaned source.
+    const m = css.match(
+      /@container\s+ctl-bar\s*\(\s*max-width:\s*360px\s*\)\s*\{([\s\S]*?)\}\s*\}/,
+    );
+    expect(m, "expected @container ctl-bar (max-width: 360px) rule").not.toBe(
+      null,
+    );
+    const body = m[1];
+    expect(/\.ctl-btn\[data-priority="2"\]\s*\{[^}]*display:\s*none/.test(body))
+      .toBe(true);
+    expect(/\.ctl-overflow\s*\{[^}]*display:\s*block/.test(body)).toBe(true);
+  });
+
+  it("the heex template tags rare control keys with data-priority=2 and renders the overflow popover", () => {
+    // ^Z / ^L / ^\ are the priority-2 keys (rare). ^C and ^D are
+    // priority-1 (always visible). The overflow popover mirrors the
+    // priority-2 list inside a <details> so the user can still reach
+    // them when the inline copy is hidden.
+    expect(/\{"\^Z",\s*"z",\s*"2"\}/.test(heex)).toBe(true);
+    expect(/\{"\^L",\s*"l",\s*"2"\}/.test(heex)).toBe(true);
+    expect(/\{"\^\\\\",\s*"\\\\",\s*"2"\}/.test(heex)).toBe(true);
+    expect(/\{"\^C",\s*"c",\s*"1"\}/.test(heex)).toBe(true);
+    expect(/\{"\^D",\s*"d",\s*"1"\}/.test(heex)).toBe(true);
+    expect(/<details\s+class="ctl-overflow"/.test(heex)).toBe(true);
+    expect(/class="ctl-overflow-menu"/.test(heex)).toBe(true);
+  });
+
   it("is rendered as a sibling of #multi-pane-grid, not nested inside #bars-group", () => {
     const barsGroupIdx = heex.indexOf('id="bars-group"');
     const ctlIdx = heex.indexOf('class="control-signal-bar"');

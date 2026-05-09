@@ -330,7 +330,12 @@ body {
 
 /* === Control signal bar ===
    Lives at the bottom of the flex column on mobile so it sits just above
-   the soft keyboard (thumb-zone). Hidden on desktop. */
+   the soft keyboard (thumb-zone). Hidden on desktop.
+
+   The bar is also a container query context (`ctl-bar`) so that when it
+   gets too narrow to fit all the chips, the rule near the bottom of
+   this block hides priority="2" buttons and reveals the `…` overflow
+   popover. */
 .control-signal-bar {
   display: flex;
   align-items: center;
@@ -341,6 +346,8 @@ body {
   border-top: 1px solid oklch(22% 0.008 260);
   flex-shrink: 0;
   z-index: 20;
+  container-type: inline-size;
+  container-name: ctl-bar;
 }
 
 .ctl-group {
@@ -452,6 +459,69 @@ body {
     min-height: 40px;
     padding: 4px 4px;
     font-size: 11px;
+  }
+}
+
+/* === Overflow popover ===
+   The `…` chip and its popover sit inside the bar but are display:none
+   by default — the @container rule at the bottom of this block reveals
+   them only when the bar is narrower than the layout breakpoint. */
+.ctl-overflow {
+  position: relative;
+  display: none;
+  flex: 0 0 auto;
+}
+
+.ctl-overflow > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.ctl-overflow > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ctl-btn-overflow {
+  /* Override the mobile flex-shrink so the summary keeps a consistent
+     width regardless of how many chips remain inline. */
+  flex: 0 0 auto;
+  min-width: 36px;
+}
+
+.ctl-overflow-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: oklch(11% 0.005 260);
+  border: 1px solid oklch(22% 0.008 260);
+  border-radius: 6px;
+  box-shadow: 0 -2px 12px oklch(0% 0 0 / 40%);
+  z-index: 30;
+}
+
+.ctl-overflow-menu .ctl-btn {
+  /* Inside the popover the buttons size to their content rather than
+     sharing equal width like in the inline bar. */
+  flex: 0 0 auto;
+  min-width: 40px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+/* When the bar is narrower than the threshold, hide the priority="2"
+   inline chips (^Z, ^L, ^\) and reveal the `…` overflow chip instead.
+   The remaining inline chips reflow to fill the freed space because
+   they have flex: 1 1 0 set above. */
+@container ctl-bar (max-width: 360px) {
+  .control-signal-bar .ctl-btn[data-priority="2"] {
+    display: none;
+  }
+
+  .ctl-overflow {
+    display: block;
   }
 }
 

@@ -465,12 +465,26 @@ defmodule TermigateWeb.MultiPaneLive do
 
       <%!-- Control signal bar (mobile/tablet only). Sits at the bottom of
            the flex column so it ends up just above the soft keyboard
-           where thumbs naturally rest. Hidden on desktop via CSS. --%>
+           where thumbs naturally rest. Hidden on desktop via CSS.
+
+           When the bar is too narrow to fit all the chips, a CSS
+           container query (see `.control-signal-bar` in app.css) hides
+           the priority="2" inline chips and reveals the `…` overflow
+           popover, whose contents mirror those chips. --%>
       <div class="control-signal-bar">
         <div class="ctl-group">
           <button
-            :for={{label, key} <- [{"^C", "c"}, {"^D", "d"}, {"^Z", "z"}, {"^L", "l"}, {"^\\", "\\"}]}
+            :for={
+              {label, key, priority} <- [
+                {"^C", "c", "1"},
+                {"^D", "d", "1"},
+                {"^Z", "z", "2"},
+                {"^L", "l", "2"},
+                {"^\\", "\\", "2"}
+              ]
+            }
             class={"ctl-btn #{if key == "\\", do: "ctl-btn-danger"}"}
+            data-priority={priority}
             phx-click="send_control"
             phx-value-key={key}
             disabled={@active_pane == nil}
@@ -502,6 +516,29 @@ defmodule TermigateWeb.MultiPaneLive do
             <kbd>{label}</kbd>
           </button>
         </div>
+
+        <details class="ctl-overflow">
+          <summary
+            class="ctl-btn ctl-btn-overflow"
+            aria-label="More control keys"
+            onmousedown="event.preventDefault()"
+          >
+            <kbd>…</kbd>
+          </summary>
+          <div class="ctl-overflow-menu">
+            <button
+              :for={{label, key} <- [{"^Z", "z"}, {"^L", "l"}, {"^\\", "\\"}]}
+              class={"ctl-btn #{if key == "\\", do: "ctl-btn-danger"}"}
+              phx-click="send_control"
+              phx-value-key={key}
+              disabled={@active_pane == nil}
+              onmousedown="event.preventDefault()"
+              onclick="this.closest('details').open = false"
+            >
+              <kbd>{label}</kbd>
+            </button>
+          </div>
+        </details>
       </div>
 
       <%!-- Notification hook (invisible, one per LiveView) --%>
