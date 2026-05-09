@@ -64,6 +64,16 @@ defmodule TermigateWeb.SetupLiveTest do
       assert {:error, {:live_redirect, %{to: "/login"}}} =
                live(conn, "/setup?token=good-token")
     end
+
+    test "renders a password-visibility toggle for each password input (F7)", %{conn: conn} do
+      {:ok, _view, html} = live(conn, "/setup?token=good-token")
+
+      # Both the Password and Confirm Password inputs need their own
+      # PasswordToggleHook button targeting the right input id.
+      assert html =~ ~s(phx-hook="PasswordToggle")
+      assert html =~ ~s(data-target="password")
+      assert html =~ ~s(data-target="password_confirm")
+    end
   end
 
   describe "form submission" do

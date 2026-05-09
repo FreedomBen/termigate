@@ -120,13 +120,26 @@ defmodule TermigateWeb.SetupLive do
               <label class="text-xs font-medium text-base-content/60 mb-1.5 block" for="password">
                 Password
               </label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                class="input input-bordered w-full"
-                autocomplete="new-password"
-              />
+              <div class="relative">
+                <input
+                  type="password"
+                  id="password"
+                  name="password"
+                  class="input input-bordered w-full pr-12"
+                  autocomplete="new-password"
+                />
+                <button
+                  type="button"
+                  id="password-toggle"
+                  phx-hook="PasswordToggle"
+                  data-target="password"
+                  aria-label="Show password"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 rounded-md text-base-content/50 hover:text-base-content"
+                >
+                  <.icon name="hero-eye-micro" class="password-toggle-show size-5" />
+                  <.icon name="hero-eye-slash-micro" class="password-toggle-hide size-5 hidden" />
+                </button>
+              </div>
             </div>
             <div>
               <label
@@ -135,13 +148,26 @@ defmodule TermigateWeb.SetupLive do
               >
                 Confirm Password
               </label>
-              <input
-                type="password"
-                id="password_confirm"
-                name="password_confirm"
-                class="input input-bordered w-full"
-                autocomplete="new-password"
-              />
+              <div class="relative">
+                <input
+                  type="password"
+                  id="password_confirm"
+                  name="password_confirm"
+                  class="input input-bordered w-full pr-12"
+                  autocomplete="new-password"
+                />
+                <button
+                  type="button"
+                  id="password-confirm-toggle"
+                  phx-hook="PasswordToggle"
+                  data-target="password_confirm"
+                  aria-label="Show password"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 rounded-md text-base-content/50 hover:text-base-content"
+                >
+                  <.icon name="hero-eye-micro" class="password-toggle-show size-5" />
+                  <.icon name="hero-eye-slash-micro" class="password-toggle-hide size-5 hidden" />
+                </button>
+              </div>
             </div>
             <div>
               <label

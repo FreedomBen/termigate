@@ -25,5 +25,19 @@ defmodule TermigateWeb.AuthLiveTest do
       Application.delete_env(:termigate, :auth_token)
       assert {:error, {:live_redirect, %{to: "/setup"}}} = live(conn, "/login")
     end
+
+    test "renders a password-visibility toggle wired to the password input (F7)", %{conn: _conn} do
+      conn =
+        Phoenix.ConnTest.build_conn()
+        |> Plug.Test.init_test_session(%{})
+
+      {:ok, _view, html} = live(conn, "/login")
+
+      # PasswordToggleHook button referencing the password input by id, with
+      # the accessible default state (`Show password`).
+      assert html =~ ~s(phx-hook="PasswordToggle")
+      assert html =~ ~s(data-target="password")
+      assert html =~ ~s(aria-label="Show password")
+    end
   end
 end
