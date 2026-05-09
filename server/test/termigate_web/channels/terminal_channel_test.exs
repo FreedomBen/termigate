@@ -117,9 +117,21 @@ defmodule TermigateWeb.TerminalChannelTest do
   end
 
   describe "handle_info (direct module calls)" do
-    # These test that handle_info returns correct tuples without crashing.
-    # We can't test push behavior without a fully joined socket,
-    # so we verify the return shape only.
+    # Build a socket whose `push/3` calls deliver to the test process so
+    # `assert_push` can match on event + payload without a full join.
+    defp pushable_socket(assigns \\ %{target: "test:0.0"}) do
+      %Phoenix.Socket{
+        topic: "terminal:test",
+        endpoint: TermigateWeb.Endpoint,
+        transport_pid: self(),
+        serializer: Phoenix.ChannelTest.NoopSerializer,
+        pubsub_server: Termigate.PubSub,
+        join_ref: "1",
+        ref: "1",
+        joined: true,
+        assigns: assigns
+      }
+    end
 
     test "unknown messages are handled gracefully" do
       socket = %Phoenix.Socket{assigns: %{target: "test:0.0"}}
@@ -141,6 +153,90 @@ defmodule TermigateWeb.TerminalChannelTest do
                  {:DOWN, other_ref, :process, self(), :normal},
                  socket
                )
+    end
+
+    test "pane_output pushes base64-encoded data" do
+      socket = pushable_socket()
+
+      assert {:noreply, ^socket} =
+               TermigateWeb.TerminalChannel.handle_info(
+                 {:pane_output, "test:0.0", "hello"},
+                 socket
+               )
+
+      assert_push "output", %{data: data}
+      assert Base.decode64!(data) == "hello"
+    end
+
+    test "pane_dead pushes empty payload and flips :pane_dead assign" do
+      socket = pushable_socket()
+
+      assert {:noreply, new_socket} =
+               TermigateWeb.TerminalChannel.handle_info(
+                 {:pane_dead, "test:0.0"},
+                 socket
+               )
+
+      assert new_socket.assigns.pane_dead == true
+      assert_push "pane_dead", %{}
+    end
+
+    test "pane_reconnected pushes reconnected with base64 history" do
+      socket = pushable_socket()
+
+      assert {:noreply, ^socket} =
+               TermigateWeb.TerminalChannel.handle_info(
+                 {:pane_reconnected, "test:0.0", "scrollback"},
+                 socket
+               )
+
+      assert_push "reconnected", %{data: data}
+      assert Base.decode64!(data) == "scrollback"
+    end
+
+    test "pane_resized pushes resized with cols/rows" do
+      socket = pushable_socket()
+
+      assert {:noreply, ^socket} =
+               TermigateWeb.TerminalChannel.handle_info(
+                 {:pane_resized, 80, 24},
+                 socket
+               )
+
+      assert_push "resized", %{cols: 80, rows: 24}
+    end
+
+    test "pane_superseded pushes superseded with new_target" do
+      socket = pushable_socket()
+
+      assert {:noreply, ^socket} =
+               TermigateWeb.TerminalChannel.handle_info(
+                 {:pane_superseded, "old:0.0", "new:0.0"},
+                 socket
+               )
+
+      assert_push "superseded", %{new_target: "new:0.0"}
+    end
+
+    test "DOWN with matching ref short-circuits when pane_dead is already set" do
+      ref = make_ref()
+
+      socket =
+        pushable_socket(%{
+          target: "test:0.0",
+          pane_stream_pid: self(),
+          pane_stream_ref: ref,
+          pane_dead: true
+        })
+
+      assert {:noreply, ^socket} =
+               TermigateWeb.TerminalChannel.handle_info(
+                 {:DOWN, ref, :process, self(), :killed},
+                 socket
+               )
+
+      # No re-subscribe attempted, no push emitted
+      refute_received %Phoenix.Socket.Message{}
     end
   end
 end

@@ -1,55 +1,97 @@
 defmodule TermigateWeb.Plugs.RateLimitTest do
-  use ExUnit.Case, async: true
+  use TermigateWeb.ConnCase, async: false
 
-  alias TermigateWeb.RateLimitStore
+  alias TermigateWeb.Plugs.RateLimit
 
-  # The rate-limit store's ETS table is process-global and isn't wiped between
-  # tests for these `:test_*` keys (ConnCase deliberately skips them; see the
-  # comment there). Random suffixes from `:rand.uniform(255)` collide between
-  # concurrent test runs and leave stale counts in the bucket, which made
-  # "blocks requests over limit" intermittently fire on the first call instead
-  # of the sixth. `:erlang.unique_integer/0` is monotonic and unique within
-  # the VM, so each call gets its own bucket key with no collisions.
-  defp unique_ip(prefix), do: "#{prefix}.#{:erlang.unique_integer([:positive])}"
+  setup do
+    original = Application.get_env(:termigate, :rate_limits)
+    on_exit(fn -> Application.put_env(:termigate, :rate_limits, original) end)
+    %{original_limits: original}
+  end
 
-  describe "RateLimitStore.check/3" do
-    test "allows requests under limit" do
-      ip = unique_ip("10.0.0")
-      assert :ok = RateLimitStore.check(ip, :test_endpoint, {5, 60})
-      assert :ok = RateLimitStore.check(ip, :test_endpoint, {5, 60})
+  defp build_conn_with_ip(ip_tuple, format \\ "json") do
+    Phoenix.ConnTest.build_conn()
+    |> Map.put(:remote_ip, ip_tuple)
+    |> Plug.Conn.put_private(:phoenix_format, format)
+    |> Plug.Conn.fetch_query_params()
+  end
+
+  defp install_limit(original_limits, key, limit) do
+    base = original_limits || %{}
+    Application.put_env(:termigate, :rate_limits, Map.put(base, key, limit))
+  end
+
+  defp unique_test_key, do: :"plug_test_#{:erlang.unique_integer([:positive])}"
+
+  describe "init/1" do
+    test "passes options through unchanged" do
+      assert RateLimit.init(key: :login) == [key: :login]
     end
+  end
 
-    test "blocks requests over limit" do
-      ip = unique_ip("10.1.0")
+  describe "call/2 — under limit" do
+    test "passes the conn through without halting", %{original_limits: original} do
+      key = unique_test_key()
+      install_limit(original, key, {3, 60})
 
-      for _ <- 1..5 do
-        assert :ok = RateLimitStore.check(ip, :test_limit, {5, 60})
+      conn = build_conn_with_ip({192, 168, 50, 1}) |> RateLimit.call(key: key)
+
+      refute conn.halted
+      assert conn.status == nil
+    end
+  end
+
+  describe "call/2 — over limit, JSON format" do
+    test "responds 429 with JSON body and retry_after", %{original_limits: original} do
+      key = unique_test_key()
+      install_limit(original, key, {1, 60})
+      ip = {192, 168, 51, :erlang.unique_integer([:positive]) |> rem(250) |> Kernel.+(1)}
+
+      build_conn_with_ip(ip) |> RateLimit.call(key: key)
+      conn = build_conn_with_ip(ip) |> RateLimit.call(key: key)
+
+      assert conn.halted
+      assert conn.status == 429
+
+      body = Jason.decode!(conn.resp_body)
+      assert body["error"] == "rate_limited"
+      assert is_integer(body["retry_after"])
+      assert body["retry_after"] >= 1
+
+      assert Plug.Conn.get_resp_header(conn, "retry-after") != []
+    end
+  end
+
+  describe "call/2 — over limit, HTML format" do
+    test "redirects to /login with a flash and retry-after header",
+         %{original_limits: original} do
+      key = unique_test_key()
+      install_limit(original, key, {1, 60})
+      ip = {192, 168, 52, :erlang.unique_integer([:positive]) |> rem(250) |> Kernel.+(1)}
+
+      build_html_conn = fn ->
+        build_conn_with_ip(ip, "html")
+        |> Plug.Test.init_test_session(%{})
+        |> Phoenix.Controller.fetch_flash()
       end
 
-      assert {:error, :rate_limited, _retry} = RateLimitStore.check(ip, :test_limit, {5, 60})
+      build_html_conn.() |> RateLimit.call(key: key)
+      conn = build_html_conn.() |> RateLimit.call(key: key)
+
+      assert conn.halted
+      assert redirected_to(conn) == "/login"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "Too many login attempts"
+      assert Plug.Conn.get_resp_header(conn, "retry-after") != []
     end
+  end
 
-    test "different IPs have independent limits" do
-      ip1 = unique_ip("10.2.0")
-      ip2 = unique_ip("10.3.0")
+  describe "call/2 — unknown key falls back to default {10, 60}" do
+    test "an unrecognised key still goes through the default limit" do
+      ip = {192, 168, 53, :erlang.unique_integer([:positive]) |> rem(250) |> Kernel.+(1)}
 
-      for _ <- 1..5 do
-        RateLimitStore.check(ip1, :test_indep, {5, 60})
-      end
+      conn = build_conn_with_ip(ip) |> RateLimit.call(key: :totally_unconfigured)
 
-      assert {:error, :rate_limited, _} = RateLimitStore.check(ip1, :test_indep, {5, 60})
-      assert :ok = RateLimitStore.check(ip2, :test_indep, {5, 60})
-    end
-
-    test "different keys have independent limits" do
-      ip = unique_ip("10.4.0")
-
-      for _ <- 1..5 do
-        RateLimitStore.check(ip, :key_a, {5, 60})
-      end
-
-      assert {:error, :rate_limited, _} = RateLimitStore.check(ip, :key_a, {5, 60})
-      assert :ok = RateLimitStore.check(ip, :key_b, {5, 60})
+      refute conn.halted
     end
   end
 end

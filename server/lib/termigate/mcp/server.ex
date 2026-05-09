@@ -79,7 +79,8 @@ defmodule Termigate.MCP.Server do
   @session_panes_regex ~r"^tmux://session/([a-zA-Z0-9_-]+)/panes$"
   @pane_screen_regex ~r"^tmux://pane/([a-zA-Z0-9_-]+:[0-9]+\.[0-9]+)/screen$"
 
-  defp parse_template_uri(uri) do
+  @doc false
+  def parse_template_uri(uri) do
     cond do
       match = Regex.run(@session_panes_regex, uri) ->
         {:session_panes, Enum.at(match, 1)}

@@ -6,7 +6,9 @@ defmodule Mix.Tasks.Termigate.Reset do
 
   @impl true
   def run(_args) do
-    config_dir = Path.expand("~/.config/termigate")
+    config_dir =
+      Application.get_env(:termigate, :reset_config_dir) ||
+        Path.expand("~/.config/termigate")
 
     files = [
       Path.join(config_dir, "credentials"),
