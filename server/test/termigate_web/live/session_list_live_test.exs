@@ -85,7 +85,7 @@ defmodule TermigateWeb.SessionListLiveTest do
     # session list), then on test exit the runner reverted to the stub and
     # the next poll saw `[]` — which broadcast `{:sessions_updated, []}` on
     # the "sessions:state" topic and bumped any concurrently-running
-    # MultiPaneLive into the "session was killed" redirect path.
+    # WindowLive into the "session was killed" redirect path.
     @describetag :tmux
 
     setup do

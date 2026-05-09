@@ -1,8 +1,8 @@
-defmodule TermigateWeb.MultiPaneLive do
+defmodule TermigateWeb.WindowLive do
   @moduledoc """
-  LiveView showing all panes in a tmux window in a CSS Grid layout.
-  Mirrors tmux's split-pane layout with window tabs for navigation.
-  Supports maximize/restore per pane.
+  LiveView showing one tmux window: every pane in a CSS Grid layout
+  mirroring tmux's split-pane geometry, with window tabs for navigation
+  and per-pane maximize/restore.
   """
   use TermigateWeb, :live_view
 

@@ -14,7 +14,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const cssPath = resolve(__dirname, "../../css/app.css");
 const heexPath = resolve(
   __dirname,
-  "../../../lib/termigate_web/live/multi_pane_live.ex",
+  "../../../lib/termigate_web/live/window_live.ex",
 );
 
 const cssRaw = readFileSync(cssPath, "utf8");

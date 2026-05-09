@@ -632,7 +632,7 @@ History buffer sized dynamically per pane (see Resolved Design Decision #2 — "
 - Bottom control signal bar for special keys (see below)
 
 ### Control Signal Bar
-A fixed bottom bar (`.control-signal-bar`, rendered server-side in `multi_pane_live.ex`) providing keys that don't exist on mobile keyboards. The button list is hardcoded in the HEEX template:
+A fixed bottom bar (`.control-signal-bar`, rendered server-side in `window_live.ex`) providing keys that don't exist on mobile keyboards. The button list is hardcoded in the HEEX template:
 ```
 [^C][^D][^Z][^L][^\] | [Tab][↑][↓][←][→] […]
 ```
@@ -725,8 +725,8 @@ termigate/
           session_list_live.html.heex # Template
           terminal_live.ex            # Terminal view page
           terminal_live.html.heex     # Template
-          multi_pane_live.ex          # Multi-pane split view (session view)
-          multi_pane_live.html.heex   # Template
+          window_live.ex              # Window view: panes in a CSS Grid
+          window_live.html.heex       # Template
           settings_live.ex            # Settings panel (quick actions CRUD)
           settings_live.html.heex     # Settings template
         components/
@@ -1223,7 +1223,7 @@ Mobile viewers are **passive resizers** by default:
 
 - **Route**: `/sessions/:session/windows/:window` shows all panes in the specified window, laid out to match tmux's actual pane layout. `/sessions/:session` redirects to the session's active window (via `tmux display-message -p -t {session} '#{window_index}'`).
 - **Window tabs**: A tab bar across the top of the multi-pane view, one tab per window in the session. Tabs show the window index and name (if set). Clicking a tab navigates to that window's URL. Tabs update from `SessionPoller` broadcasts — window add/remove/rename is detected automatically.
-- **Layout discovery**: `MultiPaneLive` polls `tmux list-panes -t {session}:{window} -F '#{pane_id} #{pane_left} #{pane_top} #{pane_width} #{pane_height}'` every 2-3s to get pane positions and sizes. This is separate from `SessionPoller` — layout coordinates are only needed by this view, so `SessionPoller` stays lean (session names, window counts, pane summaries). `MultiPaneLive` also subscribes to the `"sessions"` PubSub topic to detect window add/remove for tab updates.
+- **Layout discovery**: `WindowLive` polls `tmux list-panes -t {session}:{window} -F '#{pane_id} #{pane_left} #{pane_top} #{pane_width} #{pane_height}'` every 2-3s to get pane positions and sizes. This is separate from `SessionPoller` — layout coordinates are only needed by this view, so `SessionPoller` stays lean (session names, window counts, pane summaries). `WindowLive` also subscribes to the `"sessions"` PubSub topic to detect window add/remove for tab updates.
 - **Rendering**: CSS Grid layout with each pane mapped to a grid area based on its tmux coordinates. Each pane gets its own xterm.js instance and PaneStream subscription.
 - **Layout refresh**: The `list-panes` poll (above) detects layout changes from user splits/closes/resizes via tmux commands. On change, the CSS Grid is re-rendered to match the new layout.
 
@@ -1238,7 +1238,7 @@ In multi-pane view, all panes are **passive resizers** — they read the current
 
 #### Mobile Behavior
 
-- The multi-pane route is the same at every viewport — mobile renders the same `MultiPaneLive` and the same xterm.js hooks; only the chrome and grid layout differ.
+- The window route is the same at every viewport — mobile renders the same `WindowLive` and the same xterm.js hooks; only the chrome and grid layout differ.
 - A **pane-tabs** strip below the window tabs lists every pane in the current window as a chip (`<index> <command>`). Tapping a chip fires `focus_pane`, which sets `active_pane` and clears any maximize state.
 - On mobile (`max-width: 639px`), CSS collapses the multi-pane grid to a single 1fr cell and hides every pane wrapper except the one tagged `data-mobile-visible="true"` — so users see one terminal at a time and switch via the pane-tabs.
 - The visible pane wrapper gets `overflow: auto` and its inner xterm host gets `width: max-content; min-width: 100%` (with the matching height pair) so the terminal preserves tmux's native cols × rows on mobile and the user can pan horizontally/vertically when xterm renders past the viewport edge. `fitAddon.fit()` is intentionally skipped on mobile multi-pane (see `shouldAutoFit`).
@@ -1992,8 +1992,8 @@ scope "/", TermigateWeb do
   live_session :authenticated, on_mount: [TermigateWeb.AuthHook] do
     live "/", SessionListLive
     live "/terminal/:target", TerminalLive
-    live "/sessions/:session", MultiPaneLive  # redirects to active window
-    live "/sessions/:session/windows/:window", MultiPaneLive
+    live "/sessions/:session", WindowLive  # redirects to active window
+    live "/sessions/:session/windows/:window", WindowLive
     live "/settings", SettingsLive
   end
 end
