@@ -10,7 +10,6 @@ const DEFAULTS = {
   cursorBlink: true,
   showToolbar: true,
   mobileKeyboardEnabled: true,
-  toolbarButtons: null,
 };
 
 const THEMES = {
@@ -109,13 +108,12 @@ function serverToLocal(serverPrefs) {
     showToolbar: serverPrefs.show_toolbar ?? DEFAULTS.showToolbar,
     mobileKeyboardEnabled:
       serverPrefs.mobile_keyboard_enabled ?? DEFAULTS.mobileKeyboardEnabled,
-    toolbarButtons: serverPrefs.toolbar_buttons ?? DEFAULTS.toolbarButtons,
   };
 }
 
 // Convert local camelCase prefs to server config (snake_case)
 function localToServer(prefs) {
-  const result = {
+  return {
     font_size: prefs.fontSize,
     font_family: prefs.fontFamily,
     theme: prefs.theme,
@@ -125,10 +123,6 @@ function localToServer(prefs) {
     show_toolbar: prefs.showToolbar,
     mobile_keyboard_enabled: prefs.mobileKeyboardEnabled,
   };
-  if (prefs.toolbarButtons) {
-    result.toolbar_buttons = prefs.toolbarButtons;
-  }
-  return result;
 }
 
 function resolveTheme(prefs) {

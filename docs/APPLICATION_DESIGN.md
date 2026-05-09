@@ -320,7 +320,7 @@ Example: User types "hi" then Ctrl+C
   - `this.handleEvent("history", ({data}) => { const bytes = Uint8Array.from(atob(data), c => c.charCodeAt(0)); term.write(bytes); })` — initial scrollback on attach (before streaming begins)
   - `this.handleEvent("reconnected", ({data}) => { term.reset(); const bytes = Uint8Array.from(atob(data), c => c.charCodeAt(0)); term.write(bytes); })` — seamless refresh after PaneStream crash recovery
   - `this.handleEvent("pane_dead", () => { /* display overlay message "Session ended", offer link back to session list */ })` — pane death notification
-  - Clipboard: `onSelectionChange` → auto-copy to clipboard; paste handler intercepts Ctrl+Shift+V / toolbar button
+  - Clipboard: `onSelectionChange` → auto-copy to clipboard; paste handler intercepts Ctrl+Shift+V
   - `destroyed()`: Clean up xterm.js instance
 - **Server side** (`mount/3`):
   - Constructs target from URL params: `"#{session}:#{window}.#{pane}"` (where session, window, pane are from the route `/sessions/:session/:window/:pane` — window and pane are integer indices)
@@ -335,7 +335,7 @@ Example: User types "hi" then Ctrl+C
   - `handle_event("resize", %{"cols" => c, "rows" => r})` → forwards to `PaneStream` which calls `tmux resize-pane -t {pane_id} -x {cols} -y {rows}` and broadcasts `{:pane_resized, cols, rows}` to all viewers. See Resize Conflict Resolution below.
   - `terminate/2`: calls `PaneStream.unsubscribe(target)`. Note: `terminate/2` is best-effort — it does not run on node crash or hard network timeout. The real safety net is PaneStream's monitor on the viewer PID, which fires a `:DOWN` message and triggers auto-unsubscribe regardless of how the viewer process exits.
   - **LiveView crash recovery**: If the LiveView process itself crashes (or the WebSocket disconnects), Phoenix LiveView automatically reconnects and re-mounts. The `mount/3` callback re-runs the full subscribe flow (subscribe to PubSub, get-or-start PaneStream, receive history), making recovery transparent. The old LiveView PID triggers a `:DOWN` in the PaneStream (auto-unsubscribe); the new LiveView PID subscribes fresh. No special handling is needed beyond the standard mount logic.
-- Mobile: on-screen virtual keyboard toolbar (see Mobile UI section)
+- Mobile: on-screen control signal bar (see Mobile UI section)
 - Back button / navigation header to return to session list
 
 ### Phoenix Channel: `TerminalChannel`
@@ -619,7 +619,7 @@ History buffer sized dynamically per pane (see Resolved Design Decision #2 — "
 
 - **Copy**: xterm.js selection → `navigator.clipboard.writeText()` via the `onSelectionChange` callback. Automatically copies selected text. On mobile, long-press triggers native text selection which xterm.js supports.
 - **Paste (desktop)**: Intercept `Ctrl+Shift+V` in the hook's keydown handler. Call `navigator.clipboard.readText()`, then send content as `"key_input"` event (which flows through `send_keys -H`).
-- **Paste (mobile)**: "Paste" button in the virtual key toolbar calls `navigator.clipboard.readText()` → sends as `"key_input"` event.
+- **Paste (mobile)**: Currently desktop-only — the mobile control signal bar has no paste button.
 - **Permission**: Clipboard API requires a secure context (HTTPS or localhost). Localhost satisfies this; remote access requires HTTPS (see Authentication & Remote Access).
 - **Fallback**: If Clipboard API is unavailable (older browsers, non-secure context), fall back to `document.execCommand('copy')`/`document.execCommand('paste')` with a textarea shim.
 
@@ -629,24 +629,23 @@ History buffer sized dynamically per pane (see Resolved Design Decision #2 — "
 - Session list: single-column card layout, large touch targets (min 48px height)
 - Terminal view: full-viewport using `100dvh` (dynamic viewport height to account for mobile browser chrome)
 - Collapsible header with session info and back button (auto-hides after 3s of inactivity, tap top edge to reveal)
-- Bottom toolbar for special keys and actions
+- Bottom control signal bar for special keys (see below)
 
-### Virtual Key Toolbar
-A fixed bottom toolbar providing keys that don't exist on mobile keyboards:
+### Control Signal Bar
+A fixed bottom bar (`.control-signal-bar`, rendered server-side in `multi_pane_live.ex`) providing keys that don't exist on mobile keyboards. The button list is hardcoded in the HEEX template:
 ```
-[ Esc ] [ Tab ] [ Ctrl ] [ Alt ] [ ↑ ] [ ↓ ] [ ← ] [ → ] [ Paste ]
+[^C][^D][^Z][^L][^\] | [Tab][↑][↓][←][→] […]
 ```
-- `Ctrl` and `Alt` are sticky modifiers (tap to toggle, highlight when active)
-- Swipe-up on toolbar reveals extended keys (F1-F12, PgUp/PgDn, Home/End)
-- Toolbar auto-hides when the soft keyboard is open (to maximize terminal space), reappears on dismiss
-- Each button emits the corresponding escape sequence / control code via `"key_input"` event
+- Sits at the bottom of the flex column so it lands above the soft keyboard, where thumbs naturally rest. Hidden on desktop via CSS.
+- Each control chip dispatches `phx-click="send_control"` (for `^C`/`^D`/`^Z`/`^L`/`^\`) or `phx-click="send_special_key"` (for `Tab`/arrows) to the active pane. No client-side state, no sticky modifiers.
+- When the bar is too narrow to fit every chip, a CSS container query hides priority-2 chips (`^Z`/`^L`/`^\`) and reveals a `…` overflow `<details>` popover whose contents mirror the hidden chips.
 
 ### Soft Keyboard Handling
 - Tapping the terminal area opens the device soft keyboard
 - Use a hidden `<input>` or `<textarea>` overlay to capture mobile keyboard input, forward to xterm.js
-- `visualViewport` API used to detect soft keyboard open/close and adjust terminal + toolbar layout
-- When soft keyboard is open: terminal shrinks to fit above keyboard, toolbar hides
-- When soft keyboard closes: terminal expands to full viewport, toolbar reappears
+- `visualViewport` API used to detect soft keyboard open/close and shrink/restore the terminal
+- When soft keyboard is open: terminal `maxHeight` is shrunk to fit above the keyboard
+- When soft keyboard closes: terminal `maxHeight` is cleared
 
 ### Touch Gestures
 - Tap: focus terminal (opens soft keyboard)
@@ -655,7 +654,7 @@ A fixed bottom toolbar providing keys that don't exist on mobile keyboards:
 - Swipe from left edge: back to session list (via browser back or custom gesture handler)
 
 ### Responsive Breakpoints
-- `< 640px`: Mobile layout (single column, bottom toolbar, full-viewport terminal)
+- `< 640px`: Mobile layout (single column, bottom control signal bar, full-viewport terminal)
 - `640px - 1024px`: Tablet (sidebar session list + terminal)
 - `> 1024px`: Desktop (sidebar + terminal + status panel)
 
@@ -678,7 +677,7 @@ A fixed bottom toolbar providing keys that don't exist on mobile keyboards:
 | Pub/Sub            | Phoenix.PubSub      | Built-in; connects PaneStreams to viewers               |
 | User config (read) | yaml_elixir 2.11+   | YAML parser for quick actions and settings                 |
 | User config (write)| ymlr 5.0+           | YAML encoder for writing config back to file               |
-| Mobile terminal    | xterm.js + toolbar  | Works in mobile browsers; virtual key toolbar for special keys |
+| Mobile terminal    | xterm.js + control bar | Works in mobile browsers; bottom control signal bar for special keys |
 | Android            | Phoenix Channel     | Direct WebSocket connection; native terminal renderer   |
 
 **TERM environment variable**: xterm.js supports 256-color output and standard ANSI/xterm escape sequences. Tmux sets `TERM` inside its panes based on its `default-terminal` option, which typically defaults to `tmux-256color` or `screen-256color`. Both are compatible with xterm.js. The application does **not** override `TERM` when creating sessions — this is left to the user's tmux configuration. If users experience rendering issues (e.g., missing colors, broken line drawing), they should ensure their tmux config uses a 256-color terminal type: `set -g default-terminal "tmux-256color"`.
@@ -739,7 +738,7 @@ termigate/
           terminal_hook.js            # xterm.js integration hook
         app.js
       css/
-        app.css                       # Responsive styles, mobile layout, virtual toolbar
+        app.css                       # Responsive styles, mobile layout, control signal bar
       package.json                    # xterm.js, @xterm/addon-fit dependencies
     config/
       config.exs
@@ -957,7 +956,7 @@ config :termigate,
 
 4. **Session creation → Yes**: The session list page always shows a "New Session" option alongside existing sessions. User provides a session name (validated: alphanumeric/hyphens/underscores only); optionally a starting command.
 
-5. **Clipboard → Yes**: Copy via xterm.js selection + Clipboard API. Paste via toolbar button (mobile) or Ctrl+Shift+V (desktop). Requires secure context (localhost or HTTPS). Fallback to execCommand for older browsers.
+5. **Clipboard → Yes**: Copy via xterm.js selection + Clipboard API. Paste via Ctrl+Shift+V (desktop only — the mobile control signal bar has no paste button). Requires secure context (localhost or HTTPS). Fallback to execCommand for older browsers.
 
 6. **Web transport → LiveView push_event**: Terminal I/O on web flows through the existing LiveView WebSocket. No second WebSocket connection. Phoenix Channel is used only for the native Android client.
 
@@ -991,7 +990,7 @@ config :termigate,
 5. Send keyboard input from the browser to the pane (via send-keys -H)
 6. Shared PaneStream with viewer ref counting and grace period
 7. Clipboard copy/paste
-8. Mobile-responsive layout with virtual key toolbar
+8. Mobile-responsive layout with bottom control signal bar
 9. Pane death detection and user notification
 10. Error handling (tmux not installed, pane died, FIFO errors)
 11. Pane resize sync (last-writer-wins with broadcast)
@@ -1606,7 +1605,7 @@ A horizontally-scrollable toolbar rendered above the terminal, below the session
 │  terminal content...     │
 │                          │
 ├──────────────────────────┤
-│ [Esc][Tab][Ctrl][↑][↓][←]│  ← virtual key toolbar
+│ [^C][^D][^Z]│[Tab][↑][↓][…]│  ← control signal bar
 └──────────────────────────┘
 ```
 
@@ -2014,7 +2013,6 @@ end
 | Cursor style | Block, underline, bar | Block | `localStorage` |
 | Cursor blink | On/off | On | `localStorage` |
 | Scrollback limit | 1k-100k lines | 10k | `localStorage` | Note: this controls the xterm.js *client-side* scrollback buffer (how many lines the browser retains for scroll-up). It is independent of the server-side ring buffer and tmux's `history-limit`. |
-| Virtual toolbar | Show/hide, key selection | Show | `localStorage` |
 
 #### Implementation
 

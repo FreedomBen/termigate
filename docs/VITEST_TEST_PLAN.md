@@ -56,8 +56,7 @@ Exports under test: `serverToLocal`, `localToServer`, `resolveTheme`, `THEMES`,
   fully-populated server payload.
 - `serverToLocal` falls back to `DEFAULTS` for each missing key (drive every
   default at least once: `fontSize`, `fontFamily`, `theme`, `customTheme`,
-  `cursorStyle`, `cursorBlink`, `showToolbar`, `mobileKeyboardEnabled`,
-  `toolbarButtons`).
+  `cursorStyle`, `cursorBlink`, `showToolbar`, `mobileKeyboardEnabled`).
 - `serverToLocal` distinguishes `false` from `undefined` (e.g. an explicit
   `cursor_blink: false` survives, doesn't get clobbered by the `true` default).
   This is the `??` vs `||` trap and worth pinning.

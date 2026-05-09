@@ -15,37 +15,6 @@ function isTablet() {
   return window.innerWidth >= 640 && window.innerWidth <= 1024;
 }
 
-// --- Escape sequences for special keys ---
-const KEY_SEQUENCES = {
-  Escape: "\x1b",
-  Tab: "\x09",
-  CtrlC: "\x03",
-  CtrlD: "\x04",
-  CtrlZ: "\x1a",
-  CtrlL: "\x0c",
-  CtrlBackslash: "\x1c",
-  ArrowUp: "\x1b[A",
-  ArrowDown: "\x1b[B",
-  ArrowRight: "\x1b[C",
-  ArrowLeft: "\x1b[D",
-  F1: "\x1bOP",
-  F2: "\x1bOQ",
-  F3: "\x1bOR",
-  F4: "\x1bOS",
-  F5: "\x1b[15~",
-  F6: "\x1b[17~",
-  F7: "\x1b[18~",
-  F8: "\x1b[19~",
-  F9: "\x1b[20~",
-  F10: "\x1b[21~",
-  F11: "\x1b[23~",
-  F12: "\x1b[24~",
-  PageUp: "\x1b[5~",
-  PageDown: "\x1b[6~",
-  Home: "\x1b[H",
-  End: "\x1b[F",
-};
-
 const TerminalHook = {
   mounted() {
     const target = this.el.dataset.target;
@@ -155,27 +124,7 @@ const TerminalHook = {
     this._inputTimer = null;
     this._encoder = new TextEncoder();
 
-    // Sticky modifier state
-    this._ctrlActive = false;
-    this._altActive = false;
-
     this.term.onData((data) => {
-      // Apply sticky modifiers
-      if (this._ctrlActive && data.length === 1) {
-        const code = data.charCodeAt(0);
-        // Ctrl + key = key & 0x1f (for letters a-z / A-Z)
-        if (code >= 64 && code <= 127) {
-          data = String.fromCharCode(code & 0x1f);
-        }
-        this._ctrlActive = false;
-        this._updateModifierUI();
-      }
-      if (this._altActive) {
-        data = "\x1b" + data;
-        this._altActive = false;
-        this._updateModifierUI();
-      }
-
       this._inputBuffer.push(data);
       const totalBytes = this._inputBuffer.reduce((s, d) => s + d.length, 0);
 
@@ -248,7 +197,6 @@ const TerminalHook = {
 
     // --- Mobile features (skip in multi-pane mode) ---
     if (!this._isMultiPane) {
-      this._setupVirtualToolbar();
       this._setupSoftKeyboard();
       this._setupTouchGestures();
       this._setupAutoHidingHeader();
@@ -328,36 +276,6 @@ const TerminalHook = {
     this.term.options.cursorBlink = local.cursorBlink;
     if (shouldAutoFit({ isMobile: this._isMobile, isMultiPane: this._isMultiPane })) {
       this.fitAddon?.fit();
-    }
-    if (this._toolbar) {
-      this._toolbar.classList.toggle("vk-hidden", !local.showToolbar);
-      this._rebuildToolbarButtons(local.toolbarButtons);
-    }
-  },
-
-  _rebuildToolbarButtons(buttons) {
-    if (!buttons || !this._toolbar) return;
-
-    const mainRowEl = this._toolbar.querySelector(".vk-main-row");
-    if (mainRowEl) {
-      mainRowEl.innerHTML = this._buildButtonsHtml(buttons.main_row);
-    }
-
-    const secondRowEl = this._toolbar.querySelector(".vk-second-row");
-    if (secondRowEl) {
-      secondRowEl.innerHTML = this._buildButtonsHtml(buttons.second_row);
-    }
-
-    const extendedRowEl = this._toolbar.querySelector(".vk-extended-row");
-    if (extendedRowEl) {
-      extendedRowEl.innerHTML = this._buildButtonsHtml(buttons.extended_row, "vk-sm");
-    }
-
-    if (this._compactToolbar) {
-      this._compactToolbar.innerHTML = this._buildButtonsHtml(
-        buttons.compact_row,
-        "vk-compact",
-      );
     }
   },
 
@@ -449,141 +367,8 @@ const TerminalHook = {
 
     gearBtn.addEventListener("click", (e) => {
       e.preventDefault();
-      PreferencesPanel.open(this.term, this.fitAddon, (showToolbar) => {
-        // Toolbar visibility toggle callback
-        if (this._toolbar) {
-          if (showToolbar) {
-            this._toolbar.classList.remove("vk-hidden");
-          } else {
-            this._toolbar.classList.add("vk-hidden");
-          }
-        }
-      }, this);
+      PreferencesPanel.open(this.term, this.fitAddon, () => {}, this);
     });
-  },
-
-  // --- Virtual Key Toolbar ---
-  _buildButtonsHtml(buttons, extraClass) {
-    if (!buttons || buttons.length === 0) return "";
-    return buttons
-      .map((btn) => {
-        const cls = extraClass ? `vk-btn ${extraClass}` : "vk-btn";
-        const escaped = btn.label
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;");
-        return `<button class="${cls}" data-key="${btn.key}">${escaped}</button>`;
-      })
-      .join("\n        ");
-  },
-
-  _getToolbarButtons() {
-    const prefs = this.getLocalPrefs();
-    return prefs.toolbarButtons || null;
-  },
-
-  _setupVirtualToolbar() {
-    // Only render on mobile/tablet
-    if (!isMobile() && !isTablet()) return;
-
-    // Respect showToolbar preference
-    const localPrefs = this.getLocalPrefs();
-    const showToolbar = localPrefs.showToolbar !== false;
-    const buttons = localPrefs.toolbarButtons;
-
-    // Build row HTML from config (or use defaults if no config)
-    const mainRow = buttons ? this._buildButtonsHtml(buttons.main_row) : "";
-    const secondRow = buttons ? this._buildButtonsHtml(buttons.second_row) : "";
-    const extendedRow = buttons
-      ? this._buildButtonsHtml(buttons.extended_row, "vk-sm")
-      : "";
-
-    // Create toolbar container
-    this._toolbar = document.createElement("div");
-    this._toolbar.className = "virtual-toolbar" + (showToolbar ? "" : " vk-hidden");
-    this._toolbar.innerHTML = `
-      ${mainRow ? `<div class="vk-main-row">${mainRow}</div>` : ""}
-      ${secondRow ? `<div class="vk-second-row">${secondRow}</div>` : ""}
-      ${extendedRow ? `<div class="vk-extended-row vk-hidden">${extendedRow}</div>` : ""}
-      ${extendedRow ? `<div class="vk-expand-handle" data-action="toggle-extended"><span class="vk-expand-chevron">▲</span></div>` : ""}
-    `;
-
-    // Insert after terminal container's parent (the flex column)
-    const termPage = this.el.closest(".terminal-page") || this.el.parentElement;
-    termPage.appendChild(this._toolbar);
-
-    // Compact modifier row (visible when soft keyboard is open)
-    const compactRow = buttons
-      ? this._buildButtonsHtml(buttons.compact_row, "vk-compact")
-      : "";
-    this._compactToolbar = document.createElement("div");
-    this._compactToolbar.className = "vk-compact-row vk-hidden";
-    this._compactToolbar.innerHTML = compactRow;
-    termPage.appendChild(this._compactToolbar);
-
-    // Event delegation for toolbar buttons
-    const handleToolbarClick = (e) => {
-      const btn = e.target.closest("[data-key], [data-modifier], [data-action]");
-      if (!btn) return;
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (btn.dataset.key) {
-        const seq = KEY_SEQUENCES[btn.dataset.key];
-        if (seq) {
-          // If ctrl is active, apply to the key
-          let data = seq;
-          if (this._ctrlActive && seq.length === 1) {
-            data = String.fromCharCode(seq.charCodeAt(0) & 0x1f);
-            this._ctrlActive = false;
-            this._updateModifierUI();
-          }
-          if (this._altActive) {
-            data = "\x1b" + data;
-            this._altActive = false;
-            this._updateModifierUI();
-          }
-          this._sendInput(data);
-        }
-      } else if (btn.dataset.modifier === "ctrl") {
-        this._ctrlActive = !this._ctrlActive;
-        this._updateModifierUI();
-      } else if (btn.dataset.modifier === "alt") {
-        this._altActive = !this._altActive;
-        this._updateModifierUI();
-      } else if (btn.dataset.action === "paste") {
-        this._pasteFromClipboard();
-      } else if (btn.dataset.action === "toggle-extended") {
-        this._toggleExtendedKeys();
-      }
-    };
-
-    this._toolbar.addEventListener("pointerdown", handleToolbarClick);
-    this._compactToolbar.addEventListener("pointerdown", handleToolbarClick);
-  },
-
-  _updateModifierUI() {
-    const allCtrl = document.querySelectorAll('[data-modifier="ctrl"]');
-    const allAlt = document.querySelectorAll('[data-modifier="alt"]');
-    allCtrl.forEach((btn) => btn.classList.toggle("vk-active", this._ctrlActive));
-    allAlt.forEach((btn) => btn.classList.toggle("vk-active", this._altActive));
-  },
-
-  _toggleExtendedKeys() {
-    const extended = this._toolbar?.querySelector(".vk-extended-row");
-    const chevron = this._toolbar?.querySelector(".vk-expand-chevron");
-    if (extended) {
-      extended.classList.toggle("vk-hidden");
-      if (chevron) {
-        chevron.textContent = extended.classList.contains("vk-hidden") ? "▲" : "▼";
-      }
-    }
-  },
-
-  _sendInput(data) {
-    if (this.channel) {
-      this.channel.push("input", { data });
-    }
   },
 
   // --- Paste from clipboard ---
@@ -616,15 +401,9 @@ const TerminalHook = {
 
         if (this._keyboardOpen !== wasOpen) {
           if (this._keyboardOpen) {
-            // Keyboard opened: show compact toolbar, hide full toolbar
-            this._toolbar?.classList.add("vk-hidden");
-            this._compactToolbar?.classList.remove("vk-hidden");
-            // Shrink terminal to fit
+            // Shrink terminal to fit above the keyboard
             this.el.style.maxHeight = `${window.visualViewport.height - 90}px`;
           } else {
-            // Keyboard closed: show full toolbar, hide compact
-            this._toolbar?.classList.remove("vk-hidden");
-            this._compactToolbar?.classList.add("vk-hidden");
             this.el.style.maxHeight = "";
           }
           // Refit terminal after layout change
@@ -866,9 +645,6 @@ const TerminalHook = {
     if (this._onViewportResize && window.visualViewport) {
       window.visualViewport.removeEventListener("resize", this._onViewportResize);
     }
-    // Remove toolbar elements
-    this._toolbar?.remove();
-    this._compactToolbar?.remove();
 
     if (this.term) {
       this.term.dispose();

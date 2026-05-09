@@ -26,7 +26,6 @@ describe("serverToLocal", () => {
       cursor_blink: false,
       show_toolbar: false,
       mobile_keyboard_enabled: false,
-      toolbar_buttons: ["esc", "tab"],
     };
     expect(serverToLocal(server)).toEqual({
       fontSize: 18,
@@ -37,7 +36,6 @@ describe("serverToLocal", () => {
       cursorBlink: false,
       showToolbar: false,
       mobileKeyboardEnabled: false,
-      toolbarButtons: ["esc", "tab"],
     });
   });
 
@@ -51,7 +49,6 @@ describe("serverToLocal", () => {
       cursorBlink: DEFAULTS.cursorBlink,
       showToolbar: DEFAULTS.showToolbar,
       mobileKeyboardEnabled: DEFAULTS.mobileKeyboardEnabled,
-      toolbarButtons: DEFAULTS.toolbarButtons,
     });
   });
 
@@ -77,7 +74,6 @@ describe("localToServer", () => {
       cursor_blink: true,
       show_toolbar: true,
       mobile_keyboard_enabled: true,
-      toolbar_buttons: ["ctrl", "alt"],
     };
     expect(localToServer(serverToLocal(server))).toEqual(server);
   });
@@ -99,22 +95,6 @@ describe("localToServer", () => {
     expect(out.custom_theme).toEqual({});
   });
 
-  it("omits toolbar_buttons when local prefs don't set it", () => {
-    // toolbar_buttons is the one optional key — null/undefined means
-    // "use the server default" and must not be sent at all.
-    const out = localToServer({
-      fontSize: 14,
-      fontFamily: "monospace",
-      theme: "dark",
-      customTheme: {},
-      cursorStyle: "block",
-      cursorBlink: true,
-      showToolbar: true,
-      mobileKeyboardEnabled: true,
-      toolbarButtons: null,
-    });
-    expect(out).not.toHaveProperty("toolbar_buttons");
-  });
 });
 
 describe("resolveTheme", () => {

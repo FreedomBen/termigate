@@ -9,12 +9,7 @@ defmodule Termigate.ConfigTest do
     # Reset mutable sections to defaults so tests don't pollute each other
     reset = fn ->
       Config.update(fn config ->
-        config
-        |> Map.put("quick_actions", [])
-        |> put_in(
-          ["terminal", "toolbar_buttons"],
-          Config.defaults()["terminal"]["toolbar_buttons"]
-        )
+        Map.put(config, "quick_actions", [])
       end)
     end
 
@@ -232,99 +227,6 @@ defmodule Termigate.ConfigTest do
 
         assert Config.get()["notifications"]["mode"] == mode
       end
-    end
-  end
-
-  describe "toolbar_buttons config" do
-    test "defaults are applied when toolbar_buttons section is missing" do
-      Config.update(fn config ->
-        put_in(config, ["terminal", "toolbar_buttons"], nil)
-      end)
-
-      buttons = Config.get()["terminal"]["toolbar_buttons"]
-      assert is_map(buttons)
-      assert is_list(buttons["main_row"])
-      assert length(buttons["main_row"]) == 5
-      assert hd(buttons["main_row"])["key"] == "CtrlC"
-      assert hd(buttons["main_row"])["label"] == "^C"
-    end
-
-    test "custom button order is preserved" do
-      custom_main = [
-        %{"key" => "Tab", "label" => "Tab"},
-        %{"key" => "CtrlC", "label" => "^C"}
-      ]
-
-      Config.update(fn config ->
-        put_in(config, ["terminal", "toolbar_buttons", "main_row"], custom_main)
-      end)
-
-      buttons = Config.get()["terminal"]["toolbar_buttons"]
-      assert length(buttons["main_row"]) == 2
-      assert Enum.at(buttons["main_row"], 0)["key"] == "Tab"
-      assert Enum.at(buttons["main_row"], 1)["key"] == "CtrlC"
-    end
-
-    test "empty row list is allowed (hides the row)" do
-      Config.update(fn config ->
-        put_in(config, ["terminal", "toolbar_buttons", "second_row"], [])
-      end)
-
-      buttons = Config.get()["terminal"]["toolbar_buttons"]
-      assert buttons["second_row"] == []
-      # Other rows should still have defaults
-      assert length(buttons["main_row"]) == 5
-    end
-
-    test "buttons with invalid keys are filtered out" do
-      custom = [
-        %{"key" => "CtrlC", "label" => "^C"},
-        %{"key" => "InvalidKey", "label" => "Bad"},
-        %{"key" => "Tab", "label" => "Tab"}
-      ]
-
-      Config.update(fn config ->
-        put_in(config, ["terminal", "toolbar_buttons", "main_row"], custom)
-      end)
-
-      buttons = Config.get()["terminal"]["toolbar_buttons"]
-      assert length(buttons["main_row"]) == 2
-      assert Enum.map(buttons["main_row"], & &1["key"]) == ["CtrlC", "Tab"]
-    end
-
-    test "buttons missing key field are filtered out" do
-      custom = [
-        %{"label" => "NoKey"},
-        %{"key" => "CtrlC", "label" => "^C"}
-      ]
-
-      Config.update(fn config ->
-        put_in(config, ["terminal", "toolbar_buttons", "main_row"], custom)
-      end)
-
-      buttons = Config.get()["terminal"]["toolbar_buttons"]
-      assert length(buttons["main_row"]) == 1
-      assert hd(buttons["main_row"])["key"] == "CtrlC"
-    end
-
-    test "label defaults to key name if omitted" do
-      custom = [%{"key" => "CtrlC"}]
-
-      Config.update(fn config ->
-        put_in(config, ["terminal", "toolbar_buttons", "main_row"], custom)
-      end)
-
-      buttons = Config.get()["terminal"]["toolbar_buttons"]
-      assert hd(buttons["main_row"])["label"] == "CtrlC"
-    end
-
-    test "invalid row values fall back to defaults" do
-      Config.update(fn config ->
-        put_in(config, ["terminal", "toolbar_buttons", "main_row"], "not a list")
-      end)
-
-      buttons = Config.get()["terminal"]["toolbar_buttons"]
-      assert length(buttons["main_row"]) == 5
     end
   end
 
