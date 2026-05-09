@@ -54,7 +54,7 @@ Frontend assets use npm (`server/assets/package.json`).
 
 ### Web Layer (`lib/termigate_web/`)
 
-- **LiveViews:** `auth_live`, `session_list_live`, `terminal_live`, `multi_pane_live`, `settings_live`, `setup_live`
+- **LiveViews:** `auth_live`, `session_list_live`, `multi_pane_live`, `settings_live`, `setup_live` — `MultiPaneLive` handles both single-pane and multi-pane windows (single-pane is just the multi-pane grid with one cell)
 - **Channels:** `terminal_channel`, `session_channel` (for native app support)
 - **Plugs:** `require_auth`, `require_auth_token`, `rate_limit`
 
