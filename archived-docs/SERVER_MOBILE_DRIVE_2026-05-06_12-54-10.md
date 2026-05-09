@@ -365,7 +365,7 @@ Key:
 - [x] F10 — Terminal top bar `Close window` is an 18 × 18 tap target (resolved by `3102d61`)
 - [x] F2 — Sub-44 px touch targets on the Settings page (selects, inputs, native checkboxes/radios) (resolved by `e1d05e2`)
 - [x] F6 — Login form inputs and primary `Sign in` button at 40 px (resolved by `1b792cb`)
-- [ ] F15 — Multi-pane mobile layout: redundant card tap when only one pane (overlaps F4)
+- [x] F15 — Multi-pane mobile layout: redundant card tap when only one pane (same code path as F4, resolved by `c758494`)
 - [ ] F7 — Add a password-visibility toggle to the login form
 - [ ] F5 — Mobile scrollback / copy-mode UX (currently disabled by design — decide whether to surface)
 
