@@ -219,6 +219,13 @@ const TerminalHook = {
       this._applyTerminalPrefs(serverPrefs);
     });
 
+    // Keep the channel-scope meta tag fresh so Phoenix.Channel rejoins (which
+    // re-evaluate joinParams via buildJoinParams) read a non-expired token.
+    this.handleEvent("channel_scope_refreshed", ({ scope }) => {
+      const meta = document.querySelector("meta[name='channel-scope']");
+      if (meta && scope) meta.setAttribute("content", scope);
+    });
+
     // --- Multi-pane: notify LiveView when this pane gets focus ---
     if (this._isMultiPane) {
       this.term.textarea?.addEventListener("focus", () => {
@@ -554,12 +561,6 @@ const TerminalHook = {
   },
 
   _connectChannel(target) {
-    // The Plug session cookie authenticates the WebSocket; no auth token in
-    // the URL. The page-supplied scope token (short-lived, single-purpose)
-    // pins this channel to one tmux session as defense-in-depth.
-    const scopeMeta = document.querySelector("meta[name='channel-scope']");
-    const scope = scopeMeta ? scopeMeta.content : "";
-
     // Phoenix's WS connect_info session decoder runs a CSRF check against the
     // session's stored CSRF state, so the upgrade URL must carry the live
     // token from the page's <meta name="csrf-token">. Without it, the
@@ -580,16 +581,26 @@ const TerminalHook = {
       window.userSocket.connect();
     }
 
-    // Send browser dims so tmux pane is resized to match on join.
-    // In multi-pane mode, skip — the terminal starts at tmux's own
-    // dimensions and we don't want to resize panes just by viewing.
-    const joinParams = {};
-    if (scope) joinParams.scope = scope;
-    if (!this._isMultiPane && this.term.cols > 0 && this.term.rows > 0) {
-      joinParams.cols = this.term.cols;
-      joinParams.rows = this.term.rows;
-    }
-    this.channel = window.userSocket.channel(topic, joinParams);
+    // Pass a function so Phoenix re-evaluates params on every (re)join. The
+    // Plug session cookie authenticates the WebSocket; the page-supplied
+    // scope token (short-lived, single-purpose) pins this channel to one
+    // tmux session. The LiveView refreshes the meta tag periodically and
+    // pushes "channel_scope_refreshed" to keep this rejoin-safe after long
+    // idle periods (mobile background, screen-lock).
+    //
+    // For non-multi-pane mode, also send the current browser dims so tmux
+    // resizes the pane to match on each join.
+    const buildJoinParams = () => {
+      const params = {};
+      const meta = document.querySelector("meta[name='channel-scope']");
+      if (meta && meta.content) params.scope = meta.content;
+      if (!this._isMultiPane && this.term.cols > 0 && this.term.rows > 0) {
+        params.cols = this.term.cols;
+        params.rows = this.term.rows;
+      }
+      return params;
+    };
+    this.channel = window.userSocket.channel(topic, buildJoinParams);
     this.channel
       .join()
       .receive("ok", (reply) => {

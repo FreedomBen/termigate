@@ -27,6 +27,11 @@ defmodule TermigateWeb.MultiPaneLive do
     "terminal" => "hero-command-line-micro"
   }
 
+  # Re-sign the per-tab channel scope token before TerminalChannel's
+  # @scope_max_age (300s) elapses, so a long-idle tab doesn't get its
+  # rejoins rejected with "invalid scope token".
+  @scope_refresh_interval_ms 4 * 60 * 1000
+
   @impl true
   def mount(%{"session" => session, "window" => window}, _session, socket) do
     window = to_string(window)
@@ -35,6 +40,7 @@ defmodule TermigateWeb.MultiPaneLive do
       LayoutPoller.subscribe(session, window)
       Phoenix.PubSub.subscribe(Termigate.PubSub, "sessions:state")
       Phoenix.PubSub.subscribe(Termigate.PubSub, "config")
+      Process.send_after(self(), :refresh_channel_scope, @scope_refresh_interval_ms)
     end
 
     # Fetch layout and window list
@@ -45,7 +51,7 @@ defmodule TermigateWeb.MultiPaneLive do
       end
 
     windows = fetch_windows(session)
-    channel_scope = Phoenix.Token.sign(socket, "channel_scope", %{session: session})
+    channel_scope = sign_channel_scope(socket, session)
     config = Config.get()
     quick_actions = config["quick_actions"] || []
     terminal_prefs = config["terminal"] || %{}
@@ -765,6 +771,17 @@ defmodule TermigateWeb.MultiPaneLive do
   def handle_info({:pane_resized, _, _}, socket), do: {:noreply, socket}
   def handle_info({:pane_superseded, _, _}, socket), do: {:noreply, socket}
   def handle_info({:tmux_status_changed, _}, socket), do: {:noreply, socket}
+
+  def handle_info(:refresh_channel_scope, socket) do
+    Process.send_after(self(), :refresh_channel_scope, @scope_refresh_interval_ms)
+    scope = sign_channel_scope(socket, socket.assigns.session)
+
+    {:noreply,
+     socket
+     |> assign(:channel_scope, scope)
+     |> push_event("channel_scope_refreshed", %{scope: scope})}
+  end
+
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   # --- Event handlers ---
@@ -1081,6 +1098,10 @@ defmodule TermigateWeb.MultiPaneLive do
       {:ok, output} -> String.trim(output)
       {:error, _} -> "0"
     end
+  end
+
+  defp sign_channel_scope(socket, session) do
+    Phoenix.Token.sign(socket, "channel_scope", %{session: session})
   end
 
   defp push_notification_config(socket) do

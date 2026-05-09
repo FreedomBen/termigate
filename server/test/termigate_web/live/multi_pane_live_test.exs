@@ -696,4 +696,31 @@ defmodule TermigateWeb.MultiPaneLiveTest do
       assert render(view) =~ ~s(class="control-signal-bar")
     end
   end
+
+  describe "channel scope refresh" do
+    test "rotates the meta tag and pushes a verifiable token", %{conn: conn} do
+      {:ok, view, html} = live(conn, "/sessions/test/windows/0")
+
+      original =
+        Regex.run(~r/<meta name="channel-scope" content="([^"]+)"/, html, capture: :all_but_first)
+        |> List.first()
+
+      # Wait long enough that the new token's signed-at timestamp differs
+      # from the original's (Phoenix.Token timestamps in milliseconds).
+      Process.sleep(10)
+      send(view.pid, :refresh_channel_scope)
+
+      assert_push_event(view, "channel_scope_refreshed", %{scope: refreshed})
+      assert is_binary(refreshed)
+      assert refreshed != original
+
+      assert {:ok, %{session: "test"}} =
+               Phoenix.Token.verify(TermigateWeb.Endpoint, "channel_scope", refreshed,
+                 max_age: 300
+               )
+
+      # The render after refresh should reflect the new token in the meta tag.
+      assert render(view) =~ ~s(<meta name="channel-scope" content="#{refreshed}")
+    end
+  end
 end
