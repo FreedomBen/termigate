@@ -259,19 +259,14 @@ defmodule TermigateWeb.MultiPaneLive do
         </button>
       </div>
 
-      <div
+      <button
         :if={@quick_actions_enabled and @quick_actions != [] and not @show_actions}
-        class="quick-action-bar py-0.5"
+        class="quick-action-bar-collapsed"
+        phx-click="toggle_actions"
+        aria-label="Show quick actions"
       >
-        <button
-          class="btn btn-ghost btn-xs text-base-content/40"
-          phx-click="toggle_actions"
-          aria-label="Show quick actions"
-        >
-          <.icon name="hero-chevron-down-micro" class="size-3" />
-          <span class="text-xs">{length(@quick_actions)} actions</span>
-        </button>
-      </div>
+        <.icon name="hero-chevron-down-micro" class="size-3" />
+      </button>
 
       <%!-- Confirm dialog for actions that require confirmation --%>
       <div
