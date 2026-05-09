@@ -50,7 +50,8 @@ defmodule Termigate.Application do
     :ok
   end
 
-  defp check_auth_warning do
+  @doc false
+  def check_auth_warning do
     unless Termigate.Auth.auth_enabled?() do
       http_config =
         Application.get_env(:termigate, TermigateWeb.Endpoint, []) |> Keyword.get(:http, [])

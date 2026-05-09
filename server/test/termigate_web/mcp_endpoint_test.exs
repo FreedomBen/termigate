@@ -57,6 +57,18 @@ defmodule TermigateWeb.MCPEndpointTest do
 
       assert conn.status == 406
     end
+
+    test "rejects malformed JSON body via Plug.Parsers", %{conn: conn} do
+      {:ok, _} = start_mcp_server()
+
+      # Plug.Parsers raises Plug.Parsers.ParseError on malformed JSON; Phoenix's
+      # endpoint error handler converts that to a 400 in production.
+      assert_raise Plug.Parsers.ParseError, fn ->
+        conn
+        |> mcp_conn()
+        |> Phoenix.ConnTest.dispatch(TermigateWeb.Endpoint, :post, "/mcp", "{not valid json")
+      end
+    end
   end
 
   describe "POST /mcp (with MCP server)" do
@@ -232,6 +244,85 @@ defmodule TermigateWeb.MCPEndpointTest do
         assert tool["annotations"]["destructiveHint"] == true,
                "Expected #{tool_name} to have destructiveHint: true"
       end
+    end
+
+    test "unknown JSON-RPC method is rejected (no silent success)", %{conn: conn} do
+      session_id = init_session(conn)
+
+      resp =
+        conn
+        |> mcp_conn()
+        |> put_req_header("mcp-session-id", session_id)
+        |> post("/mcp", %{
+          "jsonrpc" => "2.0",
+          "id" => 99,
+          "method" => "totally/made-up",
+          "params" => %{}
+        })
+
+      cond do
+        resp.status >= 400 and resp.status < 500 ->
+          :ok
+
+        resp.status == 200 ->
+          body = Jason.decode!(resp.resp_body)
+
+          assert is_map(body["error"]),
+                 "unknown method should produce an error, got: #{inspect(body)}"
+
+          # If a code is present, it should be the JSON-RPC method-not-found code.
+          if code = body["error"]["code"], do: assert(code == -32601)
+
+        true ->
+          flunk("unexpected status #{resp.status} with body #{resp.resp_body}")
+      end
+    end
+
+    test "calling a method that needs a session without mcp-session-id is rejected",
+         %{conn: conn} do
+      resp =
+        conn
+        |> mcp_conn()
+        |> post("/mcp", %{
+          "jsonrpc" => "2.0",
+          "id" => 7,
+          "method" => "tools/list",
+          "params" => %{}
+        })
+
+      # Hermes either returns a JSON-RPC error or an HTTP 4xx — both are
+      # acceptable so long as the request is not silently treated as success.
+      cond do
+        resp.status >= 400 and resp.status < 500 ->
+          :ok
+
+        resp.status == 200 ->
+          body = Jason.decode!(resp.resp_body)
+          assert is_map(body["error"]),
+                 "expected an error object when no session id is supplied, got: #{inspect(body)}"
+
+        true ->
+          flunk("unexpected status #{resp.status} with body #{resp.resp_body}")
+      end
+    end
+
+    test "JSON-RPC notification (no id) does not return a JSON-RPC response", %{conn: conn} do
+      session_id = init_session(conn)
+
+      resp =
+        conn
+        |> mcp_conn()
+        |> put_req_header("mcp-session-id", session_id)
+        |> post("/mcp", %{
+          "jsonrpc" => "2.0",
+          "method" => "notifications/cancelled",
+          "params" => %{"requestId" => 1, "reason" => "user-cancelled"}
+        })
+
+      # Notifications must not produce a JSON-RPC response body.
+      # 202 Accepted (empty) and 200 OK (empty) are both valid in the spec.
+      assert resp.status in [200, 202]
+      assert resp.resp_body in ["", nil] or Jason.decode!(resp.resp_body) == %{}
     end
 
     test "rate limits excessive requests", %{conn: conn} do
