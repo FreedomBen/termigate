@@ -57,7 +57,6 @@ defmodule Termigate.Config do
         "main_row" => [
           %{"key" => "CtrlC", "label" => "^C"},
           %{"key" => "CtrlD", "label" => "^D"},
-          %{"key" => "ArrowUp", "label" => "↑"},
           %{"key" => "CtrlZ", "label" => "^Z"},
           %{"key" => "CtrlL", "label" => "^L"},
           %{"key" => "CtrlBackslash", "label" => "^\\"}
@@ -66,6 +65,7 @@ defmodule Termigate.Config do
           %{"key" => "Tab", "label" => "Tab"},
           %{"key" => "ArrowLeft", "label" => "←"},
           %{"key" => "ArrowDown", "label" => "↓"},
+          %{"key" => "ArrowUp", "label" => "↑"},
           %{"key" => "ArrowRight", "label" => "→"}
         ],
         "compact_row" => [
@@ -73,8 +73,8 @@ defmodule Termigate.Config do
           %{"key" => "CtrlD", "label" => "^D"},
           %{"key" => "CtrlZ", "label" => "^Z"},
           %{"key" => "Tab", "label" => "Tab"},
-          %{"key" => "ArrowUp", "label" => "↑"},
-          %{"key" => "ArrowDown", "label" => "↓"}
+          %{"key" => "ArrowDown", "label" => "↓"},
+          %{"key" => "ArrowUp", "label" => "↑"}
         ],
         "extended_row" => [
           %{"key" => "F1", "label" => "F1"},

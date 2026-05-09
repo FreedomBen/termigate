@@ -244,7 +244,7 @@ defmodule Termigate.ConfigTest do
       buttons = Config.get()["terminal"]["toolbar_buttons"]
       assert is_map(buttons)
       assert is_list(buttons["main_row"])
-      assert length(buttons["main_row"]) == 6
+      assert length(buttons["main_row"]) == 5
       assert hd(buttons["main_row"])["key"] == "CtrlC"
       assert hd(buttons["main_row"])["label"] == "^C"
     end
@@ -273,7 +273,7 @@ defmodule Termigate.ConfigTest do
       buttons = Config.get()["terminal"]["toolbar_buttons"]
       assert buttons["second_row"] == []
       # Other rows should still have defaults
-      assert length(buttons["main_row"]) == 6
+      assert length(buttons["main_row"]) == 5
     end
 
     test "buttons with invalid keys are filtered out" do
@@ -324,7 +324,7 @@ defmodule Termigate.ConfigTest do
       end)
 
       buttons = Config.get()["terminal"]["toolbar_buttons"]
-      assert length(buttons["main_row"]) == 6
+      assert length(buttons["main_row"]) == 5
     end
   end
 
