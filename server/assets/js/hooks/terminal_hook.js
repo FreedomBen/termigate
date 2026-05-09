@@ -99,6 +99,14 @@ const TerminalHook = {
       this.term.textarea.addEventListener("focus", (e) => {
         if (!this._getMobileKeyboardEnabled()) {
           e.target.blur();
+          return;
+        }
+        // Block xterm's focus-on-touchstart while a tap is still pending.
+        // touchend clears _tapPending before calling focus(), so a real
+        // tap still goes through; a drag/scroll clears it earlier in
+        // touchmove and never reaches the focus call.
+        if (this._tapPending) {
+          e.target.blur();
         }
       });
     }
@@ -219,9 +227,32 @@ const TerminalHook = {
       this.el.addEventListener("mousedown", () => {
         this.pushEvent("pane_focused", { target: this.el.dataset.target });
       });
-      this.el.addEventListener("touchstart", () => {
+      // Mirror the single-pane tap-vs-scroll detection: pane_focused fires
+      // on touchstart (so the active pane switches immediately), but the
+      // soft keyboard only opens on a confirmed tap (touchend with no
+      // movement). Capture phase so we set _tapPending before xterm's
+      // bubble-phase touchstart focuses the textarea.
+      this.el.addEventListener("touchstart", (e) => {
         this.pushEvent("pane_focused", { target: this.el.dataset.target });
-        this.term?.focus();
+        if (e.touches.length === 1) {
+          this._tapPending = true;
+        }
+      }, { passive: true, capture: true });
+
+      this.el.addEventListener("touchmove", () => {
+        if (this._tapPending) {
+          this._tapPending = false;
+          if (document.activeElement === this.term?.textarea) {
+            this.term.textarea.blur();
+          }
+        }
+      }, { passive: true });
+
+      this.el.addEventListener("touchend", () => {
+        if (this._tapPending) {
+          this._tapPending = false;
+          this.term?.focus();
+        }
       }, { passive: true });
 
       // Listen for server-initiated focus (e.g. after creating a new window)
@@ -413,34 +444,36 @@ const TerminalHook = {
       window.visualViewport.addEventListener("resize", this._onViewportResize);
     }
 
-    // Tap terminal area to focus (opens soft keyboard), but not on scroll.
-    // We must also block xterm.js's own focus-on-touch behavior, so we
-    // intercept focus events on its textarea and only allow them through
-    // once we've confirmed the gesture was a tap (not a drag/scroll).
-    this._touching = false;
-    this._scrolled = false;
+    // Tap to focus (opens the soft keyboard), but not on scroll/drag.
+    // _tapPending is read by the textarea focus listener in mounted() to
+    // block xterm's focus-on-touchstart. Cleared in touchmove (so a drag
+    // never opens the keyboard) and explicitly cleared in touchend right
+    // before we call focus() ourselves (so a tap still does).
+    // Capture phase: xterm registers its bubble-phase touchstart handler
+    // first (during term.open()), so without capture it would focus the
+    // textarea before _tapPending is set, defeating the block.
+    this._tapPending = false;
 
     this.el.addEventListener("touchstart", (e) => {
       if (e.touches.length === 1) {
-        this._touching = true;
-        this._scrolled = false;
+        this._tapPending = true;
       }
-    }, { passive: true });
+    }, { passive: true, capture: true });
 
     this.el.addEventListener("touchmove", () => {
-      this._scrolled = true;
-      // If xterm focused its textarea during touchstart, blur it now
-      if (this._touching && document.activeElement === this.term?.textarea) {
-        this.term.textarea.blur();
+      if (this._tapPending) {
+        this._tapPending = false;
+        if (document.activeElement === this.term?.textarea) {
+          this.term.textarea.blur();
+        }
       }
     }, { passive: true });
 
     this.el.addEventListener("touchend", () => {
-      if (this._touching && !this._scrolled) {
+      if (this._tapPending) {
+        this._tapPending = false;
         this.term?.focus();
       }
-      this._touching = false;
-      this._scrolled = false;
     }, { passive: true });
   },
 
