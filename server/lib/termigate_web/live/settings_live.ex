@@ -280,7 +280,6 @@ defmodule TermigateWeb.SettingsLive do
       |> maybe_put("theme", params["theme"], & &1)
       |> maybe_put("cursor_style", params["cursor_style"], & &1)
       |> maybe_put_bool("cursor_blink", params)
-      |> maybe_put_bool("show_toolbar", params)
 
     case Config.update(fn config -> Map.put(config, "terminal", terminal) end) do
       {:ok, _} ->
@@ -288,6 +287,19 @@ defmodule TermigateWeb.SettingsLive do
          socket
          |> assign(:terminal, terminal)
          |> put_flash(:info, "Terminal settings saved.")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to save: #{inspect(reason)}")}
+    end
+  end
+
+  def handle_event("update_mobile_control_bar", %{"key" => key, "value" => value}, socket) do
+    value = value in ["true", true]
+    terminal = Map.put(socket.assigns.terminal, key, value)
+
+    case Config.update(fn config -> Map.put(config, "terminal", terminal) end) do
+      {:ok, _} ->
+        {:noreply, assign(socket, :terminal, terminal)}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Failed to save: #{inspect(reason)}")}

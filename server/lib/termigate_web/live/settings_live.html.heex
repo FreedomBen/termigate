@@ -547,20 +547,30 @@
           />
           <span class="text-sm">Cursor blink</span>
         </label>
-        <label class="label cursor-pointer gap-2">
-          <input
-            type="checkbox"
-            name="show_toolbar"
-            value="true"
-            checked={@terminal["show_toolbar"] != false}
-            class="checkbox checkbox-sm"
-          />
-          <span class="text-sm">Mobile control bar</span>
-        </label>
       </div>
 
       <button type="submit" class="btn btn-primary btn-sm">Save</button>
     </form>
+  </div>
+
+  <%!-- Mobile Control Bar --%>
+  <div class="settings-section">
+    <div class="settings-section-title">Mobile Control Bar</div>
+    <p class="text-xs text-base-content/60 mb-3">
+      The bottom control bar on mobile and tablet that surfaces ^C, ^D, Tab, and arrow keys above the soft keyboard.
+    </p>
+
+    <label class="label cursor-pointer justify-start gap-3 py-1">
+      <input
+        type="checkbox"
+        checked={@terminal["show_toolbar"] != false}
+        class="checkbox checkbox-sm"
+        phx-click="update_mobile_control_bar"
+        phx-value-key="show_toolbar"
+        phx-value-value={to_string(@terminal["show_toolbar"] == false)}
+      />
+      <span class="text-sm">Show the control bar</span>
+    </label>
   </div>
 
   <%!-- Authentication --%>

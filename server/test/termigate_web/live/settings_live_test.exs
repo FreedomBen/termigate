@@ -43,6 +43,48 @@ defmodule TermigateWeb.SettingsLiveTest do
     end
   end
 
+  describe "mobile control bar section" do
+    setup do
+      on_exit(fn ->
+        Termigate.Config.update(fn config ->
+          put_in(config, ["terminal", "show_toolbar"], true)
+        end)
+      end)
+
+      :ok
+    end
+
+    test "renders the section header and toggle", %{conn: conn} do
+      {:ok, _view, html} = live(conn, "/settings")
+      assert html =~ "Mobile Control Bar"
+      assert html =~ "Show the control bar"
+    end
+
+    test "toggling the checkbox persists show_toolbar=false", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/settings")
+
+      view
+      |> element(~s(input[phx-click="update_mobile_control_bar"]))
+      |> render_click()
+
+      assert Termigate.Config.get()["terminal"]["show_toolbar"] == false
+    end
+
+    test "toggling again flips show_toolbar back to true", %{conn: conn} do
+      Termigate.Config.update(fn config ->
+        put_in(config, ["terminal", "show_toolbar"], false)
+      end)
+
+      {:ok, view, _html} = live(conn, "/settings")
+
+      view
+      |> element(~s(input[phx-click="update_mobile_control_bar"]))
+      |> render_click()
+
+      assert Termigate.Config.get()["terminal"]["show_toolbar"] == true
+    end
+  end
+
   describe "notifications section" do
     test "renders notification mode selector", %{conn: conn} do
       {:ok, _view, html} = live(conn, "/settings")
