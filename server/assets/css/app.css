@@ -1332,4 +1332,12 @@ body {
     grid-column: 1 / -1 !important;
     grid-row: 1 / -1 !important;
   }
+
+  /* Hide the pane-resize divider overlay: only one pane is visible at a
+     time on mobile, so there's nothing to drag-resize, and the always-on
+     0.35-opacity divider line (forced by `@media (hover: none)`) shows
+     up as a stray green stripe at the old desktop gap center. */
+  #pane-dividers {
+    display: none !important;
+  }
 }
