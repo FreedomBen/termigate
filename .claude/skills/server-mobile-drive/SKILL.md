@@ -39,7 +39,7 @@ discover them, not at the end.** Each entry includes:
 - Short title.
 - Severity: `blocker`, `major`, `minor`, or `nit`.
 - Numbered repro steps.
-- **Viewport** the issue reproduces at (e.g. `iPhone SE 375×667`).
+- **Viewport** the issue reproduces at (e.g. `Pixel 5 393×851`).
 - Expected vs. actual behavior.
 - Screenshot path if captured (save under `drive-artifacts/`).
 
@@ -98,31 +98,32 @@ Use Chrome DevTools MCP `emulate` (preferred — sets the user-agent,
 DPR, mobile flag, and touch flag together) or `resize_page` as a
 fallback for size-only changes.
 
-The **primary device profile** for the drive is:
+The **primary device profile** for the drive is a small-to-medium
+Android phone (termigate primarily targets Android):
 
 | Field             | Value                                                     |
 | ----------------- | --------------------------------------------------------- |
-| Name              | `iPhone SE (3rd gen)`                                     |
-| Viewport          | `375 × 667`                                               |
-| Device pixel ratio| `2`                                                       |
+| Name              | `Pixel 5`                                                 |
+| Viewport          | `393 × 851`                                               |
+| Device pixel ratio| `2.75`                                                    |
 | Mobile            | `true`                                                    |
 | Touch             | `true`                                                    |
-| User-agent        | `Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1` |
+| User-agent        | `Mozilla/5.0 (Linux; Android 13; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36` |
 
 Run the **entire happy-path** at this profile.
 
 Additionally, **re-test layout-critical screens** at two more
 viewports to catch breakpoint regressions:
 
-| Profile           | Viewport     | Why                                          |
-| ----------------- | ------------ | -------------------------------------------- |
-| Small phone       | `320 × 568`  | Narrowest realistic width — text wrap, overflow. |
-| Large phone       | `412 × 915`  | Pixel-class Android — taller, wider.         |
+| Profile           | Viewport     | Why                                                |
+| ----------------- | ------------ | -------------------------------------------------- |
+| Small Android     | `360 × 640`  | Galaxy S8-class — narrow width, text wrap, overflow. |
+| Large Android     | `412 × 915`  | Pixel 7-class — taller, wider.                     |
 
 For each profile switch, take a fresh `take_screenshot` of the
 session list, an attached terminal, and the settings page. Save under
 `drive-artifacts/` with the profile name in the filename
-(`session-list-iphone-se.png`, etc.).
+(`session-list-pixel-5.png`, etc.).
 
 ## Step 3 — Drive the browser
 
@@ -137,14 +138,14 @@ into `drive-artifacts/` and reference their paths in findings.
 
 ### Step 3a — Initial setup (mobile)
 
-1. `new_page`, apply the iPhone SE emulation, then `navigate_page`
+1. `new_page`, apply the Pixel 5 emulation, then `navigate_page`
    to `http://127.0.0.1:8889/` (use the IPv4 literal, not
    `localhost`, for the same reason as the healthcheck). The server
    should redirect to `/setup` if no admin user yet exists.
 2. `take_snapshot`, fill in admin username + a strong password,
    submit. Verify form inputs are full-width and the submit button is
    reachable without horizontal scroll.
-3. Confirm the post-setup landing page renders cleanly at 375 px —
+3. Confirm the post-setup landing page renders cleanly at 393 px —
    no horizontal scrollbar, no clipped controls.
 4. Visit `/settings` and capture an auth token if the UI offers one
    — record it in the report for later API checks.
