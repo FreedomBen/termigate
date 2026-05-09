@@ -96,6 +96,14 @@ const TerminalHook = {
         // touchmove and never reaches the focus call.
         if (this._tapPending) {
           e.target.blur();
+          return;
+        }
+        // On mobile, only allow focus from a confirmed direct tap on the
+        // pane. Block every other path (server-pushed focus, browser focus
+        // restoration after LiveView morph, xterm-internal handlers, etc.)
+        // so switching panes via a tab click never opens the soft keyboard.
+        if (this._isMobile && !this._allowFocus) {
+          e.target.blur();
         }
       });
     }
@@ -222,7 +230,9 @@ const TerminalHook = {
     this.el.addEventListener("touchend", () => {
       if (this._tapPending) {
         this._tapPending = false;
+        this._allowFocus = true;
         this.term?.focus();
+        queueMicrotask(() => { this._allowFocus = false; });
       }
     }, { passive: true });
 
