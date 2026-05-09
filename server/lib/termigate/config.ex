@@ -119,7 +119,8 @@ defmodule Termigate.Config do
   #                  Keys: foreground, background, cursor, selectionBackground
   #   cursor_style:  block, underline, or bar (default: "block")
   #   cursor_blink:  true/false (default: true)
-  #   show_toolbar:  Show virtual toolbar on mobile (default: true)
+  #   show_toolbar:  Show the mobile control bar above the soft keyboard
+  #                  (default: true). Hides .control-signal-bar when false.
   #   mobile_keyboard_enabled:
   #                  Default state for the on-screen keyboard popup on mobile
   #                  (default: true). Users can still toggle per-device via the

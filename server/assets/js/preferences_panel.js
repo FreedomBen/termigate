@@ -141,7 +141,7 @@ function buildHTML(prefs) {
       </div>
 
       <div class="prefs-group">
-        <label>Virtual Toolbar</label>
+        <label>Mobile Control Bar</label>
         <label class="prefs-toggle">
           <input type="checkbox" id="pref-show-toolbar" ${prefs.showToolbar !== false ? "checked" : ""} />
           <span class="prefs-toggle-slider"></span>

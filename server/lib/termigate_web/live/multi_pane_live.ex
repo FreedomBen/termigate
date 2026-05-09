@@ -465,8 +465,12 @@ defmodule TermigateWeb.MultiPaneLive do
            When the bar is too narrow to fit all the chips, a CSS
            container query (see `.control-signal-bar` in app.css) hides
            the priority="2" inline chips and reveals the `…` overflow
-           popover, whose contents mirror those chips. --%>
-      <div class="control-signal-bar">
+           popover, whose contents mirror those chips.
+
+           Gated on the `terminal.show_toolbar` config flag so users
+           can opt out of the bar entirely from /settings or the
+           in-terminal preferences panel. --%>
+      <div :if={@terminal_prefs["show_toolbar"] != false} class="control-signal-bar">
         <div class="ctl-group">
           <button
             :for={

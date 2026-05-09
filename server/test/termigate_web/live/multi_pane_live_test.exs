@@ -500,4 +500,47 @@ defmodule TermigateWeb.MultiPaneLiveTest do
       verify!(Termigate.MockCommandRunner)
     end
   end
+
+  describe "control signal bar visibility" do
+    setup do
+      on_exit(fn ->
+        Termigate.Config.update(fn config ->
+          put_in(config, ["terminal", "show_toolbar"], true)
+        end)
+      end)
+
+      :ok
+    end
+
+    test "renders the .control-signal-bar by default", %{conn: conn} do
+      {:ok, _view, html} = live(conn, "/sessions/test/windows/0")
+      assert html =~ ~s(class="control-signal-bar")
+    end
+
+    test "hides the .control-signal-bar when show_toolbar is false", %{conn: conn} do
+      Termigate.Config.update(fn config ->
+        put_in(config, ["terminal", "show_toolbar"], false)
+      end)
+
+      {:ok, _view, html} = live(conn, "/sessions/test/windows/0")
+      refute html =~ ~s(class="control-signal-bar")
+    end
+
+    test "reappears when show_toolbar flips back to true mid-session", %{conn: conn} do
+      Termigate.Config.update(fn config ->
+        put_in(config, ["terminal", "show_toolbar"], false)
+      end)
+
+      {:ok, view, html} = live(conn, "/sessions/test/windows/0")
+      refute html =~ ~s(class="control-signal-bar")
+
+      {:ok, new_config} =
+        Termigate.Config.update(fn config ->
+          put_in(config, ["terminal", "show_toolbar"], true)
+        end)
+
+      send(view.pid, {:config_changed, new_config})
+      assert render(view) =~ ~s(class="control-signal-bar")
+    end
+  end
 end
