@@ -1245,45 +1245,32 @@ body {
    mobile. The same row is shown on desktop too, but the desktop grid still
    renders every pane simultaneously — there the tabs are a redundant shortcut
    for setting the active pane. */
+/* Wraps `.pane-tabs` so the absolutely-positioned `.new-pane-menu-popup`
+   below can escape the row's `overflow-x: auto` clipping. */
+.pane-tabs-wrapper {
+  position: relative;
+}
+
 .pane-tabs {
   display: flex;
   align-items: center;
   background: oklch(10% 0.005 260);
   border-bottom: 1px solid oklch(25% 0.01 260);
   flex-shrink: 0;
-  /* Scroll lives on .pane-tabs-scroll so the trailing "+" menu popup
-     is not clipped by overflow on the row container. */
-}
-
-.pane-tabs-scroll {
+  overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  min-width: 0;
 }
 
-/* New-pane (+) menu next to pane tabs.
-   Native <details>/<summary> pattern (matches .ctl-overflow). The popup is
-   absolutely positioned below/above the trigger and right-anchored so it
-   stays inside the viewport on mobile. */
-.new-pane-menu {
-  position: relative;
-  flex-shrink: 0;
-  margin-right: 0.25rem;
-}
-
-.new-pane-menu > summary {
-  list-style: none;
-}
-
-.new-pane-menu > summary::-webkit-details-marker {
-  display: none;
-}
-
+/* New-pane (+) trigger. Sits inside the scrolling pane-tabs row alongside
+   the chips, mirroring the window-bar's `.new-window-btn` placement so
+   the row degrades the same way when there are too many tabs to fit. */
 .new-pane-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 32px;
   height: 32px;
+  margin-left: 0.25rem;
   flex-shrink: 0;
   border-radius: 6px;
   color: oklch(50% 0.01 260);
@@ -1299,16 +1286,25 @@ body {
   background: oklch(from var(--color-primary) l c h / 8%);
 }
 
-.new-pane-menu[open] > .new-pane-btn {
+.new-pane-btn:active {
+  background: oklch(from var(--color-primary) l c h / 15%);
+  transform: scale(0.93);
+}
+
+.new-pane-btn[aria-expanded="true"] {
   color: var(--color-primary);
   border-color: oklch(from var(--color-primary) l c h / 60%);
   background: oklch(from var(--color-primary) l c h / 15%);
 }
 
+/* Popup is a sibling of `.pane-tabs` (inside `.pane-tabs-wrapper`) so
+   `overflow-x: auto` on the row never clips it. Right-anchored to land
+   under the "+" button at the row's right edge. */
 .new-pane-menu-popup {
   position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
+  top: 100%;
+  right: 0.5rem;
+  margin-top: 4px;
   min-width: 220px;
   background: oklch(12% 0.005 260);
   border: 1px solid oklch(28% 0.01 260);

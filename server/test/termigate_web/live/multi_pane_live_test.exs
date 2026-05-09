@@ -125,7 +125,7 @@ defmodule TermigateWeb.MultiPaneLiveTest do
   end
 
   describe "mobile pane switching" do
-    test "single pane: pane-tabs row stays rendered for the new-pane (+) menu",
+    test "single pane: pane-tabs row stays rendered for the new-pane (+) button",
          %{conn: conn} do
       {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
 
@@ -133,10 +133,10 @@ defmodule TermigateWeb.MultiPaneLiveTest do
       html = render(view)
 
       # The pane-tabs row is rendered whenever there's at least one pane so
-      # the trailing "+" menu (used to add panes on mobile, where the
+      # the trailing "+" button (used to add panes on mobile, where the
       # per-pane overlay is hidden) stays available.
       assert html =~ "pane-tabs"
-      assert html =~ "new-pane-menu"
+      assert html =~ "new-pane-btn"
 
       # The legacy mobile card list is gone for good.
       refute html =~ "mobile-pane-card"
@@ -465,34 +465,80 @@ defmodule TermigateWeb.MultiPaneLiveTest do
   end
 
   describe "new-pane (+) menu" do
-    test "renders both split options wired to split_pane on the active pane",
+    test "trigger button renders inside the pane-tabs row but the popup is collapsed by default",
          %{conn: conn} do
       {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
       send(view.pid, {:layout_updated, @test_panes})
       html = render(view)
 
-      assert html =~ "new-pane-menu"
+      # The "+" trigger lives in the row alongside the chips and toggles
+      # the popup via a LiveView event.
+      assert html =~ "new-pane-btn"
+      assert html =~ ~s(phx-click="toggle_new_pane_menu")
+      assert html =~ ~s(aria-expanded="false")
+
+      # Popup is collapsed by default — its items are not in the DOM.
+      refute html =~ "new-pane-menu-popup"
+      refute html =~ "Split Pane Horizontally"
+      refute html =~ "Split Pane Vertically"
+    end
+
+    test "trigger button renders even with a single pane", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @single_pane})
+      html = render(view)
+
+      assert html =~ "new-pane-btn"
+      assert html =~ ~s(phx-click="toggle_new_pane_menu")
+    end
+
+    test "toggling opens the popup with both split options targeting the active pane",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @test_panes})
+      render(view)
+
+      render_click(view, "toggle_new_pane_menu", %{})
+      html = render(view)
+
+      assert html =~ "new-pane-menu-popup"
       assert html =~ "Split Pane Horizontally"
       assert html =~ "Split Pane Vertically"
+      assert html =~ ~s(aria-expanded="true")
 
-      # Both menu items invoke the existing split_pane event with the
-      # active pane as their target and the right direction.
+      # Both items invoke split_pane against the active pane with the
+      # right direction.
       assert html =~ ~s(phx-value-direction="horizontal")
       assert html =~ ~s(phx-value-direction="vertical")
       assert html =~ ~r/phx-click="split_pane"[^>]*phx-value-target="test:0\.0"/
     end
 
-    test "renders even with a single pane", %{conn: conn} do
+    test "toggling twice closes the popup", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
-      send(view.pid, {:layout_updated, @single_pane})
-      html = render(view)
+      send(view.pid, {:layout_updated, @test_panes})
+      render(view)
 
-      assert html =~ "new-pane-menu"
-      assert html =~ "Split Pane Horizontally"
-      assert html =~ "Split Pane Vertically"
+      render_click(view, "toggle_new_pane_menu", %{})
+      assert render(view) =~ "new-pane-menu-popup"
+
+      render_click(view, "toggle_new_pane_menu", %{})
+      refute render(view) =~ "new-pane-menu-popup"
     end
 
-    test "split_pane handler invokes tmux split-window with the right flag",
+    test "close_new_pane_menu collapses the popup (used by phx-click-away)",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @test_panes})
+      render(view)
+
+      render_click(view, "toggle_new_pane_menu", %{})
+      assert render(view) =~ "new-pane-menu-popup"
+
+      render_click(view, "close_new_pane_menu", %{})
+      refute render(view) =~ "new-pane-menu-popup"
+    end
+
+    test "split_pane invokes tmux split-window and collapses the popup",
          %{conn: conn} do
       {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
       send(view.pid, {:layout_updated, @test_panes})
@@ -508,7 +554,14 @@ defmodule TermigateWeb.MultiPaneLiveTest do
       |> expect(:run, fn ["split-window", "-h", "-t", "test:0.0"] -> {:ok, ""} end)
       |> expect(:run, fn ["split-window", "-v", "-t", "test:0.0"] -> {:ok, ""} end)
 
+      render_click(view, "toggle_new_pane_menu", %{})
+      assert render(view) =~ "new-pane-menu-popup"
+
       render_click(view, "split_pane", %{"target" => "test:0.0", "direction" => "horizontal"})
+      # Popup should be auto-collapsed after the split fires.
+      refute render(view) =~ "new-pane-menu-popup"
+
+      render_click(view, "toggle_new_pane_menu", %{})
       render_click(view, "split_pane", %{"target" => "test:0.0", "direction" => "vertical"})
 
       verify!(Termigate.MockCommandRunner)

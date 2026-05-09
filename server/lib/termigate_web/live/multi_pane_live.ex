@@ -80,6 +80,7 @@ defmodule TermigateWeb.MultiPaneLive do
       |> assign(:quick_actions, quick_actions)
       |> assign(:quick_actions_enabled, config["quick_actions_enabled"] != false)
       |> assign(:show_actions, true)
+      |> assign(:show_new_pane_menu, false)
       |> assign(:pending_action, nil)
       |> assign(:pending_close_window, nil)
       |> assign(:terminal_prefs, terminal_prefs)
@@ -200,67 +201,75 @@ defmodule TermigateWeb.MultiPaneLive do
              least one pane so the trailing "+" button (which opens the
              split-pane menu) stays available — on mobile the per-pane
              overlay split buttons are hidden, so this is the only way
-             to add a pane. --%>
-        <div :if={@panes != []} class="pane-tabs">
-          <div class="pane-tabs-scroll flex items-center gap-0.5 px-2 flex-1 overflow-x-auto">
-            <button
-              :for={pane <- @panes}
-              type="button"
-              class={[
-                "pane-tab",
-                if(@active_pane == pane.target,
-                  do: "pane-tab-active",
-                  else: "pane-tab-inactive"
-                )
-              ]}
-              phx-click="focus_pane"
-              phx-value-pane={pane.target}
-              aria-label={"Switch to #{pane_chip_label(pane)}"}
-              onmousedown="event.preventDefault()"
-            >
-              {pane_chip_label(pane)}
-            </button>
-          </div>
-          <details class="new-pane-menu">
-            <summary
-              class="new-pane-btn tooltip tooltip-bottom"
-              aria-label="New pane"
-              data-tip="New pane"
-              onmousedown="event.preventDefault()"
-            >
-              <.icon name="hero-plus-micro" class="size-3.5" />
-            </summary>
-            <div class="new-pane-menu-popup" role="menu">
+             to add a pane.
+
+             The wrapper hosts the absolute-positioned new-pane popup so
+             it can escape `.pane-tabs`'s `overflow-x: auto` clipping. --%>
+        <div :if={@panes != []} class="pane-tabs-wrapper">
+          <div
+            class="pane-tabs"
+            phx-click-away={@show_new_pane_menu && "close_new_pane_menu"}
+          >
+            <div class="flex items-center gap-0.5 px-2 flex-1">
               <button
+                :for={pane <- @panes}
                 type="button"
-                class="new-pane-menu-item"
-                role="menuitem"
-                phx-click="split_pane"
-                phx-value-target={@active_pane}
-                phx-value-direction="horizontal"
-                onclick="this.closest('details').open = false"
+                class={[
+                  "pane-tab",
+                  if(@active_pane == pane.target,
+                    do: "pane-tab-active",
+                    else: "pane-tab-inactive"
+                  )
+                ]}
+                phx-click="focus_pane"
+                phx-value-pane={pane.target}
+                aria-label={"Switch to #{pane_chip_label(pane)}"}
+                onmousedown="event.preventDefault()"
               >
-                <svg viewBox="0 0 20 20" fill="currentColor" class="size-4 shrink-0">
-                  <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zM9 4H4.5A.5.5 0 004 4.5v11a.5.5 0 00.5.5H9V4zm2 12h4.5a.5.5 0 00.5-.5v-11a.5.5 0 00-.5-.5H11v12z" />
-                </svg>
-                Split Pane Horizontally
+                {pane_chip_label(pane)}
               </button>
               <button
                 type="button"
-                class="new-pane-menu-item"
-                role="menuitem"
-                phx-click="split_pane"
-                phx-value-target={@active_pane}
-                phx-value-direction="vertical"
-                onclick="this.closest('details').open = false"
+                class="new-pane-btn tooltip tooltip-bottom"
+                phx-click="toggle_new_pane_menu"
+                data-tip="New pane"
+                aria-label="New pane"
+                aria-haspopup="menu"
+                aria-expanded={if @show_new_pane_menu, do: "true", else: "false"}
+                onmousedown="event.preventDefault()"
               >
-                <svg viewBox="0 0 20 20" fill="currentColor" class="size-4 shrink-0">
-                  <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zM4 9V4.5a.5.5 0 01.5-.5h11a.5.5 0 01.5.5V9H4zm0 2v4.5a.5.5 0 00.5.5h11a.5.5 0 00.5-.5V11H4z" />
-                </svg>
-                Split Pane Vertically
+                <.icon name="hero-plus-micro" class="size-3.5" />
               </button>
             </div>
-          </details>
+          </div>
+          <div :if={@show_new_pane_menu} class="new-pane-menu-popup" role="menu">
+            <button
+              type="button"
+              class="new-pane-menu-item"
+              role="menuitem"
+              phx-click="split_pane"
+              phx-value-target={@active_pane}
+              phx-value-direction="horizontal"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" class="size-4 shrink-0">
+                <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zM9 4H4.5A.5.5 0 004 4.5v11a.5.5 0 00.5.5H9V4zm2 12h4.5a.5.5 0 00.5-.5v-11a.5.5 0 00-.5-.5H11v12z" />
+              </svg>
+              Split Pane Horizontally
+            </button>
+            <button
+              type="button"
+              class="new-pane-menu-item"
+              role="menuitem"
+              phx-click="split_pane"
+              phx-value-target={@active_pane}
+              phx-value-direction="vertical"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" class="size-4 shrink-0">
+                <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zM4 9V4.5a.5.5 0 01.5-.5h11a.5.5 0 01.5.5V9H4zm0 2v4.5a.5.5 0 00.5.5h11a.5.5 0 00.5-.5V11H4z" />
+              </svg>
+              Split Pane Vertically
+            </button>
+          </div>
         </div>
       </div>
 
@@ -918,7 +927,15 @@ defmodule TermigateWeb.MultiPaneLive do
   def handle_event("split_pane", %{"target" => target, "direction" => direction}, socket) do
     dir = if direction == "vertical", do: :vertical, else: :horizontal
     TmuxManager.split_pane(target, dir)
-    {:noreply, socket}
+    {:noreply, assign(socket, :show_new_pane_menu, false)}
+  end
+
+  def handle_event("toggle_new_pane_menu", _params, socket) do
+    {:noreply, assign(socket, :show_new_pane_menu, !socket.assigns.show_new_pane_menu)}
+  end
+
+  def handle_event("close_new_pane_menu", _params, socket) do
+    {:noreply, assign(socket, :show_new_pane_menu, false)}
   end
 
   def handle_event(
