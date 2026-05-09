@@ -366,7 +366,7 @@ Key:
 - [x] F2 — Sub-44 px touch targets on the Settings page (selects, inputs, native checkboxes/radios) (resolved by `e1d05e2`)
 - [x] F6 — Login form inputs and primary `Sign in` button at 40 px (resolved by `1b792cb`)
 - [x] F15 — Multi-pane mobile layout: redundant card tap when only one pane (same code path as F4, resolved by `c758494`)
-- [ ] F7 — Add a password-visibility toggle to the login form
+- [x] F7 — Add a password-visibility toggle to the login form (resolved by `435d5e8`)
 - [ ] F5 — Mobile scrollback / copy-mode UX (currently disabled by design — decide whether to surface)
 
 Accepted / by design (no action required):
