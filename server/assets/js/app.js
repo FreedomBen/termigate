@@ -30,13 +30,14 @@ import {RestoreOrFitHook} from "./hooks/restore_or_fit_hook"
 import {QuickActionBarHook} from "./hooks/quick_action_bar_hook"
 import {PasswordToggleHook} from "./hooks/password_toggle_hook"
 import {EdgeSwipeBackHook} from "./hooks/edge_swipe_back_hook"
+import {KeyboardVisibilityHook} from "./hooks/keyboard_visibility_hook"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, TerminalHook, PaneResizeHook, NotificationHook, NotificationPermission, RestoreOrFitHook, QuickActionBarHook, PasswordToggle: PasswordToggleHook, EdgeSwipeBack: EdgeSwipeBackHook},
+  hooks: {...colocatedHooks, TerminalHook, PaneResizeHook, NotificationHook, NotificationPermission, RestoreOrFitHook, QuickActionBarHook, PasswordToggle: PasswordToggleHook, EdgeSwipeBack: EdgeSwipeBackHook, KeyboardVisibilityHook},
 })
 
 // Show progress bar on live navigation and form submits

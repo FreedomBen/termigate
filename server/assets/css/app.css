@@ -525,6 +525,33 @@ body {
   }
 }
 
+/* === Secondary "keyboard down" control bar ===
+   Stacks below the primary bar on mobile only. Carries chars/actions
+   the user would otherwise need to raise the soft keyboard for
+   (Enter, Space, Backspace, Esc, y, n). The KeyboardVisibility hook
+   sets `body.kbd-open` whenever visualViewport indicates the soft
+   keyboard is up, and the rule below collapses this row — the user
+   already has those keys in front of them. */
+.control-signal-bar-kbd-down {
+  /* Visually attached to the primary bar above — slightly lighter
+     border so the two rows read as a stack, not as two unrelated
+     toolbars. */
+  border-top-color: oklch(18% 0.008 260);
+}
+
+body.kbd-open .control-signal-bar-kbd-down {
+  display: none;
+}
+
+/* When the secondary bar is visible (mobile + kbd-down) it owns the
+   bottom safe-area-inset; strip it from the primary bar so the
+   primary doesn't carry useless padding mid-screen. */
+@media (max-width: 639px) {
+  body:not(.kbd-open) .control-signal-bar:not(.control-signal-bar-kbd-down) {
+    padding-bottom: 3px;
+  }
+}
+
 /* === Quick action bar === */
 .quick-action-bar {
   display: flex;

@@ -298,6 +298,7 @@ defmodule TermigateWeb.MCPEndpointTest do
 
         resp.status == 200 ->
           body = Jason.decode!(resp.resp_body)
+
           assert is_map(body["error"]),
                  "expected an error object when no session id is supplied, got: #{inspect(body)}"
 

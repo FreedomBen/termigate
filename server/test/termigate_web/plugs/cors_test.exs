@@ -9,6 +9,7 @@ defmodule TermigateWeb.Plugs.CorsTest do
 
   setup do
     original = Application.get_env(:termigate, :cors_origin)
+
     on_exit(fn ->
       if original,
         do: Application.put_env(:termigate, :cors_origin, original),

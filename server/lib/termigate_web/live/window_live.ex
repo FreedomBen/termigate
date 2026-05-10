@@ -623,6 +623,61 @@ defmodule TermigateWeb.WindowLive do
         </details>
       </div>
 
+      <%!-- Secondary control bar: only shown on mobile when the soft
+           keyboard is *down*. These are characters/actions the user
+           would otherwise need to raise the keyboard for (Enter,
+           Space, Backspace, Esc) plus the y/n responses for
+           interactive prompts. When the keyboard is up the
+           KeyboardVisibility hook adds a `kbd-open` class to <body>
+           and CSS hides this row (you can already type these directly
+           on the soft keyboard). --%>
+      <div
+        :if={@terminal_prefs["show_toolbar"] != false}
+        class="control-signal-bar control-signal-bar-kbd-down"
+        aria-label="Quick keys (visible when soft keyboard is hidden)"
+      >
+        <div class="ctl-group">
+          <button
+            :for={
+              {label, key} <- [
+                {"Enter", "enter"},
+                {"Space", "space"},
+                {raw("&#x232b;"), "backspace"},
+                {"Esc", "esc"}
+              ]
+            }
+            class="ctl-btn"
+            phx-click={if key == "space", do: "send_text", else: "send_special_key"}
+            phx-value-key={if key == "space", do: nil, else: key}
+            phx-value-text={if key == "space", do: " ", else: nil}
+            disabled={@active_pane == nil}
+            onmousedown="event.preventDefault()"
+          >
+            <kbd>{label}</kbd>
+          </button>
+        </div>
+
+        <span class="ctl-separator">|</span>
+
+        <div class="ctl-group">
+          <button
+            :for={letter <- ["y", "n"]}
+            class="ctl-btn"
+            phx-click="send_text"
+            phx-value-text={letter}
+            disabled={@active_pane == nil}
+            onmousedown="event.preventDefault()"
+          >
+            <kbd>{letter}</kbd>
+          </button>
+        </div>
+      </div>
+
+      <%!-- Tracks the soft keyboard via visualViewport and toggles
+           `body.kbd-open` so CSS can hide the secondary bar while
+           the keyboard is up. --%>
+      <div id="keyboard-visibility-hook" phx-hook="KeyboardVisibilityHook" class="hidden" />
+
       <%!-- Notification hook (invisible, one per LiveView) --%>
       <div id="notification-hook" phx-hook="NotificationHook" class="hidden" />
     </div>
@@ -858,7 +913,10 @@ defmodule TermigateWeb.WindowLive do
     "up" => "\e[A",
     "down" => "\e[B",
     "right" => "\e[C",
-    "left" => "\e[D"
+    "left" => "\e[D",
+    "enter" => "\r",
+    "esc" => "\e",
+    "backspace" => "\x7f"
   }
 
   def handle_event("send_special_key", %{"key" => key}, socket) do
@@ -874,6 +932,23 @@ defmodule TermigateWeb.WindowLive do
         {:noreply, socket}
     end
   end
+
+  # Tap-to-send for short literal characters (e.g. y/n/space) used by the
+  # secondary mobile control bar. Capped to a few bytes so this can't be
+  # repurposed as a generic input channel.
+  def handle_event("send_text", %{"text" => text}, socket)
+      when is_binary(text) and byte_size(text) > 0 and byte_size(text) <= 4 do
+    case socket.assigns.active_pane do
+      nil ->
+        {:noreply, socket}
+
+      target ->
+        PaneStream.send_keys(target, text)
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("send_text", _params, socket), do: {:noreply, socket}
 
   def handle_event("quick_action", params, socket) do
     id = params["id"] || params["value"]

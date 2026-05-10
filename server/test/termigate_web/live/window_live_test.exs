@@ -688,6 +688,77 @@ defmodule TermigateWeb.WindowLiveTest do
     end
   end
 
+  describe "secondary keyboard-down control bar" do
+    setup do
+      on_exit(fn ->
+        Termigate.Config.update(fn config ->
+          put_in(config, ["terminal", "show_toolbar"], true)
+        end)
+      end)
+
+      :ok
+    end
+
+    test "renders the secondary bar with Enter/Esc/Backspace and y/n by default",
+         %{conn: conn} do
+      {:ok, _view, html} = live(conn, "/sessions/test/windows/0")
+
+      assert html =~ "control-signal-bar-kbd-down"
+      # Special-key buttons (Enter / Esc / Backspace).
+      assert html =~ ~s(phx-value-key="enter")
+      assert html =~ ~s(phx-value-key="esc")
+      assert html =~ ~s(phx-value-key="backspace")
+      # Literal-text buttons (Space / y / n).
+      assert html =~ ~s(phx-value-text=" ")
+      assert html =~ ~s(phx-value-text="y")
+      assert html =~ ~s(phx-value-text="n")
+    end
+
+    test "secondary bar is hidden when show_toolbar is false (same flag as primary)",
+         %{conn: conn} do
+      Termigate.Config.update(fn config ->
+        put_in(config, ["terminal", "show_toolbar"], false)
+      end)
+
+      {:ok, _view, html} = live(conn, "/sessions/test/windows/0")
+      refute html =~ "control-signal-bar-kbd-down"
+    end
+
+    test "mounts the keyboard-visibility hook so CSS can react to soft-kb state",
+         %{conn: conn} do
+      {:ok, _view, html} = live(conn, "/sessions/test/windows/0")
+      assert html =~ ~s(phx-hook="KeyboardVisibilityHook")
+    end
+
+    test "send_special_key('enter') is a safe no-op when no pane is active",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      # active_pane defaults to nil at mount, so the handler short-circuits
+      # before reaching PaneStream. We just need to confirm it doesn't crash.
+      render_click(view, "send_special_key", %{"key" => "enter"})
+      render_click(view, "send_special_key", %{"key" => "esc"})
+      render_click(view, "send_special_key", %{"key" => "backspace"})
+    end
+
+    test "send_text accepts a single short string and is a no-op without an active pane",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      render_click(view, "send_text", %{"text" => "y"})
+      render_click(view, "send_text", %{"text" => "n"})
+      render_click(view, "send_text", %{"text" => " "})
+    end
+
+    test "send_text rejects empty or oversized payloads without crashing",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      # Empty and >4 byte payloads fall through to the catch-all clause
+      # (no-op) so they can't be used as a generic input channel.
+      render_click(view, "send_text", %{"text" => ""})
+      render_click(view, "send_text", %{"text" => "abcdef"})
+      render_click(view, "send_text", %{})
+    end
+  end
+
   describe "channel scope refresh" do
     test "rotates the meta tag and pushes a verifiable token", %{conn: conn} do
       {:ok, view, html} = live(conn, "/sessions/test/windows/0")
