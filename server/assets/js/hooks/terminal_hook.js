@@ -30,14 +30,15 @@ const TerminalHook = {
     });
 
     // Use the tmux pane's actual dimensions so captured scrollback renders
-    // correctly; xterm's own scrollback is set to 0 because tmux already
-    // owns the history.
+    // correctly. xterm.js keeps its own scrollback so the mobile control
+    // bar's scrollback buttons (Copy / ^U / ^D / Exit) have something to
+    // navigate; tmux still owns the canonical history beyond this cap.
     const termOpts = {
       fontSize: prefs.fontSize,
       fontFamily: prefs.fontFamily,
       cursorStyle: prefs.cursorStyle,
       cursorBlink: prefs.cursorBlink,
-      scrollback: 0,
+      scrollback: 5000,
       theme: resolveTheme(prefs),
     };
 
@@ -243,6 +244,28 @@ const TerminalHook = {
     this.handleEvent("focus_terminal", ({ pane }) => {
       if (pane === this.el.dataset.target && !this._isMobile) {
         this.term?.focus();
+      }
+    });
+
+    // Drives xterm.js scrollback from the secondary mobile control bar's
+    // Copy / ^U / ^D / Exit buttons. The server emits one of these
+    // actions; only the active pane's hook responds.
+    this.handleEvent("scrollback_action", ({ target, action }) => {
+      if (target !== this.el.dataset.target || !this.term) return;
+      const half = Math.max(1, Math.ceil(this.term.rows / 2));
+      switch (action) {
+        case "page-up":
+          this.term.scrollPages(-1);
+          break;
+        case "halfpage-up":
+          this.term.scrollLines(-half);
+          break;
+        case "halfpage-down":
+          this.term.scrollLines(half);
+          break;
+        case "bottom":
+          this.term.scrollToBottom();
+          break;
       }
     });
 

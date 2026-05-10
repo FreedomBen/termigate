@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 // Pins the secondary "keyboard-down" control bar — left group is
-// Enter / Space / Backspace / Esc; right group drives tmux copy-mode
-// (Copy / ^U / ^D / Exit) so scrollback is reachable without a
-// hardware keyboard. Three things matter and any one of them
+// Enter / Space / Backspace / Esc; right group drives xterm.js
+// scrollback (Copy / ^U / ^D / Exit) so history is reachable without
+// a hardware keyboard. Three things matter and any one of them
 // regressing breaks the feature:
 //
 //   1. Visibility — the bar must collapse when `body.kbd-open` is
@@ -136,15 +136,17 @@ describe("HEEx: secondary kbd-down control bar template wiring", () => {
     expect(/phx-value-text=\{if key == "space"/.test(heex)).toBe(true);
   });
 
-  it("renders the copy-mode controls (Copy / ^U / ^D / Exit)", () => {
-    // Each of these maps to an entry in @copy_mode_actions on the
-    // server side. Mismatch between this list and the server's
-    // allowlist gives the user a button that does nothing.
-    expect(/phx-click="copy_mode_action"/.test(heex)).toBe(true);
-    expect(/\{"Copy",\s*"enter"\}/.test(heex)).toBe(true);
+  it("renders the scrollback controls (Copy / ^U / ^D / Exit)", () => {
+    // Each of these maps to an entry in @scrollback_actions on the
+    // server side, which in turn drives a push_event consumed by the
+    // terminal hook's `scrollback_action` handler. Mismatch between
+    // this list and the server's allowlist (or the JS handler's
+    // switch cases) gives the user a button that does nothing.
+    expect(/phx-click="scrollback_action"/.test(heex)).toBe(true);
+    expect(/\{"Copy",\s*"page-up"\}/.test(heex)).toBe(true);
     expect(/\{"\^U",\s*"halfpage-up"\}/.test(heex)).toBe(true);
     expect(/\{"\^D",\s*"halfpage-down"\}/.test(heex)).toBe(true);
-    expect(/\{"Exit",\s*"cancel"\}/.test(heex)).toBe(true);
+    expect(/\{"Exit",\s*"bottom"\}/.test(heex)).toBe(true);
   });
 
   it("mounts the KeyboardVisibility hook so body.kbd-open ever flips", () => {

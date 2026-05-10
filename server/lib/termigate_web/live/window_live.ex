@@ -626,11 +626,11 @@ defmodule TermigateWeb.WindowLive do
       <%!-- Secondary control bar: only shown on mobile when the soft
            keyboard is *down*. The left group are characters/actions the
            user would otherwise need to raise the keyboard for (Enter,
-           Space, Backspace, Esc); the right group drives tmux copy-mode
-           so scrollback is reachable without a hardware keyboard. When
-           the keyboard is up the KeyboardVisibility hook adds a
-           `kbd-open` class to <body> and CSS hides this row (you can
-           already type these directly on the soft keyboard). --%>
+           Space, Backspace, Esc); the right group drives xterm.js's own
+           scrollback so history is reachable without a hardware
+           keyboard. When the keyboard is up the KeyboardVisibility hook
+           adds a `kbd-open` class to <body> and CSS hides this row
+           (you can already type these directly on the soft keyboard). --%>
       <div
         :if={@terminal_prefs["show_toolbar"] != false}
         class="control-signal-bar control-signal-bar-kbd-down"
@@ -659,18 +659,18 @@ defmodule TermigateWeb.WindowLive do
 
         <span class="ctl-separator">|</span>
 
-        <div class="ctl-group" aria-label="tmux copy-mode (scrollback)">
+        <div class="ctl-group" aria-label="Scrollback">
           <button
             :for={
               {label, action} <- [
-                {"Copy", "enter"},
+                {"Copy", "page-up"},
                 {"^U", "halfpage-up"},
                 {"^D", "halfpage-down"},
-                {"Exit", "cancel"}
+                {"Exit", "bottom"}
               ]
             }
             class="ctl-btn"
-            phx-click="copy_mode_action"
+            phx-click="scrollback_action"
             phx-value-action={action}
             disabled={@active_pane == nil}
             onmousedown="event.preventDefault()"
@@ -957,28 +957,26 @@ defmodule TermigateWeb.WindowLive do
 
   def handle_event("send_text", _params, socket), do: {:noreply, socket}
 
-  # Copy-mode controls for the secondary mobile control bar. Uses tmux's
-  # mode-keys-independent `send-keys -X` commands so scrollback works
-  # regardless of whether the user has vi or emacs mode-keys configured.
-  @copy_mode_actions ~w(enter halfpage-up halfpage-down cancel)
+  # Scrollback controls for the secondary mobile control bar. The buttons
+  # (Copy / ^U / ^D / Exit) keep their tmux-flavored labels but actually
+  # drive xterm.js's own scrollback via a push_event to the terminal hook.
+  # tmux copy-mode is intentionally bypassed: tmux renders copy-mode UI
+  # only to attached clients, and the browser is fed by `pipe-pane` (pane
+  # output), so a tmux-driven approach gives no visible feedback.
+  @scrollback_actions ~w(page-up halfpage-up halfpage-down bottom)
 
-  def handle_event("copy_mode_action", %{"action" => action}, socket)
-      when action in @copy_mode_actions do
+  def handle_event("scrollback_action", %{"action" => action}, socket)
+      when action in @scrollback_actions do
     case socket.assigns.active_pane do
       nil ->
         {:noreply, socket}
 
       target ->
-        case action do
-          "enter" -> TmuxManager.copy_mode(target)
-          cmd -> TmuxManager.copy_mode_command(target, cmd)
-        end
-
-        {:noreply, socket}
+        {:noreply, push_event(socket, "scrollback_action", %{target: target, action: action})}
     end
   end
 
-  def handle_event("copy_mode_action", _params, socket), do: {:noreply, socket}
+  def handle_event("scrollback_action", _params, socket), do: {:noreply, socket}
 
   def handle_event("quick_action", params, socket) do
     id = params["id"] || params["value"]
