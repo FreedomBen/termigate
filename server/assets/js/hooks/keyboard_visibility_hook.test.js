@@ -9,17 +9,22 @@ import {
 // Pin the soft-keyboard detection used by the secondary "kbd-down"
 // control bar (Enter/Space/Backspace/Esc/y/n). The bar must hide
 // while the keyboard is up (the user can already tap those keys
-// directly) and reappear when it closes. A drive-by edit that drops
-// the visualViewport listener, swaps in a ratio threshold without
-// thinking through address-bar collapse, or forgets to remove the
-// body class on destroy will fail here.
+// directly) and reappear when it closes.
+//
+// Detection compares the current viewport to a session BASELINE
+// (the largest viewport ever seen) rather than to window.innerHeight.
+// That matters because Firefox/Chrome Android shrinks innerHeight
+// in lockstep with visualViewport.height when the keyboard opens —
+// a delta-based check (innerHeight − vvHeight) returns 0 there and
+// the keyboard goes undetected. Comparing against the baseline
+// works on every browser whether innerHeight shrinks or not.
 
 describe("evaluateKeyboardOpen", () => {
   it("returns true when the viewport shrinks well past the threshold", () => {
     expect(
       evaluateKeyboardOpen({
         viewportHeight: 400,
-        windowHeight: 400 + KEYBOARD_OPEN_THRESHOLD_PX + 50,
+        baselineHeight: 400 + KEYBOARD_OPEN_THRESHOLD_PX + 50,
       }),
     ).toBe(true);
   });
@@ -29,22 +34,22 @@ describe("evaluateKeyboardOpen", () => {
     // that for the soft keyboard, otherwise the secondary bar would
     // flicker every time the user scrolls.
     expect(
-      evaluateKeyboardOpen({ viewportHeight: 700, windowHeight: 800 }),
+      evaluateKeyboardOpen({ viewportHeight: 700, baselineHeight: 800 }),
     ).toBe(false);
   });
 
-  it("returns false when viewport == window (desktop / kb closed)", () => {
+  it("returns false when viewport == baseline (desktop / kb closed)", () => {
     expect(
-      evaluateKeyboardOpen({ viewportHeight: 900, windowHeight: 900 }),
+      evaluateKeyboardOpen({ viewportHeight: 900, baselineHeight: 900 }),
     ).toBe(false);
   });
 
   it("returns false when either dimension is missing or non-numeric", () => {
     expect(evaluateKeyboardOpen({})).toBe(false);
     expect(evaluateKeyboardOpen({ viewportHeight: 400 })).toBe(false);
-    expect(evaluateKeyboardOpen({ windowHeight: 800 })).toBe(false);
+    expect(evaluateKeyboardOpen({ baselineHeight: 800 })).toBe(false);
     expect(
-      evaluateKeyboardOpen({ viewportHeight: "400", windowHeight: 800 }),
+      evaluateKeyboardOpen({ viewportHeight: "400", baselineHeight: 800 }),
     ).toBe(false);
   });
 
@@ -52,7 +57,7 @@ describe("evaluateKeyboardOpen", () => {
     expect(
       evaluateKeyboardOpen({
         viewportHeight: 700,
-        windowHeight: 800,
+        baselineHeight: 800,
         threshold: 50,
       }),
     ).toBe(true);
@@ -142,6 +147,31 @@ describe("KeyboardVisibilityHook", () => {
     fakeViewport.height = 800;
     fakeViewport.fire("resize");
     expect(document.body.classList.contains(KBD_OPEN_CLASS)).toBe(false);
+    restoreViewport();
+  });
+
+  it("detects kbd-open on Firefox/Chrome Android (innerHeight shrinks too)", () => {
+    // The whole point of the baseline approach. On these browsers,
+    // window.innerHeight drops alongside visualViewport.height when
+    // the keyboard opens, so a naive `innerHeight - vvHeight` delta
+    // would always be ~0 and the keyboard would go undetected. The
+    // hook captures innerHeight as the baseline at mount-time, so
+    // even when both subsequently shrink together it still recognises
+    // the drop.
+    mountHook(el);
+
+    // Simulate keyboard opening: BOTH viewport and innerHeight drop.
+    fakeViewport.height = 400;
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 400,
+    });
+    fakeViewport.fire("resize");
+
+    expect(
+      document.body.classList.contains(KBD_OPEN_CLASS),
+      "expected kbd-open even though innerHeight shrank in lockstep with viewport",
+    ).toBe(true);
     restoreViewport();
   });
 
