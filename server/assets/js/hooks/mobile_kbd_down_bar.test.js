@@ -3,8 +3,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
-// Pins the secondary "keyboard-down" control bar (Enter / Space /
-// Backspace / Esc / y / n). Three things matter and any one of them
+// Pins the secondary "keyboard-down" control bar — left group is
+// Enter / Space / Backspace / Esc; right group drives tmux copy-mode
+// (Copy / ^U / ^D / Exit) so scrollback is reachable without a
+// hardware keyboard. Three things matter and any one of them
 // regressing breaks the feature:
 //
 //   1. Visibility — the bar must collapse when `body.kbd-open` is
@@ -12,8 +14,8 @@ import { dirname, resolve } from "node:path";
 //   2. Bottom-safe-area handoff — when the secondary bar is visible
 //      it owns `env(safe-area-inset-bottom)`; the primary must drop
 //      that padding so it doesn't carry useless space mid-screen.
-//   3. Template wiring — the heex must render all six buttons and
-//      mount the KeyboardVisibility hook so step (1)'s class ever
+//   3. Template wiring — the heex must render both groups of buttons
+//      and mount the KeyboardVisibility hook so step (1)'s class ever
 //      gets toggled in the first place.
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -124,13 +126,25 @@ describe("HEEx: secondary kbd-down control bar template wiring", () => {
     expect(/raw\("&#x232b;"\),\s*"backspace"/.test(heex)).toBe(true);
   });
 
-  it("includes Space / y / n as send_text buttons", () => {
-    // y and n are literal characters routed through send_text rather
-    // than @special_keys (which is reserved for escape sequences).
-    expect(/phx-click="send_text"/.test(heex)).toBe(true);
-    expect(/letter <- \["y", "n"\]/.test(heex)).toBe(true);
-    // Space is rendered via send_text with phx-value-text=" ".
+  it("includes Space as a send_text button", () => {
+    // Space is the only literal character on this bar — it routes
+    // through send_text rather than @special_keys (which is reserved
+    // for escape sequences) with phx-value-text=" ".
+    expect(
+      /phx-click=\{if key == "space", do: "send_text"/.test(heex),
+    ).toBe(true);
     expect(/phx-value-text=\{if key == "space"/.test(heex)).toBe(true);
+  });
+
+  it("renders the copy-mode controls (Copy / ^U / ^D / Exit)", () => {
+    // Each of these maps to an entry in @copy_mode_actions on the
+    // server side. Mismatch between this list and the server's
+    // allowlist gives the user a button that does nothing.
+    expect(/phx-click="copy_mode_action"/.test(heex)).toBe(true);
+    expect(/\{"Copy",\s*"enter"\}/.test(heex)).toBe(true);
+    expect(/\{"\^U",\s*"halfpage-up"\}/.test(heex)).toBe(true);
+    expect(/\{"\^D",\s*"halfpage-down"\}/.test(heex)).toBe(true);
+    expect(/\{"Exit",\s*"cancel"\}/.test(heex)).toBe(true);
   });
 
   it("mounts the KeyboardVisibility hook so body.kbd-open ever flips", () => {

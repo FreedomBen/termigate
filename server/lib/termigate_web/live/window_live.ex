@@ -624,13 +624,13 @@ defmodule TermigateWeb.WindowLive do
       </div>
 
       <%!-- Secondary control bar: only shown on mobile when the soft
-           keyboard is *down*. These are characters/actions the user
-           would otherwise need to raise the keyboard for (Enter,
-           Space, Backspace, Esc) plus the y/n responses for
-           interactive prompts. When the keyboard is up the
-           KeyboardVisibility hook adds a `kbd-open` class to <body>
-           and CSS hides this row (you can already type these directly
-           on the soft keyboard). --%>
+           keyboard is *down*. The left group are characters/actions the
+           user would otherwise need to raise the keyboard for (Enter,
+           Space, Backspace, Esc); the right group drives tmux copy-mode
+           so scrollback is reachable without a hardware keyboard. When
+           the keyboard is up the KeyboardVisibility hook adds a
+           `kbd-open` class to <body> and CSS hides this row (you can
+           already type these directly on the soft keyboard). --%>
       <div
         :if={@terminal_prefs["show_toolbar"] != false}
         class="control-signal-bar control-signal-bar-kbd-down"
@@ -659,16 +659,23 @@ defmodule TermigateWeb.WindowLive do
 
         <span class="ctl-separator">|</span>
 
-        <div class="ctl-group">
+        <div class="ctl-group" aria-label="tmux copy-mode (scrollback)">
           <button
-            :for={letter <- ["y", "n"]}
+            :for={
+              {label, action} <- [
+                {"Copy", "enter"},
+                {"^U", "halfpage-up"},
+                {"^D", "halfpage-down"},
+                {"Exit", "cancel"}
+              ]
+            }
             class="ctl-btn"
-            phx-click="send_text"
-            phx-value-text={letter}
+            phx-click="copy_mode_action"
+            phx-value-action={action}
             disabled={@active_pane == nil}
             onmousedown="event.preventDefault()"
           >
-            <kbd>{letter}</kbd>
+            <kbd>{label}</kbd>
           </button>
         </div>
       </div>
@@ -933,7 +940,7 @@ defmodule TermigateWeb.WindowLive do
     end
   end
 
-  # Tap-to-send for short literal characters (e.g. y/n/space) used by the
+  # Tap-to-send for short literal characters (e.g. space) used by the
   # secondary mobile control bar. Capped to a few bytes so this can't be
   # repurposed as a generic input channel.
   def handle_event("send_text", %{"text" => text}, socket)
@@ -949,6 +956,29 @@ defmodule TermigateWeb.WindowLive do
   end
 
   def handle_event("send_text", _params, socket), do: {:noreply, socket}
+
+  # Copy-mode controls for the secondary mobile control bar. Uses tmux's
+  # mode-keys-independent `send-keys -X` commands so scrollback works
+  # regardless of whether the user has vi or emacs mode-keys configured.
+  @copy_mode_actions ~w(enter halfpage-up halfpage-down cancel)
+
+  def handle_event("copy_mode_action", %{"action" => action}, socket)
+      when action in @copy_mode_actions do
+    case socket.assigns.active_pane do
+      nil ->
+        {:noreply, socket}
+
+      target ->
+        case action do
+          "enter" -> TmuxManager.copy_mode(target)
+          cmd -> TmuxManager.copy_mode_command(target, cmd)
+        end
+
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("copy_mode_action", _params, socket), do: {:noreply, socket}
 
   def handle_event("quick_action", params, socket) do
     id = params["id"] || params["value"]

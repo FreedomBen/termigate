@@ -202,6 +202,29 @@ defmodule Termigate.TmuxManager do
     end
   end
 
+  @doc "Enter tmux copy-mode on the given pane target."
+  @spec copy_mode(String.t()) :: :ok | {:error, String.t()}
+  def copy_mode(target) do
+    case command_runner().run(["copy-mode", "-t", target]) do
+      {:ok, _} -> :ok
+      {:error, {msg, _code}} -> {:error, msg}
+    end
+  end
+
+  @copy_mode_commands ~w(halfpage-up halfpage-down cancel)
+
+  @doc """
+  Issue a mode-keys-independent copy-mode command via `tmux send-keys -X`.
+  Allowed values: #{Enum.join(@copy_mode_commands, ", ")}.
+  """
+  @spec copy_mode_command(String.t(), String.t()) :: :ok | {:error, String.t()}
+  def copy_mode_command(target, command) when command in @copy_mode_commands do
+    case command_runner().run(["send-keys", "-t", target, "-X", command]) do
+      {:ok, _} -> :ok
+      {:error, {msg, _code}} -> {:error, msg}
+    end
+  end
+
   @doc "Equalize pane sizes. Layout can be :horizontal (even-horizontal) or :vertical (even-vertical)."
   @spec equalize_panes(String.t(), :horizontal | :vertical) :: :ok | {:error, String.t()}
   def equalize_panes(target, direction) do

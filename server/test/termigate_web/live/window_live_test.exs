@@ -699,7 +699,7 @@ defmodule TermigateWeb.WindowLiveTest do
       :ok
     end
 
-    test "renders the secondary bar with Enter/Esc/Backspace and y/n by default",
+    test "renders the secondary bar with Enter/Esc/Backspace + Space + copy-mode controls by default",
          %{conn: conn} do
       {:ok, _view, html} = live(conn, "/sessions/test/windows/0")
 
@@ -708,10 +708,13 @@ defmodule TermigateWeb.WindowLiveTest do
       assert html =~ ~s(phx-value-key="enter")
       assert html =~ ~s(phx-value-key="esc")
       assert html =~ ~s(phx-value-key="backspace")
-      # Literal-text buttons (Space / y / n).
+      # Literal-text button (Space).
       assert html =~ ~s(phx-value-text=" ")
-      assert html =~ ~s(phx-value-text="y")
-      assert html =~ ~s(phx-value-text="n")
+      # Copy-mode controls (Copy / ^U / ^D / Exit).
+      assert html =~ ~s(phx-value-action="enter")
+      assert html =~ ~s(phx-value-action="halfpage-up")
+      assert html =~ ~s(phx-value-action="halfpage-down")
+      assert html =~ ~s(phx-value-action="cancel")
     end
 
     test "secondary bar is hidden when show_toolbar is false (same flag as primary)",
@@ -743,9 +746,8 @@ defmodule TermigateWeb.WindowLiveTest do
     test "send_text accepts a single short string and is a no-op without an active pane",
          %{conn: conn} do
       {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
-      render_click(view, "send_text", %{"text" => "y"})
-      render_click(view, "send_text", %{"text" => "n"})
       render_click(view, "send_text", %{"text" => " "})
+      render_click(view, "send_text", %{"text" => "x"})
     end
 
     test "send_text rejects empty or oversized payloads without crashing",
@@ -756,6 +758,20 @@ defmodule TermigateWeb.WindowLiveTest do
       render_click(view, "send_text", %{"text" => ""})
       render_click(view, "send_text", %{"text" => "abcdef"})
       render_click(view, "send_text", %{})
+    end
+
+    test "copy_mode_action is a safe no-op without an active pane and rejects unknown actions",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      # active_pane defaults to nil at mount, so each known action
+      # short-circuits before reaching TmuxManager. Unknown actions
+      # fall through to the catch-all clause and are dropped.
+      render_click(view, "copy_mode_action", %{"action" => "enter"})
+      render_click(view, "copy_mode_action", %{"action" => "halfpage-up"})
+      render_click(view, "copy_mode_action", %{"action" => "halfpage-down"})
+      render_click(view, "copy_mode_action", %{"action" => "cancel"})
+      render_click(view, "copy_mode_action", %{"action" => "rm -rf /"})
+      render_click(view, "copy_mode_action", %{})
     end
   end
 
