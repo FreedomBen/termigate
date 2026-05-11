@@ -56,5 +56,25 @@ defmodule TermigateWeb.AuthLiveTest do
       assert button_html =~ ~r/class="[^"]*\bh-11\b/,
              "expected #password-toggle to have h-11 (44 px) — got: #{button_html}"
     end
+
+    test "error-flash close button meets 44 px touch-target minimum (F4)" do
+      # The error flash rendered after a wrong-password submit must have a
+      # dismiss button large enough to tap without fat-fingering the form
+      # below it (WCAG 2.5.5 — 44×44 CSS px minimum). The flash lives in
+      # the shared CoreComponents.flash/1 component, so test it directly.
+      html =
+        render_component(&TermigateWeb.CoreComponents.flash/1,
+          kind: :error,
+          flash: %{"error" => "Invalid username or password."}
+        )
+
+      # The close button has aria-label="close". Match the class attribute
+      # appearing before aria-label in the HEEX-rendered output.
+      assert html =~ ~r/<button[^>]*class="[^"]*\bw-11\b[^"]*"[^>]*aria-label="close"/,
+             "expected flash close button to have w-11 (44 px) — got: #{html}"
+
+      assert html =~ ~r/<button[^>]*class="[^"]*\bh-11\b[^"]*"[^>]*aria-label="close"/,
+             "expected flash close button to have h-11 (44 px) — got: #{html}"
+    end
   end
 end

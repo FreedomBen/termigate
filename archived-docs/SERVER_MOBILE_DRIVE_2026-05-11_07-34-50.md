@@ -16,6 +16,18 @@
 | Primary user-agent | `Mozilla/5.0 (Linux; Android 13; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36` |
 | Secondary profiles | Small Android (360×640), Large Android (412×915), Pixel 5 landscape (851×393) |
 
+## Progress
+
+- [x] **F1** — Setup show/hide password toggles 40×40 → 44×44 (commit `b3c56ef`)
+- [x] **F2** — Setup session-duration select 40 px → `min-h-11` (commit `0987a75`)
+- [x] **F3** — Login show/hide password toggle 40×40 → 44×44 (commit `5bda4e1`)
+- [x] **F4** — Flash close button (login error alert) → 44×44 (commit `19e2ebc`)
+- [ ] **F5** — Login form clears username after wrong-password submit
+- [ ] **F6** — On-screen quick-key strip controls below 44 px (modifier keys 35–44×40, tab close 28×28)
+- [ ] **F7** — `/settings` 275 px horizontal overflow at 393 width
+- [ ] **F8** — `/settings` native checkboxes and radios 20×20
+- [ ] **F9** — `/settings` overflow at 360 & 412 widths (same root cause as F7)
+
 ## Findings
 
 ### F1 — Password show/hide toggle buttons are 40×40 on the setup form (minor)
