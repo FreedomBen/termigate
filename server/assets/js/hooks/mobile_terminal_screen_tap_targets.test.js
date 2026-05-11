@@ -87,4 +87,23 @@ describe("terminal screen tap targets on mobile (F6)", () => {
       ".pane-close-btn needs height:44px or min-height:44px on mobile",
     ).toBe(true);
   });
+
+  it(".pane-close-btn glyph matches .window-close-btn glyph size on mobile", () => {
+    // The 44×44 hit area is right, but the X character inside still
+    // renders smaller on pane tabs because the mobile rule sets a
+    // smaller font-size (16px) than the equivalent window-tab rule
+    // (18px). Match them so the two close buttons read at the same
+    // visual weight on a phone.
+    const paneBody = ruleBody(".pane-close-btn");
+    const windowBody = ruleBody(".window-close-btn");
+    expect(paneBody).not.toBeNull();
+    expect(windowBody).not.toBeNull();
+
+    const fontSize = (body) => {
+      const m = /font-size:\s*(\d+)px/.exec(body);
+      return m ? Number(m[1]) : null;
+    };
+
+    expect(fontSize(paneBody)).toBe(fontSize(windowBody));
+  });
 });
