@@ -39,5 +39,22 @@ defmodule TermigateWeb.AuthLiveTest do
       assert html =~ ~s(data-target="password")
       assert html =~ ~s(aria-label="Show password")
     end
+
+    test "password toggle button meets 44 px touch-target minimum (F3)", %{conn: _conn} do
+      # WCAG 2.5.5 / Material / Apple HIG: tap targets >= 44 CSS px.
+      conn =
+        Phoenix.ConnTest.build_conn()
+        |> Plug.Test.init_test_session(%{})
+
+      {:ok, view, _html} = live(conn, "/login")
+
+      button_html = view |> element("#password-toggle") |> render()
+
+      assert button_html =~ ~r/class="[^"]*\bw-11\b/,
+             "expected #password-toggle to have w-11 (44 px) — got: #{button_html}"
+
+      assert button_html =~ ~r/class="[^"]*\bh-11\b/,
+             "expected #password-toggle to have h-11 (44 px) — got: #{button_html}"
+    end
   end
 end

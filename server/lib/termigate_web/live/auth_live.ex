@@ -73,7 +73,7 @@ defmodule TermigateWeb.AuthLive do
                   phx-hook="PasswordToggle"
                   data-target="password"
                   aria-label="Show password"
-                  class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 rounded-md text-base-content/50 hover:text-base-content"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-11 h-11 rounded-md text-base-content/50 hover:text-base-content"
                 >
                   <.icon name="hero-eye-micro" class="password-toggle-show size-5" />
                   <.icon name="hero-eye-slash-micro" class="password-toggle-hide size-5 hidden" />
