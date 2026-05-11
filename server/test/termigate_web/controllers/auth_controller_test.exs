@@ -131,6 +131,31 @@ defmodule TermigateWeb.AuthControllerTest do
       end
     end
 
+    test "stores submitted username in flash on failure so it survives redirect (F5)",
+         %{conn: conn} do
+      conn =
+        conn
+        |> init_test_session(%{})
+        |> post("/login", %{username: "alice", password: "wrong"})
+
+      assert redirected_to(conn) == "/login"
+      assert Phoenix.Flash.get(conn.assigns.flash, :username) == "alice"
+    end
+
+    test "flashed username on failure is truncated and sanitized (F5)", %{conn: conn} do
+      poisoned = "alice\r\n[FORGED]" <> String.duplicate("b", 300)
+
+      conn =
+        conn
+        |> init_test_session(%{})
+        |> post("/login", %{username: poisoned, password: "wrong"})
+
+      flashed = Phoenix.Flash.get(conn.assigns.flash, :username)
+      refute flashed =~ "\r"
+      refute flashed =~ "\n"
+      assert byte_size(flashed) <= 200
+    end
+
     # Regression: with `:secure_cookies` unset in the application env (the
     # default in tests), `TermigateWeb.Endpoint.runtime_session_options/0`
     # resolves to `secure: false` and `same_site: "Lax"`. The session cookie

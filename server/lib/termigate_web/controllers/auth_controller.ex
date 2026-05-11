@@ -81,6 +81,7 @@ defmodule TermigateWeb.AuthController do
 
         conn
         |> put_flash(:error, "Invalid username or password.")
+        |> put_flash(:username, flash_safe_user(username))
         |> redirect(to: "/login")
     end
   end
@@ -132,4 +133,14 @@ defmodule TermigateWeb.AuthController do
     do: s |> String.replace(~r/[\x00-\x1f\x7f]/, "?") |> String.slice(0, 64)
 
   defp sanitize_user(other), do: other |> to_string() |> sanitize_user()
+
+  # Sanitizes a username for round-tripping back through the login form on
+  # failure: drops control characters (so a malicious value cannot inject
+  # raw newlines into the rendered HTML) and caps length at 200 bytes.
+  defp flash_safe_user(nil), do: ""
+
+  defp flash_safe_user(s) when is_binary(s),
+    do: s |> String.replace(~r/[\x00-\x1f\x7f]/, "") |> String.slice(0, 200)
+
+  defp flash_safe_user(other), do: other |> to_string() |> flash_safe_user()
 end

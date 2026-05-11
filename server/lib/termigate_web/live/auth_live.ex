@@ -14,9 +14,11 @@ defmodule TermigateWeb.AuthLive do
         {:ok, push_navigate(socket, to: "/")}
 
       true ->
+        username = Phoenix.Flash.get(socket.assigns.flash, :username) || ""
+
         socket =
           socket
-          |> assign(:username, "")
+          |> assign(:username, username)
           |> assign(:password, "")
           |> assign(:error, nil)
 

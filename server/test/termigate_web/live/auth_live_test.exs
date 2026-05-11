@@ -76,5 +76,23 @@ defmodule TermigateWeb.AuthLiveTest do
       assert html =~ ~r/<button[^>]*class="[^"]*\bh-11\b[^"]*"[^>]*aria-label="close"/,
              "expected flash close button to have h-11 (44 px) — got: #{html}"
     end
+
+    test "preserves submitted username when redirected back after wrong password (F5)" do
+      # F5 (archived-docs/SERVER_MOBILE_DRIVE_2026-05-11_07-34-50.md): on a
+      # failed login, the username field must be pre-populated so the user
+      # only has to retype the password. The controller stores the username
+      # in flash; AuthLive reads it on mount.
+      conn =
+        Phoenix.ConnTest.build_conn()
+        |> Plug.Test.init_test_session(%{})
+        |> Phoenix.ConnTest.fetch_flash()
+        |> Phoenix.Controller.put_flash(:username, "alice")
+
+      {:ok, _view, html} = live(conn, "/login")
+
+      assert html =~ ~s(value="alice"),
+             "expected the username input to be pre-populated with the flashed " <>
+               "username — got: #{html}"
+    end
   end
 end
