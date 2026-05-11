@@ -239,25 +239,29 @@
         <label class="text-xs font-medium text-base-content/60 block">Detection Mode</label>
         <div class="flex flex-col gap-1.5">
           <label class="label cursor-pointer justify-start gap-3 py-1">
-            <input
-              type="radio"
-              name="notifications[mode]"
-              value="disabled"
-              checked={@notification_mode == "disabled"}
-              class="radio radio-sm"
-            />
+            <span class="flex items-center justify-center w-11 h-11 shrink-0">
+              <input
+                type="radio"
+                name="notifications[mode]"
+                value="disabled"
+                checked={@notification_mode == "disabled"}
+                class="radio radio-sm"
+              />
+            </span>
             <div class="flex-1 min-w-0">
               <span class="text-sm">Disabled</span>
             </div>
           </label>
           <label class="label cursor-pointer justify-start gap-3 py-1">
-            <input
-              type="radio"
-              name="notifications[mode]"
-              value="activity"
-              checked={@notification_mode == "activity"}
-              class="radio radio-sm"
-            />
+            <span class="flex items-center justify-center w-11 h-11 shrink-0">
+              <input
+                type="radio"
+                name="notifications[mode]"
+                value="activity"
+                checked={@notification_mode == "activity"}
+                class="radio radio-sm"
+              />
+            </span>
             <div class="flex-1 min-w-0">
               <span class="text-sm">Activity-based</span>
               <span class="text-xs text-base-content/40 block whitespace-normal break-words">
@@ -266,13 +270,15 @@
             </div>
           </label>
           <label class="label cursor-pointer justify-start gap-3 py-1">
-            <input
-              type="radio"
-              name="notifications[mode]"
-              value="shell"
-              checked={@notification_mode == "shell"}
-              class="radio radio-sm"
-            />
+            <span class="flex items-center justify-center w-11 h-11 shrink-0">
+              <input
+                type="radio"
+                name="notifications[mode]"
+                value="shell"
+                checked={@notification_mode == "shell"}
+                class="radio radio-sm"
+              />
+            </span>
             <div class="flex-1 min-w-0">
               <span class="text-sm">Shell integration</span>
               <span class="text-xs text-base-content/40 block whitespace-normal break-words">
@@ -405,13 +411,15 @@
           <%!-- Hidden input ensures unchecked checkbox submits "false" rather
                than being omitted entirely. --%>
           <input type="hidden" name="notifications[sound]" value="false" />
-          <input
-            type="checkbox"
-            name="notifications[sound]"
-            value="true"
-            checked={@notification_sound}
-            class="checkbox checkbox-sm"
-          />
+          <span class="flex items-center justify-center w-11 h-11 shrink-0">
+            <input
+              type="checkbox"
+              name="notifications[sound]"
+              value="true"
+              checked={@notification_sound}
+              class="checkbox checkbox-sm"
+            />
+          </span>
           <span class="text-sm">Play sound with notification</span>
         </label>
 
@@ -546,13 +554,15 @@
 
       <div class="flex flex-wrap gap-x-6 gap-y-2">
         <label class="label cursor-pointer gap-2">
-          <input
-            type="checkbox"
-            name="cursor_blink"
-            value="true"
-            checked={@terminal["cursor_blink"] != false}
-            class="checkbox checkbox-sm"
-          />
+          <span class="flex items-center justify-center w-11 h-11 shrink-0">
+            <input
+              type="checkbox"
+              name="cursor_blink"
+              value="true"
+              checked={@terminal["cursor_blink"] != false}
+              class="checkbox checkbox-sm"
+            />
+          </span>
           <span class="text-sm">Cursor blink</span>
         </label>
       </div>
@@ -575,13 +585,15 @@
              unchecked checkboxes from form submissions and the server
              can't tell "off" apart from "field missing entirely". --%>
         <input type="hidden" name="show_toolbar" value="false" />
-        <input
-          type="checkbox"
-          name="show_toolbar"
-          value="true"
-          checked={@terminal["show_toolbar"] != false}
-          class="checkbox checkbox-sm"
-        />
+        <span class="flex items-center justify-center w-11 h-11 shrink-0">
+          <input
+            type="checkbox"
+            name="show_toolbar"
+            value="true"
+            checked={@terminal["show_toolbar"] != false}
+            class="checkbox checkbox-sm"
+          />
+        </span>
         <span class="text-sm">Show the control bar</span>
       </label>
       <button type="submit" class="btn btn-primary btn-sm">Save</button>

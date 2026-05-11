@@ -147,6 +147,43 @@ defmodule TermigateWeb.SettingsLiveTest do
       end
     end
 
+    test "settings checkboxes and radios have a 44x44 hit-area wrapper (F8)",
+         %{conn: conn} do
+      # F8 (archived-docs/SERVER_MOBILE_DRIVE_2026-05-11_07-34-50.md):
+      # native <input type="checkbox|radio"> chips on Settings render at
+      # 20x20 CSS px, below WCAG 2.5.5's 44 px tap target. Each input
+      # must live inside a span sized at w-11 h-11 (44x44) so a touch
+      # anywhere in that span hits the control.
+      Termigate.Config.update(fn config ->
+        Map.put(config, "notifications", %{"mode" => "activity"})
+      end)
+
+      on_exit(fn ->
+        Termigate.Config.update(fn config -> Map.delete(config, "notifications") end)
+      end)
+
+      {:ok, view, _html} = live(conn, "/settings")
+
+      for {description, selector} <- [
+            {"Detection Mode 'Disabled' radio",
+             ~s|span.w-11.h-11 > input[type="radio"][value="disabled"]|},
+            {"Detection Mode 'Activity-based' radio",
+             ~s|span.w-11.h-11 > input[type="radio"][value="activity"]|},
+            {"Detection Mode 'Shell integration' radio",
+             ~s|span.w-11.h-11 > input[type="radio"][value="shell"]|},
+            {"Notification 'sound' checkbox",
+             ~s|span.w-11.h-11 > input[type="checkbox"][name="notifications[sound]"]|},
+            {"Mobile Control Bar 'show_toolbar' checkbox",
+             ~s|span.w-11.h-11 > input[type="checkbox"][name="show_toolbar"][value="true"]|},
+            {"Terminal Appearance 'cursor_blink' checkbox",
+             ~s|span.w-11.h-11 > input[type="checkbox"][name="cursor_blink"]|}
+          ] do
+        assert has_element?(view, selector),
+               "#{description} must be the child of a w-11 h-11 (44×44) " <>
+                 "hit-area span (F8). Selector: #{selector}"
+      end
+    end
+
     test "validate updates draft state without persisting", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/settings")
 
