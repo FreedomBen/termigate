@@ -30,15 +30,17 @@ const TerminalHook = {
     });
 
     // Use the tmux pane's actual dimensions so captured scrollback renders
-    // correctly. xterm.js keeps its own scrollback so the mobile control
-    // bar's scrollback buttons (Copy / ^U / ^D / Exit) have something to
-    // navigate; tmux still owns the canonical history beyond this cap.
+    // correctly. On attach, the server captures whatever tmux retains in
+    // history and writes it here, so this cap needs to be large enough to
+    // hold a typical user-raised tmux history-limit (often 10–50K lines).
+    // xterm.js allocates scrollback rows lazily, so the cost scales with
+    // actual usage, not the cap.
     const termOpts = {
       fontSize: prefs.fontSize,
       fontFamily: prefs.fontFamily,
       cursorStyle: prefs.cursorStyle,
       cursorBlink: prefs.cursorBlink,
-      scrollback: 5000,
+      scrollback: 50000,
       theme: resolveTheme(prefs),
     };
 

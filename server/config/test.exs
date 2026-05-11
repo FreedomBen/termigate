@@ -14,7 +14,12 @@ config :termigate,
   config_path: "/tmp/termigate-test/config.yaml",
   session_poll_interval: 500,
   config_poll_interval: 500,
-  output_coalesce_ms: 0
+  output_coalesce_ms: 0,
+  # Isolate :tmux-tagged integration tests on a dedicated tmux server socket
+  # so test sessions and send-keys can never reach the developer's own tmux
+  # server. CommandRunner passes `-S <socket>` to every tmux invocation, and
+  # TmuxHelpers does the same for raw new-session / kill-session calls.
+  tmux_socket: "/tmp/termigate-test-tmux.sock"
 
 # Print only errors during test
 config :logger, level: :error

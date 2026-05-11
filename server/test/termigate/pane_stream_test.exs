@@ -176,8 +176,9 @@ defmodule Termigate.PaneStreamTest do
       {:ok, _history, pid} = PaneStream.subscribe(target)
       ref = Process.monitor(pid)
 
-      # Kill the session (which kills all its panes)
-      System.cmd("tmux", ["kill-session", "-t", session])
+      # Kill the session (which kills all its panes). Go through the
+      # helper so this routes to the isolated test tmux socket.
+      destroy_test_session(session)
 
       # Should receive pane_dead and PaneStream should terminate
       assert_receive {:pane_dead, ^target}, 3000
