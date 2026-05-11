@@ -90,6 +90,16 @@ defmodule TermigateWeb.SetupLiveTest do
                "expected #{id} button to have h-11 (44 px) — got: #{button_html}"
       end
     end
+
+    test "session-duration select is at least 44 px tall (F2)", %{conn: conn} do
+      # WCAG 2.5.5 touch-target minimum on a primary form control.
+      {:ok, view, _html} = live(conn, "/setup?token=good-token")
+
+      select_html = view |> element("#session_ttl_hours") |> render()
+
+      assert select_html =~ ~r/class="[^"]*\bmin-h-11\b/,
+             "expected select to have min-h-11 (44 px) — got: #{select_html}"
+    end
   end
 
   describe "form submission" do

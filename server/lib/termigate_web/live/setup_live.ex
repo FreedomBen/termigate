@@ -179,7 +179,7 @@ defmodule TermigateWeb.SetupLive do
               <select
                 id="session_ttl_hours"
                 name="session_ttl_hours"
-                class="select select-bordered w-full"
+                class="select select-bordered w-full min-h-11"
               >
                 <option value="1">1 hour</option>
                 <option value="8">8 hours</option>
