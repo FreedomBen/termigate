@@ -23,7 +23,7 @@
 - [x] **F3** — Login show/hide password toggle 40×40 → 44×44 (commit `5bda4e1`)
 - [x] **F4** — Flash close button (login error alert) → 44×44 (commit `19e2ebc`)
 - [x] **F5** — Login form preserves username after wrong-password submit (commit `6a0f1b0`)
-- [ ] **F6** — On-screen quick-key strip controls below 44 px (modifier keys 35–44×40, tab close 28×28)
+- [x] **F6** — On-screen quick-key strip controls below 44 px (modifier keys 35–44×40, tab close 28×28)
 - [x] **F7** — `/settings` 275 px horizontal overflow at 393 width (commit `ac18ebb`)
 - [x] **F8** — `/settings` native checkboxes and radios 20×20 (commit `1cbfff5`)
 - [x] **F9** — `/settings` overflow at 360 & 412 widths — same root cause as F7 (commit `ac18ebb`)

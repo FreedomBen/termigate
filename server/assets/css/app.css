@@ -456,7 +456,7 @@ body {
   .ctl-btn {
     flex: 1 1 0;
     min-width: 0;
-    min-height: 40px;
+    min-height: 44px;
     padding: 4px 4px;
     font-size: 11px;
   }
@@ -1237,13 +1237,13 @@ body.kbd-open .control-signal-bar-kbd-down {
 @media (max-width: 639px) {
   .pane-tab {
     min-height: 44px;
-    padding: 0.5rem 2.25rem 0.5rem 0.875rem;
+    padding: 0.5rem 3rem 0.5rem 0.875rem;
     font-size: 0.8125rem;
   }
 
   .pane-close-btn {
-    width: 28px;
-    height: 28px;
+    width: 44px;
+    height: 44px;
     font-size: 16px;
     right: 4px;
   }
