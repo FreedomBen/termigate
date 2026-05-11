@@ -74,6 +74,22 @@ defmodule TermigateWeb.SetupLiveTest do
       assert html =~ ~s(data-target="password")
       assert html =~ ~s(data-target="password_confirm")
     end
+
+    test "password toggle buttons meet 44 px touch-target minimum (F1)", %{conn: conn} do
+      # WCAG 2.5.5 / Material / Apple HIG: tap targets >= 44 CSS px.
+      # Tailwind `w-11 h-11` = 44 px.
+      {:ok, view, _html} = live(conn, "/setup?token=good-token")
+
+      for id <- ["password-toggle", "password-confirm-toggle"] do
+        button_html = view |> element("##{id}") |> render()
+
+        assert button_html =~ ~r/class="[^"]*\bw-11\b/,
+               "expected #{id} button to have w-11 (44 px) — got: #{button_html}"
+
+        assert button_html =~ ~r/class="[^"]*\bh-11\b/,
+               "expected #{id} button to have h-11 (44 px) — got: #{button_html}"
+      end
+    end
   end
 
   describe "form submission" do
