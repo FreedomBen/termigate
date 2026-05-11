@@ -125,6 +125,28 @@ defmodule TermigateWeb.SettingsLiveTest do
       end
     end
 
+    test "Detection Mode descriptions override daisyUI .label nowrap (F7/F9)",
+         %{conn: conn} do
+      # F7/F9 (archived-docs/SERVER_MOBILE_DRIVE_2026-05-11_07-34-50.md):
+      # /settings overflowed by 256-308 px on every mobile width because
+      # daisyUI v5's `.label` class sets `white-space: nowrap`, which
+      # cascades into the helper-text span and stops the sentence from
+      # wrapping even inside `flex-1 min-w-0`. Each description span must
+      # opt back into normal wrapping so long sentences flow at narrow
+      # widths.
+      {:ok, view, _html} = live(conn, "/settings")
+
+      for {mode_label, description_fragment} <- [
+            {"Activity-based", "Notify when a pane goes silent"},
+            {"Shell integration", "Precise command detection"}
+          ] do
+        assert has_element?(view, "span.whitespace-normal", description_fragment),
+               "Detection Mode option '#{mode_label}' description must carry " <>
+                 "whitespace-normal to override daisyUI .label's white-space: " <>
+                 "nowrap (F7/F9 in the 2026-05-11 mobile drive)."
+      end
+    end
+
     test "validate updates draft state without persisting", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/settings")
 
