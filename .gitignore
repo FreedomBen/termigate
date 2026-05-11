@@ -1,5 +1,6 @@
 TODO.md
 .codex
+.claude/settings.local.json
 
 # OS files
 .DS_Store
