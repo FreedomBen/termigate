@@ -92,6 +92,12 @@ defmodule TermigateWeb.WindowLive do
       |> assign(:terminal_prefs, terminal_prefs)
       |> assign(:notification_config, notification_config)
       |> assign(:subscribed_panes, subscribed_panes)
+      # Set of pane targets currently in scroll mode (per-viewer). The
+      # terminal hook for each target is paused (no live channel output
+      # rendered, input forwarding blocked) while it's in this set, and
+      # the secondary control bar shows an "Exit Scroll" button instead
+      # of "Scroll" for the active pane.
+      |> assign(:scroll_mode_panes, MapSet.new())
       # Start false; flips to true on the first :sessions_updated broadcast
       # that includes this session. Used by the :sessions_updated handler so
       # that a stray "no sessions" broadcast received before we've ever
@@ -660,13 +666,33 @@ defmodule TermigateWeb.WindowLive do
         <span class="ctl-separator">|</span>
 
         <div class="ctl-group" aria-label="Scrollback">
+          <%!-- Scroll / Exit Scroll toggle: snapshots full tmux history
+               into xterm and pauses live updates (server-side state in
+               @scroll_mode_panes). The label flips based on whether the
+               active pane is currently in scroll mode. --%>
+          <button
+            class="ctl-btn"
+            phx-click={
+              if @active_pane && MapSet.member?(@scroll_mode_panes, @active_pane),
+                do: "exit_scroll_mode",
+                else: "enter_scroll_mode"
+            }
+            disabled={@active_pane == nil}
+            onmousedown="event.preventDefault()"
+          >
+            <kbd>
+              {if @active_pane && MapSet.member?(@scroll_mode_panes, @active_pane),
+                do: "Exit Scroll",
+                else: "Scroll"}
+            </kbd>
+          </button>
+
           <button
             :for={
               {label, action} <- [
-                {"Copy", "page-up"},
                 {"^U", "halfpage-up"},
                 {"^D", "halfpage-down"},
-                {"Exit", "bottom"}
+                {"Bottom", "bottom"}
               ]
             }
             class="ctl-btn"
@@ -750,13 +776,20 @@ defmodule TermigateWeb.WindowLive do
       Phoenix.PubSub.unsubscribe(Termigate.PubSub, "pane:#{target}")
     end
 
+    # Drop scroll-mode entries for any pane that no longer exists; the
+    # terminal hook for that pane is gone, so there's nothing for the
+    # state to drive.
+    scroll_mode_panes =
+      MapSet.intersection(socket.assigns.scroll_mode_panes, new_targets)
+
     {:noreply,
      assign(socket,
        panes: panes,
        grid: grid,
        maximized: maximized,
        active_pane: active_pane,
-       subscribed_panes: new_targets
+       subscribed_panes: new_targets,
+       scroll_mode_panes: scroll_mode_panes
      )}
   end
 
@@ -957,12 +990,11 @@ defmodule TermigateWeb.WindowLive do
 
   def handle_event("send_text", _params, socket), do: {:noreply, socket}
 
-  # Scrollback controls for the secondary mobile control bar. The buttons
-  # (Copy / ^U / ^D / Exit) keep their tmux-flavored labels but actually
-  # drive xterm.js's own scrollback via a push_event to the terminal hook.
-  # tmux copy-mode is intentionally bypassed: tmux renders copy-mode UI
-  # only to attached clients, and the browser is fed by `pipe-pane` (pane
-  # output), so a tmux-driven approach gives no visible feedback.
+  # Drives xterm.js scrollback navigation from the ^U / ^D / Exit buttons
+  # on the secondary mobile control bar. These operate on whatever is
+  # currently in xterm's scrollback buffer regardless of scroll mode; the
+  # `bottom` action jumps to the live edge but does NOT exit scroll mode
+  # (that's the dedicated Scroll / Exit Scroll toggle below).
   @scrollback_actions ~w(page-up halfpage-up halfpage-down bottom)
 
   def handle_event("scrollback_action", %{"action" => action}, socket)
@@ -977,6 +1009,72 @@ defmodule TermigateWeb.WindowLive do
   end
 
   def handle_event("scrollback_action", _params, socket), do: {:noreply, socket}
+
+  # Scroll mode for the active pane. Clicking "Scroll" snapshots tmux's
+  # full retained scrollback for the pane and pushes it to the terminal
+  # hook, which clears xterm and renders the snapshot, ignores live
+  # channel output, and blocks input. Clicking "Exit Scroll" snapshots
+  # again (so the user sees current live state) and resumes. We
+  # intentionally bypass tmux copy-mode: tmux only renders its copy-mode
+  # UI to attached clients, and the browser is fed by `pipe-pane`, so a
+  # copy-mode approach gives no visible feedback on the web side.
+  def handle_event("enter_scroll_mode", _params, socket) do
+    case socket.assigns.active_pane do
+      nil ->
+        {:noreply, socket}
+
+      target ->
+        case TmuxManager.capture_pane(target, lines: :all, escape: true) do
+          {:ok, history} ->
+            scroll_mode_panes = MapSet.put(socket.assigns.scroll_mode_panes, target)
+
+            {:noreply,
+             socket
+             |> assign(:scroll_mode_panes, scroll_mode_panes)
+             |> push_event("scroll_mode_enter", %{
+               target: target,
+               history: Base.encode64(history)
+             })}
+
+          {:error, _reason} ->
+            {:noreply, socket}
+        end
+    end
+  end
+
+  def handle_event("exit_scroll_mode", _params, socket) do
+    case socket.assigns.active_pane do
+      nil ->
+        {:noreply, socket}
+
+      target ->
+        scroll_mode_panes = MapSet.delete(socket.assigns.scroll_mode_panes, target)
+
+        # Resync the hook to current live state. tmux's capture-pane returns
+        # state at the moment of capture; any pipe-pane output that arrives
+        # between now and when the client processes scroll_mode_exit is
+        # dropped client-side (still in scroll mode), but it's a tiny
+        # window and the next live output will repaint correctly.
+        case TmuxManager.capture_pane(target, lines: :all, escape: true) do
+          {:ok, history} ->
+            {:noreply,
+             socket
+             |> assign(:scroll_mode_panes, scroll_mode_panes)
+             |> push_event("scroll_mode_exit", %{
+               target: target,
+               history: Base.encode64(history)
+             })}
+
+          {:error, _reason} ->
+            # Even if capture failed, exit the mode so the user isn't stuck;
+            # send an empty payload and the hook will just resume live output.
+            {:noreply,
+             socket
+             |> assign(:scroll_mode_panes, scroll_mode_panes)
+             |> push_event("scroll_mode_exit", %{target: target, history: ""})}
+        end
+    end
+  end
 
   def handle_event("quick_action", params, socket) do
     id = params["id"] || params["value"]

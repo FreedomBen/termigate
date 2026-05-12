@@ -4,10 +4,10 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 // Pins the secondary "keyboard-down" control bar — left group is
-// Enter / Space / Backspace / Esc; right group drives xterm.js
-// scrollback (Copy / ^U / ^D / Exit) so history is reachable without
-// a hardware keyboard. Three things matter and any one of them
-// regressing breaks the feature:
+// Enter / Space / Backspace / Esc; right group exposes scroll mode
+// (Scroll / Exit Scroll toggle + ^U / ^D / Bottom nav) so history is
+// reachable without a hardware keyboard or tmux copy-mode. Three things
+// matter and any one of them regressing breaks the feature:
 //
 //   1. Visibility — the bar must collapse when `body.kbd-open` is
 //      set, otherwise it overlaps the soft keyboard.
@@ -136,17 +136,34 @@ describe("HEEx: secondary kbd-down control bar template wiring", () => {
     expect(/phx-value-text=\{if key == "space"/.test(heex)).toBe(true);
   });
 
-  it("renders the scrollback controls (Copy / ^U / ^D / Exit)", () => {
+  it("renders the Scroll / Exit Scroll toggle with the right phx-click branches", () => {
+    // Clicking Scroll fires `enter_scroll_mode` server-side; clicking
+    // Exit Scroll fires `exit_scroll_mode`. The label and event flip
+    // based on whether the active pane is currently a member of
+    // @scroll_mode_panes. Both branches must be present in the template
+    // so the toggle works regardless of starting state.
+    expect(/phx-click=\{[\s\S]*?"exit_scroll_mode"[\s\S]*?"enter_scroll_mode"/.test(heex)).toBe(
+      true,
+    );
+    expect(/"Exit Scroll"/.test(heex)).toBe(true);
+    // The non-active-scroll label is just "Scroll". It sits on the
+    // else: side of the if/else label expression, so anchor on
+    // `else: "Scroll"` to avoid matching the larger "Exit Scroll".
+    expect(/else:\s*"Scroll"/.test(heex)).toBe(true);
+  });
+
+  it("renders the scrollback nav controls (^U / ^D / Bottom)", () => {
     // Each of these maps to an entry in @scrollback_actions on the
     // server side, which in turn drives a push_event consumed by the
     // terminal hook's `scrollback_action` handler. Mismatch between
     // this list and the server's allowlist (or the JS handler's
-    // switch cases) gives the user a button that does nothing.
+    // switch cases) gives the user a button that does nothing. The
+    // old "Copy → page-up" entry is gone (the Scroll button took its
+    // place); ^U / ^D / Bottom remain for paging through the snapshot.
     expect(/phx-click="scrollback_action"/.test(heex)).toBe(true);
-    expect(/\{"Copy",\s*"page-up"\}/.test(heex)).toBe(true);
     expect(/\{"\^U",\s*"halfpage-up"\}/.test(heex)).toBe(true);
     expect(/\{"\^D",\s*"halfpage-down"\}/.test(heex)).toBe(true);
-    expect(/\{"Exit",\s*"bottom"\}/.test(heex)).toBe(true);
+    expect(/\{"Bottom",\s*"bottom"\}/.test(heex)).toBe(true);
   });
 
   it("mounts the KeyboardVisibility hook so body.kbd-open ever flips", () => {

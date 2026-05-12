@@ -699,7 +699,7 @@ defmodule TermigateWeb.WindowLiveTest do
       :ok
     end
 
-    test "renders the secondary bar with Enter/Esc/Backspace + Space + scrollback controls by default",
+    test "renders the secondary bar with Enter/Esc/Backspace + Space + scroll controls by default",
          %{conn: conn} do
       {:ok, _view, html} = live(conn, "/sessions/test/windows/0")
 
@@ -710,8 +710,11 @@ defmodule TermigateWeb.WindowLiveTest do
       assert html =~ ~s(phx-value-key="backspace")
       # Literal-text button (Space).
       assert html =~ ~s(phx-value-text=" ")
-      # Scrollback controls (Copy / ^U / ^D / Exit).
-      assert html =~ ~s(phx-value-action="page-up")
+      # Scroll mode toggle — at mount the active pane is not in
+      # @scroll_mode_panes, so the "Scroll" branch renders.
+      assert html =~ "Scroll"
+      assert html =~ ~s(phx-click="enter_scroll_mode")
+      # Scrollback nav buttons (^U / ^D / Bottom).
       assert html =~ ~s(phx-value-action="halfpage-up")
       assert html =~ ~s(phx-value-action="halfpage-down")
       assert html =~ ~s(phx-value-action="bottom")
@@ -772,6 +775,167 @@ defmodule TermigateWeb.WindowLiveTest do
       render_click(view, "scrollback_action", %{"action" => "bottom"})
       render_click(view, "scrollback_action", %{"action" => "rm -rf /"})
       render_click(view, "scrollback_action", %{})
+    end
+
+    test "enter_scroll_mode / exit_scroll_mode are safe no-ops without an active pane",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      # active_pane defaults to nil at mount, so both handlers
+      # short-circuit before reaching tmux. We just need to confirm
+      # they don't crash and don't push events.
+      render_click(view, "enter_scroll_mode", %{})
+      refute_push_event(view, "scroll_mode_enter", %{})
+      render_click(view, "exit_scroll_mode", %{})
+      refute_push_event(view, "scroll_mode_exit", %{})
+    end
+
+    test "enter_scroll_mode captures the pane and flips the button to Exit Scroll",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @single_pane})
+      render(view)
+
+      original = Application.get_env(:termigate, :command_runner)
+      Application.put_env(:termigate, :command_runner, Termigate.MockCommandRunner)
+      on_exit(fn -> Application.put_env(:termigate, :command_runner, original) end)
+
+      Mox.stub_with(Termigate.MockCommandRunner, Termigate.StubCommandRunner)
+
+      # The handler asks tmux for the full retained scrollback (-S -)
+      # with escape sequences (-e) so colored output replays correctly.
+      Termigate.MockCommandRunner
+      |> expect(:run, fn ["capture-pane", "-p", "-t", "test:0.0", "-e", "-S", "-"] ->
+        {:ok, "history bytes\n"}
+      end)
+
+      render_click(view, "enter_scroll_mode", %{})
+
+      assert_push_event(view, "scroll_mode_enter", %{
+        target: "test:0.0",
+        history: encoded
+      })
+
+      assert Base.decode64!(encoded) == "history bytes\n"
+
+      # The toggle should now render Exit Scroll for the active pane.
+      html = render(view)
+      assert html =~ "Exit Scroll"
+      assert html =~ ~s(phx-click="exit_scroll_mode")
+
+      verify!(Termigate.MockCommandRunner)
+    end
+
+    test "exit_scroll_mode re-captures the pane and flips the button back to Scroll",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @single_pane})
+      render(view)
+
+      original = Application.get_env(:termigate, :command_runner)
+      Application.put_env(:termigate, :command_runner, Termigate.MockCommandRunner)
+      on_exit(fn -> Application.put_env(:termigate, :command_runner, original) end)
+
+      Mox.stub_with(Termigate.MockCommandRunner, Termigate.StubCommandRunner)
+
+      # Two captures: enter, then exit (so the resumed live view starts
+      # from current state, not from when scroll began).
+      Termigate.MockCommandRunner
+      |> expect(:run, fn ["capture-pane", "-p", "-t", "test:0.0", "-e", "-S", "-"] ->
+        {:ok, "old state\n"}
+      end)
+      |> expect(:run, fn ["capture-pane", "-p", "-t", "test:0.0", "-e", "-S", "-"] ->
+        {:ok, "new state\n"}
+      end)
+
+      render_click(view, "enter_scroll_mode", %{})
+      assert render(view) =~ "Exit Scroll"
+
+      render_click(view, "exit_scroll_mode", %{})
+
+      assert_push_event(view, "scroll_mode_exit", %{
+        target: "test:0.0",
+        history: encoded
+      })
+
+      assert Base.decode64!(encoded) == "new state\n"
+
+      # The toggle should be back to Scroll (and wire enter_scroll_mode).
+      html = render(view)
+      refute html =~ "Exit Scroll"
+      assert html =~ ~s(phx-click="enter_scroll_mode")
+
+      verify!(Termigate.MockCommandRunner)
+    end
+
+    test "exit_scroll_mode still exits the mode even when capture-pane fails",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @single_pane})
+      render(view)
+
+      original = Application.get_env(:termigate, :command_runner)
+      Application.put_env(:termigate, :command_runner, Termigate.MockCommandRunner)
+      on_exit(fn -> Application.put_env(:termigate, :command_runner, original) end)
+
+      Mox.stub_with(Termigate.MockCommandRunner, Termigate.StubCommandRunner)
+
+      Termigate.MockCommandRunner
+      |> expect(:run, fn ["capture-pane", "-p", "-t", "test:0.0", "-e", "-S", "-"] ->
+        {:ok, "old state\n"}
+      end)
+      |> expect(:run, fn ["capture-pane", "-p", "-t", "test:0.0", "-e", "-S", "-"] ->
+        {:error, {"can't find pane test:0.0", 1}}
+      end)
+
+      render_click(view, "enter_scroll_mode", %{})
+      assert render(view) =~ "Exit Scroll"
+
+      # capture-pane fails on exit, but the user must not get stuck in
+      # scroll mode — the toggle must flip back so they can recover.
+      render_click(view, "exit_scroll_mode", %{})
+
+      assert_push_event(view, "scroll_mode_exit", %{target: "test:0.0", history: ""})
+
+      html = render(view)
+      refute html =~ "Exit Scroll"
+      assert html =~ ~s(phx-click="enter_scroll_mode")
+
+      verify!(Termigate.MockCommandRunner)
+    end
+
+    test "scroll_mode_panes drops entries when the pane disappears from the layout",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @test_panes})
+      render(view)
+
+      original = Application.get_env(:termigate, :command_runner)
+      Application.put_env(:termigate, :command_runner, Termigate.MockCommandRunner)
+      on_exit(fn -> Application.put_env(:termigate, :command_runner, original) end)
+
+      Mox.stub_with(Termigate.MockCommandRunner, Termigate.StubCommandRunner)
+
+      Termigate.MockCommandRunner
+      |> expect(:run, fn ["capture-pane", "-p", "-t", "test:0.0", "-e", "-S", "-"] ->
+        {:ok, ""}
+      end)
+
+      render_click(view, "enter_scroll_mode", %{})
+      assert render(view) =~ "Exit Scroll"
+
+      # Pane 0 disappears. The layout_updated handler should remove it
+      # from scroll_mode_panes; otherwise stale entries would accumulate
+      # and the next time a target with the same name appears it would
+      # spuriously render as "Exit Scroll".
+      send(view.pid, {:layout_updated, [List.last(@test_panes)]})
+      html = render(view)
+
+      # Active pane fell back to test:0.1 (which was never in scroll
+      # mode), so we should see Scroll, not Exit Scroll.
+      refute html =~ "Exit Scroll"
+      assert html =~ ~s(phx-click="enter_scroll_mode")
+
+      verify!(Termigate.MockCommandRunner)
     end
   end
 

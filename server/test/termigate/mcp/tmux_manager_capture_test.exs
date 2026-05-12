@@ -43,6 +43,19 @@ defmodule Termigate.MCP.TmuxManagerCaptureTest do
                Termigate.TmuxManager.capture_pane("dev:0.0", lines: 500)
     end
 
+    test "captures everything tmux retains with lines: :all" do
+      # `-S -` asks tmux for the full retained history (clamped by the
+      # pane's history-limit). Used by scroll mode to snapshot the
+      # entire scrollback in one shot.
+      Termigate.MockCommandRunner
+      |> expect(:run, fn ["capture-pane", "-p", "-t", "dev:0.0", "-e", "-S", "-"] ->
+        {:ok, "everything\n"}
+      end)
+
+      assert {:ok, "everything\n"} =
+               Termigate.TmuxManager.capture_pane("dev:0.0", lines: :all, escape: true)
+    end
+
     test "returns pane_not_found for missing pane" do
       Termigate.MockCommandRunner
       |> expect(:run, fn ["capture-pane", "-p", "-t", "nope:0.0"] ->

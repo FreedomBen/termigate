@@ -249,9 +249,10 @@ const TerminalHook = {
       }
     });
 
-    // Drives xterm.js scrollback from the secondary mobile control bar's
-    // Copy / ^U / ^D / Exit buttons. The server emits one of these
-    // actions; only the active pane's hook responds.
+    // Drives xterm.js scrollback navigation from the secondary mobile
+    // control bar's ^U / ^D / Bottom buttons. Only the active pane's hook
+    // responds. These operate on whatever's already in xterm's scrollback
+    // buffer, regardless of scroll mode.
     this.handleEvent("scrollback_action", ({ target, action }) => {
       if (target !== this.el.dataset.target || !this.term) return;
       const half = Math.max(1, Math.ceil(this.term.rows / 2));
@@ -268,6 +269,32 @@ const TerminalHook = {
         case "bottom":
           this.term.scrollToBottom();
           break;
+      }
+    });
+
+    // Scroll mode: server snapshots tmux's full retained history and
+    // pushes it here. While _scrollMode is true we ignore live channel
+    // output and refuse to forward input — the user is looking at a
+    // frozen snapshot, scrolling natively. Exit fires another snapshot
+    // so the resumed live view starts from current state, not whatever
+    // was last on screen before the snapshot.
+    this._scrollMode = false;
+    this.handleEvent("scroll_mode_enter", ({ target, history }) => {
+      if (target !== this.el.dataset.target || !this.term) return;
+      this._scrollMode = true;
+      this.term.reset();
+      if (history) {
+        const bytes = Uint8Array.from(atob(history), (c) => c.charCodeAt(0));
+        this.term.write(bytes);
+      }
+    });
+    this.handleEvent("scroll_mode_exit", ({ target, history }) => {
+      if (target !== this.el.dataset.target || !this.term) return;
+      this._scrollMode = false;
+      this.term.reset();
+      if (history) {
+        const bytes = Uint8Array.from(atob(history), (c) => c.charCodeAt(0));
+        this.term.write(bytes);
       }
     });
 
@@ -400,6 +427,10 @@ const TerminalHook = {
 
   // --- Paste from clipboard ---
   _pasteFromClipboard() {
+    // Scroll mode = view-only; pasting into a frozen snapshot would
+    // confuse the user (no visible feedback). The keyboard-typing path
+    // is gated in `_flushInput`; this gate covers the Ctrl+Shift+V path.
+    if (this._scrollMode) return;
     if (!navigator.clipboard || !navigator.clipboard.readText) {
       // Show a brief message if clipboard API is unavailable
       this.term?.write("\r\n\x1b[33m[Clipboard requires HTTPS or localhost]\x1b[0m\r\n");
@@ -470,8 +501,13 @@ const TerminalHook = {
         );
       });
 
-    // Output from server
+    // Output from server. While in scroll mode we drop incoming output
+    // entirely — the user is viewing a frozen snapshot. On exit the
+    // server re-snapshots and pushes scroll_mode_exit, which repaints
+    // current state, so the dropped bytes are not lost; they're folded
+    // into the resync.
     this.channel.on("output", (msg) => {
+      if (this._scrollMode) return;
       if (msg.data) {
         const bytes = Uint8Array.from(atob(msg.data), (c) =>
           c.charCodeAt(0)
@@ -507,6 +543,14 @@ const TerminalHook = {
 
     const combined = this._inputBuffer.join("");
     this._inputBuffer = [];
+
+    // Drop input while in scroll mode — the visible terminal is a
+    // frozen snapshot, so forwarding keystrokes would send them to a
+    // pane the user can't see, which is confusing. Clipboard paste
+    // (`_pasteFromClipboard`) and the secondary control bar's special
+    // keys go through their own paths and are similarly gated by the
+    // server (scroll mode is per-viewer; other viewers stay live).
+    if (this._scrollMode) return;
 
     if (this.channel) {
       this.channel.push("input", { data: combined });

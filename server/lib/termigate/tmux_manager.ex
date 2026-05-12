@@ -238,7 +238,9 @@ defmodule Termigate.TmuxManager do
 
   @doc """
   Capture pane content. Options:
-  - `lines:` — number of scrollback lines to capture (default: 0 = visible only)
+  - `lines:` — number of scrollback lines to capture
+    (default: 0 = visible only; `:all` requests everything tmux's
+    history-limit retains, mapping to `-S -`)
   - `escape:` — include ANSI escape sequences (default: false)
   """
   @spec capture_pane(String.t(), keyword()) :: {:ok, String.t()} | {:error, atom() | String.t()}
@@ -248,7 +250,13 @@ defmodule Termigate.TmuxManager do
 
     args = ["capture-pane", "-p", "-t", target]
     args = if escape, do: args ++ ["-e"], else: args
-    args = if lines > 0, do: args ++ ["-S", "-#{lines}"], else: args
+
+    args =
+      case lines do
+        :all -> args ++ ["-S", "-"]
+        n when is_integer(n) and n > 0 -> args ++ ["-S", "-#{n}"]
+        _ -> args
+      end
 
     case command_runner().run(args) do
       {:ok, output} ->
