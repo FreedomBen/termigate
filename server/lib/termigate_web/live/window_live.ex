@@ -909,7 +909,11 @@ defmodule TermigateWeb.WindowLive do
   end
 
   def handle_event("pane_focused", %{"target" => target}, socket) do
-    {:noreply, assign(socket, :active_pane, target)}
+    if socket.assigns.active_pane == target do
+      {:noreply, socket}
+    else
+      {:noreply, assign(socket, :active_pane, target)}
+    end
   end
 
   def handle_event("focus_pane", %{"pane" => pane_target}, socket) do

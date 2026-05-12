@@ -354,6 +354,31 @@ defmodule TermigateWeb.WindowLiveTest do
     end
   end
 
+  describe "pane_focused" do
+    test "switches active pane to the focused target", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @test_panes})
+      render(view)
+
+      render_hook(view, "pane_focused", %{"target" => "test:0.1"})
+      html = render(view)
+
+      assert html =~ ~r/pane-wrapper-test:0\.1[^>]*data-mobile-visible="true"/
+      assert html =~ ~r/pane-wrapper-test:0\.0[^>]*data-mobile-visible="false"/
+    end
+
+    test "is a no-op when target already matches active_pane", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/sessions/test/windows/0")
+      send(view.pid, {:layout_updated, @test_panes})
+      before = render(view)
+
+      # active_pane defaults to test:0.0 — re-pushing for the same target
+      # should leave the rendered markup byte-identical (no diff).
+      render_hook(view, "pane_focused", %{"target" => "test:0.0"})
+      assert render(view) == before
+    end
+  end
+
   describe "pane subscription management" do
     test "subscribes to new panes on layout update", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/sessions/test/windows/0")

@@ -202,20 +202,24 @@ const TerminalHook = {
       if (meta && scope) meta.setAttribute("content", scope);
     });
 
-    // Notify LiveView when this pane gets focus.
-    this.term.textarea?.addEventListener("focus", () => {
-      this.pushEvent("pane_focused", { target: this.el.dataset.target });
-    });
-    this.el.addEventListener("mousedown", () => {
-      this.pushEvent("pane_focused", { target: this.el.dataset.target });
-    });
+    // Notify LiveView when this pane gets focus. Skipped in single-pane
+    // mode — active_pane never changes, and the touchstart push is a
+    // measurable source of mobile scroll jank. Checked lazily because
+    // panes can be split open after mount.
+    const notifyFocus = () => {
+      if (document.querySelectorAll('[phx-hook="TerminalHook"]').length > 1) {
+        this.pushEvent("pane_focused", { target: this.el.dataset.target });
+      }
+    };
+    this.term.textarea?.addEventListener("focus", notifyFocus);
+    this.el.addEventListener("mousedown", notifyFocus);
     // Tap-vs-scroll detection: pane_focused fires on touchstart (so the
     // active pane switches immediately), but the soft keyboard only opens
     // on a confirmed tap (touchend with no movement). Capture phase so we
     // set _tapPending before xterm's bubble-phase touchstart focuses the
     // textarea.
     this.el.addEventListener("touchstart", (e) => {
-      this.pushEvent("pane_focused", { target: this.el.dataset.target });
+      notifyFocus();
       if (e.touches.length === 1) {
         this._tapPending = true;
       }
