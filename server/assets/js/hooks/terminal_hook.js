@@ -213,12 +213,34 @@ const TerminalHook = {
     };
     this.term.textarea?.addEventListener("focus", notifyFocus);
     this.el.addEventListener("mousedown", notifyFocus);
+    // Pause output writes during an active mobile touch. xterm.js
+    // adjusts scrollTop every time new bytes arrive while the user is
+    // scrolled up (its "preserve scrollback position" behavior), which
+    // fights momentum scroll and strands the user at one-line-per-
+    // gesture progress. Buffering server output here lets the gesture
+    // run uncontested; we flush in one shot on touchend/touchcancel,
+    // so xterm's adjustment happens at most once per gesture.
+    this._touchActive = false;
+    this._touchOutputQueue = [];
+    const endTouchPause = () => {
+      this._touchActive = false;
+      if (this._touchOutputQueue.length === 0) return;
+      const queued = this._touchOutputQueue;
+      this._touchOutputQueue = [];
+      for (const chunk of queued) {
+        this.term.write(chunk);
+      }
+    };
+
     // Tap-vs-scroll detection: defer both pane_focused and the soft
     // keyboard until touchend confirms a tap (no movement). Scrolls
     // never push the event — that's the whole point. Capture phase so
     // we set _tapPending before xterm's bubble-phase touchstart handler
     // tries to focus the textarea.
     this.el.addEventListener("touchstart", (e) => {
+      if (this._isMobile) {
+        this._touchActive = true;
+      }
       if (e.touches.length === 1) {
         this._tapPending = true;
       }
@@ -234,6 +256,7 @@ const TerminalHook = {
     }, { passive: true });
 
     this.el.addEventListener("touchend", () => {
+      endTouchPause();
       if (this._tapPending) {
         this._tapPending = false;
         this._allowFocus = true;
@@ -245,6 +268,8 @@ const TerminalHook = {
         queueMicrotask(() => { this._allowFocus = false; });
       }
     }, { passive: true });
+
+    this.el.addEventListener("touchcancel", endTouchPause, { passive: true });
 
     // Listen for server-initiated focus (e.g. after creating a new window).
     // On mobile, skip the focus call so the soft keyboard doesn't pop up just
@@ -519,7 +544,11 @@ const TerminalHook = {
         const bytes = Uint8Array.from(atob(msg.data), (c) =>
           c.charCodeAt(0)
         );
-        this.term.write(bytes);
+        if (this._touchActive) {
+          this._touchOutputQueue.push(bytes);
+        } else {
+          this.term.write(bytes);
+        }
       }
     });
 
