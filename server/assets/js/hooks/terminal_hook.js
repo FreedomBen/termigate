@@ -213,13 +213,12 @@ const TerminalHook = {
     };
     this.term.textarea?.addEventListener("focus", notifyFocus);
     this.el.addEventListener("mousedown", notifyFocus);
-    // Tap-vs-scroll detection: pane_focused fires on touchstart (so the
-    // active pane switches immediately), but the soft keyboard only opens
-    // on a confirmed tap (touchend with no movement). Capture phase so we
-    // set _tapPending before xterm's bubble-phase touchstart focuses the
-    // textarea.
+    // Tap-vs-scroll detection: defer both pane_focused and the soft
+    // keyboard until touchend confirms a tap (no movement). Scrolls
+    // never push the event — that's the whole point. Capture phase so
+    // we set _tapPending before xterm's bubble-phase touchstart handler
+    // tries to focus the textarea.
     this.el.addEventListener("touchstart", (e) => {
-      notifyFocus();
       if (e.touches.length === 1) {
         this._tapPending = true;
       }
@@ -238,6 +237,10 @@ const TerminalHook = {
       if (this._tapPending) {
         this._tapPending = false;
         this._allowFocus = true;
+        // Push before focus(): mobile-keyboard-disabled mode blocks the
+        // textarea focus event, so we can't rely on the focus listener
+        // alone to fire notifyFocus.
+        notifyFocus();
         this.term?.focus();
         queueMicrotask(() => { this._allowFocus = false; });
       }
