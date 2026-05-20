@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { PaneResizeHook, getPointer } from "./pane_resize_hook.js";
+import {
+  PaneResizeHook,
+  getPointer,
+  shouldEnableTouchResize,
+} from "./pane_resize_hook.js";
 
 // Pin the lifecycle and divider-creation contract for the multi-pane
 // drag-resize hook. The pixel math (deltaCols / deltaRows rounding) is
@@ -65,11 +69,13 @@ function buildTwoPaneGrid() {
 describe("PaneResizeHook lifecycle", () => {
   let rafCallbacks;
   let originalRaf;
+  let originalMatchMedia;
 
   beforeEach(() => {
     document.body.innerHTML = "";
     rafCallbacks = [];
     originalRaf = globalThis.requestAnimationFrame;
+    originalMatchMedia = window.matchMedia;
     globalThis.requestAnimationFrame = (cb) => {
       rafCallbacks.push(cb);
       return rafCallbacks.length;
@@ -78,6 +84,10 @@ describe("PaneResizeHook lifecycle", () => {
 
   afterEach(() => {
     globalThis.requestAnimationFrame = originalRaf;
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: originalMatchMedia,
+    });
     vi.restoreAllMocks();
   });
 
@@ -93,6 +103,33 @@ describe("PaneResizeHook lifecycle", () => {
     expect(document.querySelectorAll(".pane-divider")).toHaveLength(0);
     rafCallbacks[0]();
     expect(document.querySelectorAll(".pane-divider")).toHaveLength(1);
+  });
+
+  it("mounted() skips non-passive touch resize listeners on phone layouts", () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn(() => ({ matches: true })),
+    });
+    const grid = buildTwoPaneGrid();
+    const gridAddSpy = vi.spyOn(grid, "addEventListener");
+    const documentAddSpy = vi.spyOn(document, "addEventListener");
+
+    mountHook(grid);
+
+    expect(gridAddSpy).not.toHaveBeenCalledWith(
+      "touchstart",
+      expect.any(Function),
+      { passive: false },
+    );
+    expect(documentAddSpy).not.toHaveBeenCalledWith(
+      "touchmove",
+      expect.any(Function),
+      { passive: false },
+    );
+    expect(documentAddSpy).not.toHaveBeenCalledWith(
+      "touchend",
+      expect.any(Function),
+    );
   });
 
   it("_setupDividers creates one .pane-divider per separator track with correct data attributes", () => {
@@ -250,5 +287,23 @@ describe("getPointer", () => {
       changedTouches: [{ clientX: 70, clientY: 80 }],
     };
     expect(getPointer(e, true)).toEqual({ x: 70, y: 80 });
+  });
+});
+
+describe("shouldEnableTouchResize", () => {
+  it("returns false for phone layouts where resize dividers are hidden", () => {
+    expect(
+      shouldEnableTouchResize({
+        matchMedia: vi.fn(() => ({ matches: true })),
+      }),
+    ).toBe(false);
+  });
+
+  it("returns true outside the phone layout", () => {
+    expect(
+      shouldEnableTouchResize({
+        matchMedia: vi.fn(() => ({ matches: false })),
+      }),
+    ).toBe(true);
   });
 });

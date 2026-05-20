@@ -19,6 +19,10 @@ export function getPointer(e, isEnd = false) {
   return { x: e.clientX, y: e.clientY };
 }
 
+export function shouldEnableTouchResize(win = window) {
+  return !win.matchMedia?.("(max-width: 639px)")?.matches;
+}
+
 const PaneResizeHook = {
   mounted() {
     this._isDragging = false;
@@ -302,19 +306,27 @@ const PaneResizeHook = {
     };
 
     this.el.addEventListener("mousedown", onStart);
-    this.el.addEventListener("touchstart", onStart, { passive: false });
     document.addEventListener("mousemove", onMove);
-    document.addEventListener("touchmove", onMove, { passive: false });
     document.addEventListener("mouseup", onEnd);
-    document.addEventListener("touchend", onEnd);
+
+    if (shouldEnableTouchResize()) {
+      this.el.addEventListener("touchstart", onStart, { passive: false });
+      document.addEventListener("touchmove", onMove, { passive: false });
+      document.addEventListener("touchend", onEnd);
+      this._touchResizeHandlersAttached = true;
+    } else {
+      this._touchResizeHandlersAttached = false;
+    }
 
     this._cleanupDrag = () => {
       this.el.removeEventListener("mousedown", onStart);
-      this.el.removeEventListener("touchstart", onStart);
       document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("touchmove", onMove);
       document.removeEventListener("mouseup", onEnd);
-      document.removeEventListener("touchend", onEnd);
+      if (this._touchResizeHandlersAttached) {
+        this.el.removeEventListener("touchstart", onStart);
+        document.removeEventListener("touchmove", onMove);
+        document.removeEventListener("touchend", onEnd);
+      }
     };
   },
 };
