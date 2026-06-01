@@ -113,13 +113,13 @@ _Android home: `ui/terminal/TerminalScreen.kt` / `ui/navigation/AppNavigation.kt
 
 _Android home: `terminal-lib/.../view/TerminalView.java`, `ui/terminal/RemoteTerminalSession.kt`, `TerminalViewModel.kt`._
 
-- [ ] Buffer pane output during an active touch (don't repaint mid-gesture) — `2ab76e0`
-- [ ] Extend the output pause through momentum/inertial scroll — `5beaa76`
-- [ ] Avoid resize listeners firing during a touch — `a2e7179`
-- [ ] Pin the "no terminal resize on mobile" policy (mobile stays at fixed cols/rows) — `b630e3a` · see also `[[feedback_mobile_terminal_size]]`
-- [ ] Defer the pane-focus change until `touchend` confirms a tap (not a scroll) — `15cf1f2`
-- [ ] Skip pane-focus pushes that can't change the active pane — `d420fc8`
-- [ ] _(web-only — likely N/A)_ Render panes with WebGL, falling back to Canvas then DOM — `8770745` _(native `TerminalRenderer` already draws to a Canvas/View)_
+- [ ] Buffer pane output during an active touch (don't repaint mid-gesture) — `2ab76e0` — _(deferred: web-rendering concern. The native Termux `TerminalView` keeps its scroll position via `mTopRow` and repaints a hardware Canvas; whether output during a touch-scroll actually janks is unproven — verify via `/android-drive` before adding buffering.)_
+- [ ] Extend the output pause through momentum/inertial scroll — `5beaa76` — _(deferred: depends on `2ab76e0`; the Termux view already drives fling via its own `Scroller`)_
+- [x] Avoid resize listeners firing during a touch — `a2e7179` — _(satisfied: native pushes no view-geometry resize at all — `TerminalViewClient.onEmulatorSet()` is a deliberate no-op — so there is no listener to fire during a touch)_
+- [x] Pin the "no terminal resize on mobile" policy (mobile stays at fixed cols/rows) — `b630e3a` · see also `[[feedback_mobile_terminal_size]]` — _(satisfied: the client never resizes from its own geometry; emulator dims track tmux `resized` events. Only the explicit "Fit to screen width" action resizes.)_
+- [x] Defer the pane-focus change until `touchend` confirms a tap (not a scroll) — `15cf1f2` — _(N/A: single-pane, no pane-focus push; the IME-raising tap already fires on `onSingleTapUp` i.e. touch-up, not on scroll)_
+- [x] Skip pane-focus pushes that can't change the active pane — `d420fc8` — _(N/A: single-pane, no active-pane concept)_
+- [x] _(web-only — likely N/A)_ Render panes with WebGL, falling back to Canvas then DOM — `8770745` _(native `TerminalRenderer` already draws to a Canvas/View)_ — _(N/A: confirmed, native already renders to a hardware-accelerated Canvas)_
 
 ## 8. Scrollback
 
