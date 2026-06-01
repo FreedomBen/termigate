@@ -55,14 +55,14 @@ _Android home: every `ui/**/*Screen.kt` Compose surface; use `Modifier.sizeIn(mi
 
 _Android home: `ui/terminal/SpecialKeyToolbar.kt` (+ defaults that mirror `config.ex`)._
 
-- [ ] Move the control bar to the bottom of the screen, above the soft keyboard — `28ad19b`
-- [ ] Pack the control bar onto a single row — `50e92d6`
-- [ ] Move rare control keys to a `…` overflow popover when the bar is narrow — `b0705eb`
+- [x] Move the control bar to the bottom of the screen, above the soft keyboard — `28ad19b` — _(native: `SpecialKeyToolbar` is the last child of the `imePadding()` column, so it already sits at the bottom above the IME)_
+- [x] Pack the control bar onto a single row — `50e92d6` — _(native: the main key row is a single horizontally-scrollable `Row`)_
+- [x] Move rare control keys to a `…` overflow popover when the bar is narrow — `b0705eb` — _(native equivalent: rare keys (F1–F12, Home/End, PgUp/Dn, Ins/Del) live in a `▲`/`▼` expandable second row rather than a popover; same declutter intent)_
 - [x] Add a **secondary** control bar shown when the soft keyboard is **down** — `0822875` — _(native: new `KeyboardDownBar` with Enter/Space/Backspace/Esc, shown via `AnimatedVisibility` when `!isKeyboardVisible`; tested in `KeyboardDownBarTest`)_
-- [ ] On the secondary bar, replace y/n buttons with tmux copy-mode controls — `49f9a93`
-- [ ] Hide the control bar entirely when the toolbar setting is off — `ea742a7`
+- [ ] On the secondary bar, replace y/n buttons with tmux copy-mode controls — `49f9a93` — _(deferred: the `terminal:` channel has no copy-mode handler; on native, scrollback is local to the terminal-lib emulator, so this becomes local scroll controls — tracked with §8)_
+- [ ] Hide the control bar entirely when the toolbar setting is off — `ea742a7` — _(deferred: native settings has no Mobile Control Bar toggle yet; implement with §10 `7fbda47`, then gate both control bars on it)_
 - [x] Reorder arrow keys to ←, ↓, ↑, → and group all four together in toolbar defaults — `ec2b123` — _(native: reordered the four arrow `ToolbarKey`s in `SpecialKeyToolbar`)_
-- [ ] Drop the removed `toolbar_buttons` config / legacy virtual toolbar (don't port the dead path) — `40771e3`
+- [x] Drop the removed `toolbar_buttons` config / legacy virtual toolbar (don't port the dead path) — `40771e3` — _(N/A: native never had a `toolbar_buttons` config or JS virtual toolbar; nothing to remove)_
 
 ## 3. Quick Action bar
 
