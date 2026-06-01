@@ -1,6 +1,8 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { WebglAddon } from "@xterm/addon-webgl";
+import { CanvasAddon } from "@xterm/addon-canvas";
 import { Socket } from "phoenix";
 import { serverToLocal, resolveTheme } from "../preferences";
 import { shouldAutoFit } from "./should_auto_fit";
@@ -67,6 +69,44 @@ const TerminalHook = {
 
     // Open terminal in container
     this.term.open(this.el);
+
+    // Renderer. xterm's built-in DOM renderer re-renders rows on the main
+    // thread on every scroll tick, which janks touch scrolling on mobile
+    // while output streams: dropped scroll frames, one-line-at-a-time
+    // steps, and stutter on BOTH axes (the viewport scrolls in x and y).
+    // Prefer the GPU WebGL renderer, fall back to the 2D Canvas renderer,
+    // then to DOM. Must load after open() so the render service exists.
+    this._renderer = null;
+    const useCanvas = () => {
+      try {
+        const canvas = new CanvasAddon();
+        this.term.loadAddon(canvas);
+        this._renderer = canvas;
+      } catch (e) {
+        // Leave xterm's built-in DOM renderer in place.
+        this._renderer = null;
+        console.warn("[TerminalHook] Canvas renderer unavailable, using DOM", e);
+      }
+    };
+    try {
+      const webgl = new WebglAddon();
+      // Mobile GPUs cap concurrent WebGL contexts; a multi-pane window can
+      // lose one. Drop that pane to Canvas so it keeps painting instead of
+      // freezing on a dead context.
+      webgl.onContextLoss(() => {
+        if (this._renderer === webgl) {
+          webgl.dispose();
+          this._renderer = null;
+          useCanvas();
+        }
+      });
+      this.term.loadAddon(webgl);
+      this._renderer = webgl;
+    } catch (e) {
+      // WebGL2 missing (older mobile browsers, blocklisted GPUs).
+      console.warn("[TerminalHook] WebGL renderer unavailable, trying Canvas", e);
+      useCanvas();
+    }
 
     // Expose this hook on the element so sibling hooks (e.g. the mobile
     // "fit pane to screen" button) can read xterm cell metrics for resizing.
@@ -674,6 +714,12 @@ const TerminalHook = {
     if (this._scrollDisposable) {
       this._scrollDisposable.dispose();
       this._scrollDisposable = null;
+    }
+    // Release the GPU/canvas context promptly (mobile caps concurrent
+    // contexts). Disposing again via term.dispose() below is a safe no-op.
+    if (this._renderer) {
+      this._renderer.dispose();
+      this._renderer = null;
     }
 
     if (this.term) {

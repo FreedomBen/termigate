@@ -313,7 +313,7 @@ Example: User types "hi" then Ctrl+C
 - Route: `/sessions/:session/:window/:pane`
 - Full-viewport xterm.js terminal
 - **LiveView Hook (`TerminalHook`)**:
-  - `mounted()`: Creates xterm.js `Terminal` + `FitAddon`, opens terminal in container div, calls `FitAddon.fit()`, sends initial `resize` event to server
+  - `mounted()`: Creates xterm.js `Terminal` + `FitAddon`, opens terminal in container div, calls `FitAddon.fit()`, sends initial `resize` event to server. After `open()`, loads a GPU renderer — `WebglAddon`, falling back to `CanvasAddon` then xterm's built-in DOM renderer — so touch scrolling stays smooth on mobile. (The DOM renderer re-renders rows on the main thread on every scroll tick, which janks scrolling on both axes while output streams.) Recovers from WebGL context loss — mobile GPUs cap concurrent contexts, so a multi-pane window can lose one — by disposing the lost context and dropping that pane to Canvas.
   - `onData`: xterm.js keyboard input → UTF-8 encode via `TextEncoder` → base64 encode → `this.pushEvent("key_input", {data: base64String})`. `onData` emits JavaScript strings which `TextEncoder` converts to UTF-8 bytes. This is sufficient for all terminal input: printable characters, control codes, and escape sequences are all within the BMP (U+0000–U+FFFF). Characters above U+FFFF (e.g., emoji) are not emitted by `onData` — they arrive via paste, which also goes through `TextEncoder` and encodes correctly as multi-byte UTF-8. `onBinary` is not needed.
   - `onResize`: debounced (300ms) → `this.pushEvent("resize", {cols, rows})`
   - `this.handleEvent("output", ({data}) => { const bytes = Uint8Array.from(atob(data), c => c.charCodeAt(0)); term.write(bytes); })` — streaming terminal output
