@@ -40,16 +40,16 @@ Existing native surfaces that mirror the web (natural homes for these ports):
 
 _Android home: every `ui/**/*Screen.kt` Compose surface; use `Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)` / `minimumInteractiveComponentSize`._
 
-- [ ] Grow terminal top-bar tap targets to 44×44 on mobile — `3102d61`
+- [x] Grow terminal top-bar tap targets to 44×44 on mobile — `3102d61` — _(native: top bar uses Material3 `IconButton`s, already 48 dp)_
 - [x] Raise Settings page tap targets to 44 px on mobile — `e1d05e2` — _(native: Add-Quick-Action and Logout buttons now `heightIn(min = 48.dp)`; edit/delete are 48 dp `IconButton`s)_
 - [x] Raise login form tap targets to 44 px on mobile — `1b792cb` — _(native: Connect button now `heightIn(min = 48.dp)`; text fields are 56 dp, password toggle is a 48 dp `IconButton`)_
 - [x] Lift control-bar and pane-close tap targets to 44 px on mobile — `68a0d66` — _(native: `ToolbarKey` now 48 dp via `defaultMinSize`; pane-close is N/A, app is single-pane)_
-- [ ] Enlarge login password-visibility toggle button to 44×44 — `5bda4e1`
-- [ ] Enlarge setup password toggle buttons to 44×44 — `b3c56ef` _(setup is web-first-run; verify relevance)_
-- [ ] Give the session-duration select a 44 px (`min-h-11`) touch height — `0987a75` _(setup screen)_
-- [ ] Enlarge the flash/snackbar close button to 44×44 — `538df3c`
+- [x] Enlarge login password-visibility toggle button to 44×44 — `5bda4e1` — _(native: it is a Material3 `IconButton`, already 48 dp)_
+- [x] Enlarge setup password toggle buttons to 44×44 — `b3c56ef` _(setup is web-first-run; verify relevance)_ — _(N/A: native has no `/setup` screen; it connects to a configured server)_
+- [x] Give the session-duration select a 44 px (`min-h-11`) touch height — `0987a75` _(setup screen)_ — _(N/A: setup-only, no native equivalent)_
+- [x] Enlarge the flash/snackbar close button to 44×44 — `538df3c` — _(N/A: native shows transient errors via Material3 `Snackbar` / inline `Text`, neither has a custom close button to enlarge)_
 - [x] Wrap settings checkboxes and radios in 44×44 hit areas — `1cbfff5` — _(native settings has no checkboxes/radios; toggles are 48 dp `Switch`es. Enlarged the closest analog — the Edit-Quick-Action color swatches — from 36 dp to 48 dp.)_
-- [ ] Match pane-tab close-X size to window-tab close-X — `7605812`
+- [x] Match pane-tab close-X size to window-tab close-X — `7605812` — _(N/A: single-pane native app has no pane tabs; revisit with §5 if multi-pane lands)_
 
 ## 2. Mobile control bar / special-key toolbar
 
