@@ -28,7 +28,7 @@ mix test               # Run all tests
 mix test test/path_to_test.exs           # Run single test file
 mix test test/path_to_test.exs:42        # Run test at specific line
 
-# Pre-commit (compile warnings-as-errors + deps check + format + test)
+# Pre-commit (compile warnings-as-errors + deps check + format + test + asset tests)
 mix precommit
 
 # Formatting
@@ -48,7 +48,7 @@ Frontend assets use npm (`server/assets/package.json`).
 
 - **PaneStream** (GenServer) — one per active pane. Bidirectional bridge between tmux pane and browser viewers. Streams output via `tmux pipe-pane` + FIFO, sends input via `tmux send-keys`. Registered in a dual-key Registry (`{:pane, target}` and `{:pane_id, pane_id}`).
 - **PaneStreamSupervisor** (DynamicSupervisor) — lifecycle management for PaneStreams
-- **TmuxManager** — stateless module for tmux operations (list/create/kill sessions). Broadcasts `{:sessions_changed}` on PubSub topic "sessions".
+- **TmuxManager** — stateless module for tmux operations (list/create/kill sessions). Broadcasts `{:sessions_changed}` on PubSub topic "sessions:mutations".
 - **Config** (GenServer) — reads/watches YAML config file, broadcasts changes
 - **SessionPoller / LayoutPoller** — poll tmux state for changes
 
@@ -56,7 +56,8 @@ Frontend assets use npm (`server/assets/package.json`).
 
 - **LiveViews:** `auth_live`, `session_list_live`, `window_live`, `settings_live`, `setup_live` — `WindowLive` is the terminal page (one tmux window, any number of panes in a CSS Grid)
 - **Channels:** `terminal_channel`, `session_channel` (for native app support)
-- **Plugs:** `require_auth`, `require_auth_token`, `rate_limit`
+- **Plugs:** `require_auth`, `require_auth_token`, `rate_limit`, `cors`, `remote_ip`
+- **MCP server:** `/mcp` route (token-auth + rate limit) forwards to `Termigate.MCP.Server`, a Hermes streamable-HTTP server. Tmux tools live in `lib/termigate/mcp/tools/` (`run_command`, `read_pane`, `send_keys`, `split_pane`, `wait_for_output`, …)
 
 ### Frontend (`server/assets/`)
 
@@ -78,4 +79,5 @@ Dual auth: username/password (PBKDF2-HMAC-SHA512 via `pbkdf2_elixir`) and token-
 
 - `docs/APPLICATION_DESIGN.md` — comprehensive architecture spec
 - `docs/TECH_STACK.md` — technology decisions
+- `docs/MCP_DESIGN.md` — MCP server design (the `/mcp` AI-agent endpoint)
 - `implementation-docs/` — phase-based implementation docs

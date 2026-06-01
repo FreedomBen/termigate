@@ -55,7 +55,7 @@ termigate supports two auth methods:
 
 ## Configuration
 
-Config is stored in `~/.config/termigate/config.yml` (created automatically on first run). Quick actions and other settings can be edited through the UI or by modifying the YAML file directly.
+Config is stored in `~/.config/termigate/config.yaml` (created automatically on first run). Quick actions and other settings can be edited through the UI or by modifying the YAML file directly.
 
 ## Development
 
@@ -66,7 +66,7 @@ mix test                              # Run all tests
 mix test test/path_to_test.exs        # Run a single test file
 mix test test/path_to_test.exs:42     # Run test at specific line
 mix format                            # Format code
-mix precommit                         # Compile (warnings-as-errors) + deps check + format + test
+mix precommit                         # Compile (warnings-as-errors) + deps check + format + test + asset tests
 mix assets.build                      # Build CSS/JS
 ```
 
@@ -153,6 +153,36 @@ This is independent of `TERMIGATE_FORCE_SSL`: `force_ssl` excludes
 loopback and `10.0.2.2` from the HTTPS redirect, and flipping the cookie
 secure flag for those hosts would block them from logging in over HTTP.
 Default is off.
+
+#### First-run setup token
+
+On a fresh deployment with no admin account yet, the `/setup` page is
+gated by a one-time token so a stranger can't claim the admin account in
+the window between deploy and your first visit. If `TERMIGATE_SETUP_TOKEN`
+is unset, a random token is generated on boot and the full
+`/setup?token=…` URL is logged at warning level (visible via `podman
+logs` / `journalctl -u termigate`). Set `TERMIGATE_SETUP_TOKEN` to pin a
+known value instead. The gate closes automatically once the admin account
+is created.
+
+#### Metrics endpoint
+
+`/metrics` serves operational metrics. Access is checked in order:
+loopback peers (`127.0.0.1`, `::1`) always get them; setting
+`TERMIGATE_PUBLIC_METRICS=true` opens the endpoint to any peer on the
+public listener; setting `TERMIGATE_METRICS_TOKEN` accepts any peer
+presenting a matching `Authorization: Bearer …` header. Otherwise remote
+requests get `404` so the route isn't advertised. Default is
+loopback-only.
+
+#### Client IP and CORS behind a proxy
+
+By default `X-Forwarded-For` is ignored and the socket peer is used as the
+client IP for rate limiting and audit logs. Set `TERMIGATE_TRUSTED_PROXIES`
+to a comma-separated list of proxy CIDRs to honor `X-Forwarded-For` from
+those proxies and recover the real client IP. Set `TERMIGATE_CORS_ORIGIN`
+to send CORS headers for that origin when a browser or native client loads
+termigate cross-origin; unset, no CORS headers are sent.
 
 #### Using host tmux sessions
 

@@ -1,6 +1,7 @@
 TODO.md
 .codex
 .claude/settings.local.json
+node-compile-cache/
 
 # OS files
 .DS_Store
