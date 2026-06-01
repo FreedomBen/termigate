@@ -107,7 +107,7 @@ _Android home: `ui/terminal/TerminalScreen.kt`, `TerminalViewModel.kt`._
 
 _Android home: `ui/terminal/TerminalScreen.kt` / `ui/navigation/AppNavigation.kt`._
 
-- [ ] Left-edge swipe gesture to navigate from a window back to the session list — `633e483`
+- [x] Left-edge swipe gesture to navigate from a window back to the session list — `633e483` — _(satisfied by the platform: the back stack is `SESSIONS → TERMINAL`, and `NavHost` maps system back to `popBackStack()`. On gesture-nav devices the system back affordance is itself the left/right-edge swipe → session list; a custom in-app edge swipe would conflict with the OS predictive-back gesture.)_
 
 ## 7. Terminal rendering & touch-scroll performance
 
