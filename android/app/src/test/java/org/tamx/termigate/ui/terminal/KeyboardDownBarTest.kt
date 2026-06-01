@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -52,5 +53,48 @@ class KeyboardDownBarTest {
     @Test
     fun esc_sends_escape() {
         assertArrayEquals(byteArrayOf(0x1b), captureKey("Esc"))
+    }
+
+    /**
+     * Local-scrollback controls (web parity, `49f9a93` / `84654fd`): a Scroll /
+     * Exit Scroll toggle, with ▲/▼ page keys revealed only while paused.
+     */
+    @Test
+    fun toggle_reads_scroll_when_inactive_and_invokes_callback() {
+        var toggled = false
+        composeTestRule.setContent {
+            KeyboardDownBar(onSendInput = {}, onToggleScrollback = { toggled = true })
+        }
+        composeTestRule.onNodeWithText("Exit Scroll").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Scroll").performClick()
+        assertTrue(toggled)
+    }
+
+    @Test
+    fun page_keys_hidden_until_scrollback_active() {
+        composeTestRule.setContent {
+            KeyboardDownBar(onSendInput = {}, scrollbackActive = false)
+        }
+        composeTestRule.onNodeWithText("▲").assertDoesNotExist()
+        composeTestRule.onNodeWithText("▼").assertDoesNotExist()
+    }
+
+    @Test
+    fun active_scrollback_reads_exit_and_pages_up_and_down() {
+        var up = false
+        var down = false
+        composeTestRule.setContent {
+            KeyboardDownBar(
+                onSendInput = {},
+                scrollbackActive = true,
+                onScrollUp = { up = true },
+                onScrollDown = { down = true }
+            )
+        }
+        composeTestRule.onNodeWithText("Exit Scroll").assertExists()
+        composeTestRule.onNodeWithText("▲").performClick()
+        composeTestRule.onNodeWithText("▼").performClick()
+        assertTrue(up)
+        assertTrue(down)
     }
 }

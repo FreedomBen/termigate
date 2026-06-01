@@ -123,12 +123,22 @@ fun SpecialKeyToolbar(
  * Secondary control bar shown when the soft keyboard is **down** (web parity,
  * `0822875`). Surfaces the keystrokes you'd otherwise have to raise the
  * keyboard for — Enter, Space, Backspace, Esc — so prompts can be answered
- * one-handed. The tmux copy-mode / scrollback half of the web bar (`49f9a93`)
- * is local scrollback navigation on native and is tracked under §8.
+ * one-handed, plus a local-scrollback **Scroll / Exit Scroll** toggle.
+ *
+ * The web's copy-mode bar (`49f9a93`) became a Scroll / Exit Scroll toggle
+ * (`84654fd`) that snapshots tmux history and pauses live updates. On native,
+ * scrollback is the emulator's own transcript, so [onToggleScrollback] pauses
+ * the emulator's auto-scroll (output stops yanking the view to the bottom) and
+ * the ▲/▼ keys page through that transcript via [onScrollUp]/[onScrollDown].
+ * The page keys appear only while paused; live input keys stay live throughout.
  */
 @Composable
 fun KeyboardDownBar(
     onSendInput: (ByteArray) -> Unit,
+    scrollbackActive: Boolean = false,
+    onToggleScrollback: () -> Unit = {},
+    onScrollUp: () -> Unit = {},
+    onScrollDown: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -146,6 +156,14 @@ fun KeyboardDownBar(
             ToolbarKey("Space") { onSendInput(byteArrayOf(0x20)) }
             ToolbarKey("Bksp") { onSendInput(byteArrayOf(0x7f)) }
             ToolbarKey("Esc") { onSendInput(byteArrayOf(0x1b)) }
+            ToolbarKey(
+                label = if (scrollbackActive) "Exit Scroll" else "Scroll",
+                isActive = scrollbackActive
+            ) { onToggleScrollback() }
+            if (scrollbackActive) {
+                ToolbarKey("▲") { onScrollUp() }
+                ToolbarKey("▼") { onScrollDown() }
+            }
         }
     }
 }

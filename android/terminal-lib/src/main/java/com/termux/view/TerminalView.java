@@ -1076,6 +1076,43 @@ public final class TerminalView extends View {
         this.mTopRow = mTopRow;
     }
 
+    /** True while live output is paused for reading scrollback (see {@link #enterScrollback}). */
+    public boolean isScrollbackPaused() {
+        return mEmulator != null && mEmulator.isAutoScrollDisabled();
+    }
+
+    /**
+     * Page the local scrollback transcript up or down by one screenful, without
+     * sending anything to the underlying program. Backs the on-screen scroll
+     * controls shown when the soft keyboard is down. No-op on the alternate
+     * screen or while mouse tracking is active, where there is no scrollback to
+     * pan (and {@link #doScroll} would instead forward keys / mouse events).
+     */
+    public void pageScroll(boolean up) {
+        if (mEmulator == null || mEmulator.isAlternateBufferActive() || mEmulator.isMouseTrackingActive()) return;
+        doScroll(null, up ? -mEmulator.mRows : mEmulator.mRows);
+    }
+
+    /**
+     * Enter scrollback view: pause auto-scroll so incoming output stops yanking
+     * the viewport back to the bottom (the native analog of the web's paused
+     * live updates, `84654fd`), then page up one screen to reveal history.
+     * No-op on the alternate screen, which has no scrollback.
+     */
+    public void enterScrollback() {
+        if (mEmulator == null || mEmulator.isAlternateBufferActive()) return;
+        mEmulator.setAutoScrollDisabled(true);
+        pageScroll(true);
+    }
+
+    /** Exit scrollback view: resume auto-scroll and jump back to the live bottom. */
+    public void exitScrollback() {
+        if (mEmulator == null) return;
+        mEmulator.setAutoScrollDisabled(false);
+        mTopRow = 0;
+        invalidate();
+    }
+
 
 
     /**

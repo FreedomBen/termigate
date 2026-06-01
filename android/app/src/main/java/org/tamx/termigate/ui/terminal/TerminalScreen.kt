@@ -117,6 +117,7 @@ fun TerminalScreen(
     var showTopBar by remember { mutableStateOf(true) }
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
     var isKeyboardVisible by remember { mutableStateOf(false) }
+    var scrollbackActive by remember { mutableStateOf(false) }
     var viewportWidthPx by remember { mutableIntStateOf(0) }
 
     // Detect soft keyboard visibility
@@ -128,6 +129,17 @@ fun TerminalScreen(
         }
         onDispose {
             ViewCompat.setOnApplyWindowInsetsListener(view, null)
+        }
+    }
+
+    // Raising the keyboard means the user wants to type at the live prompt, so
+    // leave scrollback view first: resume auto-scroll and jump to the bottom so
+    // input isn't echoed into a frozen, paused viewport. (The toggle lives on
+    // the keyboard-down bar, which is itself hidden once the IME is up.)
+    LaunchedEffect(isKeyboardVisible) {
+        if (isKeyboardVisible && scrollbackActive) {
+            terminalView?.exitScrollback()
+            scrollbackActive = false
         }
     }
 
@@ -216,7 +228,16 @@ fun TerminalScreen(
                 exit = slideOutVertically { it }
             ) {
                 KeyboardDownBar(
-                    onSendInput = viewModel::sendInput
+                    onSendInput = viewModel::sendInput,
+                    scrollbackActive = scrollbackActive,
+                    onToggleScrollback = {
+                        terminalView?.let { tv ->
+                            if (scrollbackActive) tv.exitScrollback() else tv.enterScrollback()
+                            scrollbackActive = !scrollbackActive
+                        }
+                    },
+                    onScrollUp = { terminalView?.pageScroll(true) },
+                    onScrollDown = { terminalView?.pageScroll(false) }
                 )
             }
         }
