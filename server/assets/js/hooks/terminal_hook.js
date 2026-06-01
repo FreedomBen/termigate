@@ -9,6 +9,12 @@ function isMobile() {
   return window.innerWidth < 640;
 }
 
+// How long (ms) after the last scroll tick we treat the inertial glide
+// that follows a touch lift-off as finished and resume writing buffered
+// output. Long enough to span the gaps between momentum scroll events,
+// short enough that output doesn't feel stalled once scrolling stops.
+const MOMENTUM_SETTLE_MS = 180;
+
 const TerminalHook = {
   mounted() {
     const target = this.el.dataset.target;
@@ -213,24 +219,62 @@ const TerminalHook = {
     };
     this.term.textarea?.addEventListener("focus", notifyFocus);
     this.el.addEventListener("mousedown", notifyFocus);
-    // Pause output writes during an active mobile touch. xterm.js
+    // Pause output writes during a mobile touch *and* through the
+    // inertial scroll that keeps gliding after the finger lifts. xterm.js
     // adjusts scrollTop every time new bytes arrive while the user is
     // scrolled up (its "preserve scrollback position" behavior), which
     // fights momentum scroll and strands the user at one-line-per-
-    // gesture progress. Buffering server output here lets the gesture
-    // run uncontested; we flush in one shot on touchend/touchcancel,
-    // so xterm's adjustment happens at most once per gesture.
+    // gesture progress. The pause spans two phases: _touchActive (finger
+    // down) and _momentumActive (the post-lift glide, detected via
+    // xterm's onScroll below). Buffered output drains in one shot once
+    // both clear, so xterm's adjustment happens at most once per gesture.
     this._touchActive = false;
+    this._momentumActive = false;
+    this._momentumTimer = null;
     this._touchOutputQueue = [];
-    const endTouchPause = () => {
-      this._touchActive = false;
+
+    const flushTouchOutput = () => {
       if (this._touchOutputQueue.length === 0) return;
       const queued = this._touchOutputQueue;
       this._touchOutputQueue = [];
       for (const chunk of queued) {
-        this.term.write(chunk);
+        this.term?.write(chunk);
       }
     };
+    const clearMomentumTimer = () => {
+      if (this._momentumTimer) {
+        clearTimeout(this._momentumTimer);
+        this._momentumTimer = null;
+      }
+    };
+    // Immediately end the pause and drain. Used for confirmed taps (no
+    // scrolling to wait out), touchcancel, and teardown.
+    const endTouchPause = () => {
+      this._touchActive = false;
+      this._momentumActive = false;
+      clearMomentumTimer();
+      flushTouchOutput();
+    };
+    // After a scroll gesture lifts off, the view keeps gliding with no
+    // finger down. Keep buffering and (re)arm a settle timer; each
+    // onScroll tick below pushes the deadline out, so we only drain once
+    // the glide actually stops.
+    const armMomentumSettle = () => {
+      clearMomentumTimer();
+      this._momentumTimer = setTimeout(() => {
+        this._momentumTimer = null;
+        this._momentumActive = false;
+        flushTouchOutput();
+      }, MOMENTUM_SETTLE_MS);
+    };
+
+    // xterm fires onScroll for every viewport scroll, including the
+    // native inertial glide after touchend. While the momentum pause is
+    // armed, each tick resets the settle timer. The flush is what
+    // re-enables direct writes, so the scroll it triggers can't re-arm.
+    this._scrollDisposable = this.term.onScroll(() => {
+      if (this._momentumActive) armMomentumSettle();
+    });
 
     // Tap-vs-scroll detection: defer both pane_focused and the soft
     // keyboard until touchend confirms a tap (no movement). Scrolls
@@ -240,6 +284,11 @@ const TerminalHook = {
     this.el.addEventListener("touchstart", (e) => {
       if (this._isMobile) {
         this._touchActive = true;
+        // Finger back down during the post-gesture glide: cancel the
+        // momentum settle so buffering continues under _touchActive
+        // until the next lift-off instead of draining mid-interaction.
+        this._momentumActive = false;
+        clearMomentumTimer();
       }
       if (e.touches.length === 1) {
         this._tapPending = true;
@@ -256,9 +305,13 @@ const TerminalHook = {
     }, { passive: true });
 
     this.el.addEventListener("touchend", () => {
-      endTouchPause();
       if (this._tapPending) {
+        // Confirmed tap (touchmove never fired): nothing is scrolling, so
+        // end the pause and drain now, then run the deferred focus. Clear
+        // _tapPending before focus() so the textarea focus listener
+        // doesn't blur the tap we're trying to honor.
         this._tapPending = false;
+        endTouchPause();
         this._allowFocus = true;
         // Push before focus(): mobile-keyboard-disabled mode blocks the
         // textarea focus event, so we can't rely on the focus listener
@@ -266,6 +319,14 @@ const TerminalHook = {
         notifyFocus();
         this.term?.focus();
         queueMicrotask(() => { this._allowFocus = false; });
+      } else if (this._isMobile) {
+        // Scroll/drag lift-off: keep buffering through the inertial glide
+        // instead of draining straight away (see armMomentumSettle).
+        this._touchActive = false;
+        this._momentumActive = true;
+        armMomentumSettle();
+      } else {
+        endTouchPause();
       }
     }, { passive: true });
 
@@ -544,7 +605,7 @@ const TerminalHook = {
         const bytes = Uint8Array.from(atob(msg.data), (c) =>
           c.charCodeAt(0)
         );
-        if (this._touchActive) {
+        if (this._touchActive || this._momentumActive) {
           this._touchOutputQueue.push(bytes);
         } else {
           this.term.write(bytes);
@@ -606,6 +667,13 @@ const TerminalHook = {
     }
     if (this._inputTimer) {
       cancelAnimationFrame(this._inputTimer);
+    }
+    if (this._momentumTimer) {
+      clearTimeout(this._momentumTimer);
+    }
+    if (this._scrollDisposable) {
+      this._scrollDisposable.dispose();
+      this._scrollDisposable = null;
     }
 
     if (this.term) {
