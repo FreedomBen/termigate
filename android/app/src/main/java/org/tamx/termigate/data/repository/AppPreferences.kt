@@ -24,6 +24,7 @@ class AppPreferences @Inject constructor(
         private const val KEY_FONT_SIZE = "font_size"
         private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
         private const val KEY_VIBRATE_ON_KEY = "vibrate_on_key"
+        private const val KEY_SHOW_TOOLBAR = "show_toolbar"
         private const val KEY_QUICK_ACTIONS_CACHE = "quick_actions_cache"
     }
 
@@ -88,6 +89,18 @@ class AppPreferences @Inject constructor(
     var vibrateOnKey: Boolean
         get() = prefs.getBoolean(KEY_VIBRATE_ON_KEY, true)
         set(value) = prefs.edit().putBoolean(KEY_VIBRATE_ON_KEY, value).apply()
+
+    // Flow-backed so the terminal screen can hide/show the control bars live
+    // when the setting is toggled (no submit step). Defaults on.
+    private val _showToolbarFlow = MutableStateFlow(prefs.getBoolean(KEY_SHOW_TOOLBAR, true))
+    val showToolbarFlow: StateFlow<Boolean> = _showToolbarFlow.asStateFlow()
+
+    var showToolbar: Boolean
+        get() = _showToolbarFlow.value
+        set(value) {
+            prefs.edit().putBoolean(KEY_SHOW_TOOLBAR, value).apply()
+            _showToolbarFlow.value = value
+        }
 
     var quickActionsCache: String?
         get() = prefs.getString(KEY_QUICK_ACTIONS_CACHE, null)

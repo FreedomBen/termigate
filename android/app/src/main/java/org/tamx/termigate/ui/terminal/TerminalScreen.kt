@@ -113,6 +113,7 @@ fun TerminalScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val paneSize by viewModel.paneSize.collectAsStateWithLifecycle()
     val fontSize by viewModel.fontSize.collectAsStateWithLifecycle()
+    val showToolbar by viewModel.showToolbar.collectAsStateWithLifecycle()
     var showTopBar by remember { mutableStateOf(true) }
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
     var isKeyboardVisible by remember { mutableStateOf(false) }
@@ -195,9 +196,10 @@ fun TerminalScreen(
                 }
             }
 
-            // Special key toolbar (visible when keyboard is open)
+            // Special key toolbar (visible when keyboard is open). Hidden
+            // entirely when the Mobile Control Bar setting is off (`ea742a7`).
             AnimatedVisibility(
-                visible = isKeyboardVisible,
+                visible = showToolbar && isKeyboardVisible,
                 enter = slideInVertically { it },
                 exit = slideOutVertically { it }
             ) {
@@ -209,7 +211,7 @@ fun TerminalScreen(
             // Secondary control bar (visible when the keyboard is down) so
             // Enter/Space/Backspace/Esc stay reachable without raising the IME.
             AnimatedVisibility(
-                visible = state.isConnected && !isKeyboardVisible,
+                visible = showToolbar && state.isConnected && !isKeyboardVisible,
                 enter = slideInVertically { it },
                 exit = slideOutVertically { it }
             ) {

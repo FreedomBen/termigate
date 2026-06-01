@@ -170,6 +170,22 @@ fun SettingsScreen(
 
             HorizontalDivider()
 
+            // Mobile Control Bar section
+            SectionHeader("Mobile Control Bar")
+            SettingsToggle(
+                label = "Show control bar",
+                checked = state.showToolbar,
+                onCheckedChange = viewModel::onShowToolbarChanged
+            )
+            Text(
+                "Shows the special-key bar (and the Enter/Esc bar) above the " +
+                    "soft keyboard on the terminal screen.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            HorizontalDivider()
+
             // Connection section
             SectionHeader("Connection")
             Text(

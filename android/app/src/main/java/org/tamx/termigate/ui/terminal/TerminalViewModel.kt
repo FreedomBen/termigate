@@ -41,6 +41,9 @@ class TerminalViewModel @Inject constructor(
 
     val fontSize: StateFlow<Int> = appPreferences.fontSizeFlow
 
+    /** Whether the mobile control bars should be shown (Settings → Mobile Control Bar). */
+    val showToolbar: StateFlow<Boolean> = appPreferences.showToolbarFlow
+
     fun onFontSizeChanged(size: Int) {
         appPreferences.fontSize = size.coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE)
     }

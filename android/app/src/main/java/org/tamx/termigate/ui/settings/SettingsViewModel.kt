@@ -26,6 +26,7 @@ class SettingsViewModel @Inject constructor(
         val fontSize: Int = 14,
         val keepScreenOn: Boolean = true,
         val vibrateOnKey: Boolean = true,
+        val showToolbar: Boolean = true,
         val serverUrl: String = "",
         val isLoading: Boolean = false,
         val error: String? = null,
@@ -38,6 +39,7 @@ class SettingsViewModel @Inject constructor(
             fontSize = appPrefs.fontSize,
             keepScreenOn = appPrefs.keepScreenOn,
             vibrateOnKey = appPrefs.vibrateOnKey,
+            showToolbar = appPrefs.showToolbar,
             serverUrl = appPrefs.serverUrl ?: ""
         )
     )
@@ -104,6 +106,13 @@ class SettingsViewModel @Inject constructor(
     fun onVibrateChanged(enabled: Boolean) {
         appPrefs.vibrateOnKey = enabled
         _uiState.update { it.copy(vibrateOnKey = enabled) }
+    }
+
+    // Applies immediately (web parity `486ea05`): persisting flips the
+    // flow the terminal screen observes, so the control bars hide/show live.
+    fun onShowToolbarChanged(enabled: Boolean) {
+        appPrefs.showToolbar = enabled
+        _uiState.update { it.copy(showToolbar = enabled) }
     }
 
     fun onLogout() {

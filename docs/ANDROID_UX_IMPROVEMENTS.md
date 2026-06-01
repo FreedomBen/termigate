@@ -60,7 +60,7 @@ _Android home: `ui/terminal/SpecialKeyToolbar.kt` (+ defaults that mirror `confi
 - [x] Move rare control keys to a `…` overflow popover when the bar is narrow — `b0705eb` — _(native equivalent: rare keys (F1–F12, Home/End, PgUp/Dn, Ins/Del) live in a `▲`/`▼` expandable second row rather than a popover; same declutter intent)_
 - [x] Add a **secondary** control bar shown when the soft keyboard is **down** — `0822875` — _(native: new `KeyboardDownBar` with Enter/Space/Backspace/Esc, shown via `AnimatedVisibility` when `!isKeyboardVisible`; tested in `KeyboardDownBarTest`)_
 - [ ] On the secondary bar, replace y/n buttons with tmux copy-mode controls — `49f9a93` — _(deferred: the `terminal:` channel has no copy-mode handler; on native, scrollback is local to the terminal-lib emulator, so this becomes local scroll controls — tracked with §8)_
-- [ ] Hide the control bar entirely when the toolbar setting is off — `ea742a7` — _(deferred: native settings has no Mobile Control Bar toggle yet; implement with §10 `7fbda47`, then gate both control bars on it)_
+- [x] Hide the control bar entirely when the toolbar setting is off — `ea742a7` — _(native: both control bars are gated on `showToolbar`, from the new Mobile Control Bar setting — see §10 `7fbda47`)_
 - [x] Reorder arrow keys to ←, ↓, ↑, → and group all four together in toolbar defaults — `ec2b123` — _(native: reordered the four arrow `ToolbarKey`s in `SpecialKeyToolbar`)_
 - [x] Drop the removed `toolbar_buttons` config / legacy virtual toolbar (don't port the dead path) — `40771e3` — _(N/A: native never had a `toolbar_buttons` config or JS virtual toolbar; nothing to remove)_
 
@@ -140,8 +140,8 @@ _Android home: `ui/login/LoginScreen.kt`, `ui/login/LoginViewModel.kt`._
 
 _Android home: `ui/settings/SettingsScreen.kt`, `ui/settings/SettingsViewModel.kt`._
 
-- [ ] Promote the mobile control-bar toggle to its own settings section — `7fbda47`
-- [ ] Make the control-bar toggle apply on change (not only on submit) — `486ea05`
+- [x] Promote the mobile control-bar toggle to its own settings section — `7fbda47` — _(native: added a "Mobile Control Bar" section in `SettingsScreen` with a flow-backed `showToolbar` pref in `AppPreferences`)_
+- [x] Make the control-bar toggle apply on change (not only on submit) — `486ea05` — _(native: `onShowToolbarChanged` persists immediately and flips the `showToolbarFlow` the terminal screen observes; tested in `SettingsViewModelToolbarToggleTest`)_
 - [ ] Add explicit Save buttons to the Notifications and Mobile Control Bar sections — `fda0f97`
 - [ ] Constrain Detection Mode descriptions so they wrap cleanly — `ab4eaad`
 - [ ] Don't truncate notification descriptions (allow wrapping) — `ac18ebb`
