@@ -92,7 +92,7 @@ _Android home: `ui/terminal/TerminalScreen.kt`, `TerminalViewModel.kt`._
 - [ ] Hide pane overlay buttons on mobile; add a `+` split menu next to the pane tabs — `1d3bb9b`
 - [ ] Make the new-pane `+` menu mirror the window-bar `+` placement — `22050e3`
 - [ ] Add a close (X) button to each pane chip — `52cd4fb`
-- [ ] Label each pane's input target with its pane number (a11y) — `40dc29f`
+- [x] Label each pane's input target with its pane number (a11y) — `40dc29f` — _(native: set `contentDescription = "Terminal pane <target>"` on the `TerminalView`)_
 
 ## 6. Gestures & navigation
 

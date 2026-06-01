@@ -389,6 +389,9 @@ private fun TerminalAndroidView(
                 val termView = this
                 isFocusable = true
                 isFocusableInTouchMode = true
+                // a11y: name the input target so screen readers announce which
+                // pane has focus (web parity, `40dc29f`).
+                contentDescription = "Terminal pane ${viewModel.target}"
                 setTextSize(fontSize)
                 appliedFontSize = fontSize
                 setTypeface(Typeface.MONOSPACE)
