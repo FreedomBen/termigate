@@ -9,8 +9,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
@@ -126,7 +126,8 @@ private fun ToolbarKey(
 ) {
     TextButton(
         onClick = onClick,
-        modifier = Modifier.height(40.dp)
+        // Material minimum touch target (web parity: 44 px tap targets).
+        modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
     ) {
         Text(
             text = label,
