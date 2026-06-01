@@ -119,6 +119,37 @@ fun SpecialKeyToolbar(
     }
 }
 
+/**
+ * Secondary control bar shown when the soft keyboard is **down** (web parity,
+ * `0822875`). Surfaces the keystrokes you'd otherwise have to raise the
+ * keyboard for — Enter, Space, Backspace, Esc — so prompts can be answered
+ * one-handed. The tmux copy-mode / scrollback half of the web bar (`49f9a93`)
+ * is local scrollback navigation on native and is tracked under §8.
+ */
+@Composable
+fun KeyboardDownBar(
+    onSendInput: (ByteArray) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            ToolbarKey("Enter") { onSendInput(byteArrayOf(0x0d)) }
+            ToolbarKey("Space") { onSendInput(byteArrayOf(0x20)) }
+            ToolbarKey("Bksp") { onSendInput(byteArrayOf(0x7f)) }
+            ToolbarKey("Esc") { onSendInput(byteArrayOf(0x1b)) }
+        }
+    }
+}
+
 @Composable
 private fun ToolbarKey(
     label: String,

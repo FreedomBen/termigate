@@ -205,6 +205,18 @@ fun TerminalScreen(
                     onSendInput = viewModel::sendInput
                 )
             }
+
+            // Secondary control bar (visible when the keyboard is down) so
+            // Enter/Space/Backspace/Esc stay reachable without raising the IME.
+            AnimatedVisibility(
+                visible = state.isConnected && !isKeyboardVisible,
+                enter = slideInVertically { it },
+                exit = slideOutVertically { it }
+            ) {
+                KeyboardDownBar(
+                    onSendInput = viewModel::sendInput
+                )
+            }
         }
 
         // Loading overlay

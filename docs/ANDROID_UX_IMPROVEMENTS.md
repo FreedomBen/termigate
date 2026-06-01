@@ -58,7 +58,7 @@ _Android home: `ui/terminal/SpecialKeyToolbar.kt` (+ defaults that mirror `confi
 - [ ] Move the control bar to the bottom of the screen, above the soft keyboard — `28ad19b`
 - [ ] Pack the control bar onto a single row — `50e92d6`
 - [ ] Move rare control keys to a `…` overflow popover when the bar is narrow — `b0705eb`
-- [ ] Add a **secondary** control bar shown when the soft keyboard is **down** — `0822875`
+- [x] Add a **secondary** control bar shown when the soft keyboard is **down** — `0822875` — _(native: new `KeyboardDownBar` with Enter/Space/Backspace/Esc, shown via `AnimatedVisibility` when `!isKeyboardVisible`; tested in `KeyboardDownBarTest`)_
 - [ ] On the secondary bar, replace y/n buttons with tmux copy-mode controls — `49f9a93`
 - [ ] Hide the control bar entirely when the toolbar setting is off — `ea742a7`
 - [x] Reorder arrow keys to ←, ↓, ↑, → and group all four together in toolbar defaults — `ec2b123` — _(native: reordered the four arrow `ToolbarKey`s in `SpecialKeyToolbar`)_
