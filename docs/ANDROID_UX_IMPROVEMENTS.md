@@ -84,14 +84,23 @@ _Android home: `ui/terminal/TerminalScreen.kt` / `TerminalViewModel.kt` (existin
 
 _Android home: `ui/terminal/TerminalScreen.kt`, `TerminalViewModel.kt`._
 
-- [ ] Add a mobile pane-tabs row for switching panes in multi-pane view — `de7558d`
-- [ ] Render the terminal full-bleed on mobile when there is only one pane — `c758494`
-- [ ] Hide the pane-resize divider overlay on mobile — `1ea82c4`
-- [ ] Drop the active-pane border on mobile — `d26afb6`
-- [ ] Restore horizontal scroll on the mobile active pane — `486730e`
-- [ ] Hide pane overlay buttons on mobile; add a `+` split menu next to the pane tabs — `1d3bb9b`
-- [ ] Make the new-pane `+` menu mirror the window-bar `+` placement — `22050e3`
-- [ ] Add a close (X) button to each pane chip — `52cd4fb`
+> **Architecture note:** the native app is **single-pane-per-screen** —
+> `TerminalScreen` shows exactly one pane (one `target`/`RemoteTerminalSession`/
+> `TerminalView`); choosing a pane happens in the session list, not in a
+> multi-pane grid. The web's mobile multi-pane chrome (pane-tabs row, split
+> menu, per-pane chips/close-X, resize divider, active-pane border) has no
+> native counterpart. The items below marked **deferred** would require
+> building a native multi-pane view — a feature, not a port. See the §5
+> decision flagged to the maintainer.
+
+- [ ] Add a mobile pane-tabs row for switching panes in multi-pane view — `de7558d` — _(deferred: gateway multi-pane feature; today panes are switched from the session list)_
+- [x] Render the terminal full-bleed on mobile when there is only one pane — `c758494` — _(already native: the single pane fills the viewport; the top bar auto-hides)_
+- [x] Hide the pane-resize divider overlay on mobile — `1ea82c4` — _(N/A: no split grid, so no resize divider)_
+- [x] Drop the active-pane border on mobile — `d26afb6` — _(N/A: no multi-pane grid, so no active-pane border)_
+- [ ] Restore horizontal scroll on the mobile active pane — `486730e` — _(ties to §7 pane-sizing policy; verify whether an over-wide pane can pan — tracked with `b630e3a`)_
+- [ ] Hide pane overlay buttons on mobile; add a `+` split menu next to the pane tabs — `1d3bb9b` — _(deferred: no pane overlay buttons natively; the `+` split menu depends on the multi-pane view. Split exists in the session list.)_
+- [ ] Make the new-pane `+` menu mirror the window-bar `+` placement — `22050e3` — _(deferred: depends on `1d3bb9b`)_
+- [ ] Add a close (X) button to each pane chip — `52cd4fb` — _(deferred: no pane chips without the multi-pane pane-tabs row)_
 - [x] Label each pane's input target with its pane number (a11y) — `40dc29f` — _(native: set `contentDescription = "Terminal pane <target>"` on the `TerminalView`)_
 
 ## 6. Gestures & navigation
