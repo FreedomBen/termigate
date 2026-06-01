@@ -97,7 +97,7 @@ _Android home: `ui/terminal/TerminalScreen.kt`, `TerminalViewModel.kt`._
 - [x] Render the terminal full-bleed on mobile when there is only one pane — `c758494` — _(already native: the single pane fills the viewport; the top bar auto-hides)_
 - [x] Hide the pane-resize divider overlay on mobile — `1ea82c4` — _(N/A: no split grid, so no resize divider)_
 - [x] Drop the active-pane border on mobile — `d26afb6` — _(N/A: no multi-pane grid, so no active-pane border)_
-- [ ] Restore horizontal scroll on the mobile active pane — `486730e` — _(ties to §7 pane-sizing policy; verify whether an over-wide pane can pan — tracked with `b630e3a`)_
+- [x] Restore horizontal scroll on the mobile active pane — `486730e` — _(native: the `TerminalViewport` `Box` now wraps the sized `TerminalView` in `horizontalScroll`, so an over-wide pane — e.g. after a pinch-zoom-in or a server-driven wide resize — pans instead of clipping its right edge. Horizontal drags are unused by the emulator's gesture detector, so this doesn't steal the vertical scrollback/tap gestures; when the pane fits, the scroll range is zero. The function's docstring had claimed a scroll container that the code lacked — now true.)_
 - [ ] Hide pane overlay buttons on mobile; add a `+` split menu next to the pane tabs — `1d3bb9b` — _(deferred: no pane overlay buttons natively; the `+` split menu depends on the multi-pane view. Split exists in the session list.)_
 - [ ] Make the new-pane `+` menu mirror the window-bar `+` placement — `22050e3` — _(deferred: depends on `1d3bb9b`)_
 - [ ] Add a close (X) button to each pane chip — `52cd4fb` — _(deferred: no pane chips without the multi-pane pane-tabs row)_

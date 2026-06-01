@@ -318,12 +318,15 @@ fun TerminalScreen(
 }
 
 /**
- * Wraps the Termux [TerminalView] in a horizontal+vertical scroll container
- * and sizes it to exactly `cols * cellWidthPx × rows * cellHeightPx` so the
- * Android view mirrors the tmux pane's true dimensions. When the pane is
- * larger than the viewport, the user can scroll. During bootstrap (before
- * the first measure has produced cell pixel dims), the view fills the
- * available space; once cell dims are known, it switches to explicit sizing.
+ * Sizes the Termux [TerminalView] to exactly `cols * cellWidthPx ×
+ * rows * cellHeightPx` so the Android view mirrors the tmux pane's true
+ * dimensions, and wraps it in a horizontal scroll container so an over-wide
+ * pane (e.g. after a pinch-zoom-in or a server-driven wide resize) can be
+ * panned instead of clipped (web parity, `486730e`). Vertical scrollback is
+ * the emulator's own (`TerminalView.mTopRow`), not a Compose scroll, so only
+ * the horizontal axis is wrapped here. During bootstrap (before the first
+ * measure has produced cell pixel dims), the view fills the available space;
+ * once cell dims are known, it switches to explicit sizing.
  */
 @Composable
 private fun TerminalViewport(
@@ -365,6 +368,12 @@ private fun TerminalViewport(
         modifier = Modifier
             .fillMaxSize()
             .onSizeChanged { viewportPx = it }
+            // Pan an over-wide pane instead of clipping its right edge
+            // (web parity, `486730e`). Horizontal drags are unused by the
+            // TerminalView gesture detector, so this never steals the
+            // vertical scrollback / tap gestures; when the pane fits, the
+            // scroll range is zero and every gesture passes to the child.
+            .horizontalScroll(rememberScrollState())
     ) {
         TerminalAndroidView(
             viewModel = viewModel,
