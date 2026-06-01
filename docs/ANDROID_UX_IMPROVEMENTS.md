@@ -133,8 +133,8 @@ _Android home: `terminal-lib` scrollback + `ui/terminal/TerminalViewModel.kt`._
 
 _Android home: `ui/login/LoginScreen.kt`, `ui/login/LoginViewModel.kt`._
 
-- [ ] Add a password-visibility toggle to the login form — `435d5e8`
-- [ ] Preserve the entered username after a failed login submit — `6a0f1b0`
+- [x] Add a password-visibility toggle to the login form — `435d5e8` — _(already native: the eye / eye-off `IconButton` trailing the password field)_
+- [x] Preserve the entered username after a failed login submit — `6a0f1b0` — _(already native: a failed login only sets `error`; `username` stays in `UiState`, and the form even pre-fills `getLastUsername()`)_
 
 ## 10. Settings screen
 
