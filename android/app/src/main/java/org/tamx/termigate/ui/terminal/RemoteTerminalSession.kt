@@ -42,7 +42,11 @@ class RemoteTerminalSession(
     override fun initializeEmulator(columns: Int, rows: Int, cellWidthPixels: Int, cellHeightPixels: Int) {
         cellWidthPx = cellWidthPixels
         cellHeightPx = cellHeightPixels
-        mEmulator = TerminalEmulator(this, columns, rows, cellWidthPixels, cellHeightPixels, 10000, mClient)
+        // Scrollback cap. The server captures full tmux history on attach
+        // (`capture-pane -S -`, `e4c781a`); use the emulator's max transcript
+        // (50000 rows, lazily allocated) so that history is retained client-side
+        // rather than truncated, matching the web's xterm scrollback cap.
+        mEmulator = TerminalEmulator(this, columns, rows, cellWidthPixels, cellHeightPixels, 50000, mClient)
         pendingHistory?.let { history ->
             mEmulator.append(history, history.size)
             pendingHistory = null

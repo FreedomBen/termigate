@@ -125,7 +125,7 @@ _Android home: `terminal-lib/.../view/TerminalView.java`, `ui/terminal/RemoteTer
 
 _Android home: `terminal-lib` scrollback + `ui/terminal/TerminalViewModel.kt`._
 
-- [ ] Capture full tmux scrollback on pane attach — `e4c781a`
+- [x] Capture full tmux scrollback on pane attach — `e4c781a` — _(server half is shared: the native channel join calls the same `PaneStream.resize_and_capture` (`capture-pane -S -`). Client half: raised the native emulator transcript from 10000 to 50000 rows so the full history is retained, matching the web's xterm cap.)_
 - [ ] Replace the Copy button with a Scroll / Exit-Scroll toggle — `84654fd`
 - [ ] _(web-impl detail)_ Drive scrollback via the terminal emulator instead of tmux copy-mode — `0da0a49` _(native already has its own scrollback buffer; adopt the same UX, not the xterm.js mechanism)_
 
