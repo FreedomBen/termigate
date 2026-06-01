@@ -93,14 +93,15 @@ fun SpecialKeyToolbar(
                     label = "Alt",
                     isActive = altActive
                 ) { altActive = !altActive }
-                ToolbarKey("\u2191") {
-                    onSendInput(byteArrayOf(0x1b, '['.code.toByte(), 'A'.code.toByte()))
+                // Arrows grouped left-to-right as \u2190 \u2193 \u2191 \u2192 (web parity, `ec2b123`).
+                ToolbarKey("\u2190") {
+                    onSendInput(byteArrayOf(0x1b, '['.code.toByte(), 'D'.code.toByte()))
                 }
                 ToolbarKey("\u2193") {
                     onSendInput(byteArrayOf(0x1b, '['.code.toByte(), 'B'.code.toByte()))
                 }
-                ToolbarKey("\u2190") {
-                    onSendInput(byteArrayOf(0x1b, '['.code.toByte(), 'D'.code.toByte()))
+                ToolbarKey("\u2191") {
+                    onSendInput(byteArrayOf(0x1b, '['.code.toByte(), 'A'.code.toByte()))
                 }
                 ToolbarKey("\u2192") {
                     onSendInput(byteArrayOf(0x1b, '['.code.toByte(), 'C'.code.toByte()))

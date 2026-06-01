@@ -61,7 +61,7 @@ _Android home: `ui/terminal/SpecialKeyToolbar.kt` (+ defaults that mirror `confi
 - [ ] Add a **secondary** control bar shown when the soft keyboard is **down** — `0822875`
 - [ ] On the secondary bar, replace y/n buttons with tmux copy-mode controls — `49f9a93`
 - [ ] Hide the control bar entirely when the toolbar setting is off — `ea742a7`
-- [ ] Reorder arrow keys to ←, ↓, ↑, → and group all four together in toolbar defaults — `ec2b123`
+- [x] Reorder arrow keys to ←, ↓, ↑, → and group all four together in toolbar defaults — `ec2b123` — _(native: reordered the four arrow `ToolbarKey`s in `SpecialKeyToolbar`)_
 - [ ] Drop the removed `toolbar_buttons` config / legacy virtual toolbar (don't port the dead path) — `40771e3`
 
 ## 3. Quick Action bar
