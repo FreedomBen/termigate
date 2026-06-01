@@ -171,13 +171,13 @@ Not UX, but the native Phoenix client (`PhoenixSocket.kt`, `PhoenixChannel.kt`,
 `AuthInterceptor.kt`, `AuthRepository.kt`) may **break or need updates** because
 of these server-side auth changes. Review before/while porting UX.
 
-- [ ] Sessions and bearer tokens are now bound to current credentials via an `auth_version` claim — tokens are invalidated when credentials change — `095573f`
-- [ ] Channel-scope tokens are refreshed periodically so long-idle connections can rejoin — confirm the native client refreshes too — `a8444e3`
-- [ ] Password hashing switched to `pbkdf2_elixir` with self-identifying hash strings (server-side; verify native login still authenticates) — `cbad11a`
-- [ ] `/api/config` no longer returns `auth.password_hash` — don't depend on it — `6a77eb6`
-- [ ] Session cookie `Secure` flag now resolved at runtime — `ba3ac95`
-- [ ] _(web-only)_ `_csrf_token` is now sent on the `/socket` WebSocket upgrade for cookie auth — native uses bearer tokens, not cookies — `01a415c`
-- [ ] `/metrics` restricted to loopback; `/setup` loopback gate dropped in favor of the one-shot token — `c7f0359`, `1aa12f9`
+- [x] Sessions and bearer tokens are now bound to current credentials via an `auth_version` claim — tokens are invalidated when credentials change — `095573f` — _(verified OK: native treats the token opaquely (no `auth_version`/`password_hash` references); an invalidated token returns 401, which `AuthInterceptor` turns into `AuthEvent.TokenExpired` → `AppNavigation` clears the token and routes to login)_
+- [x] Channel-scope tokens are refreshed periodically so long-idle connections can rejoin — confirm the native client refreshes too — `a8444e3` — _(N/A: that token is the web's LiveView `<meta name="channel-scope">` mechanism. The native client joins the `terminal:` channel directly with its bearer token via `PhoenixSocket`'s `tokenProvider`, re-read on every reconnect; there is no per-mount scope token to refresh. A long-idle expiry surfaces as 401 → re-login.)_
+- [x] Password hashing switched to `pbkdf2_elixir` with self-identifying hash strings (server-side; verify native login still authenticates) — `cbad11a` — _(verified OK: native posts credentials to the login endpoint; hashing is server-side and opaque to the client)_
+- [x] `/api/config` no longer returns `auth.password_hash` — don't depend on it — `6a77eb6` — _(verified OK: no `password_hash` reference anywhere in `android/app/src/main`)_
+- [x] Session cookie `Secure` flag now resolved at runtime — `ba3ac95` — _(N/A: native authenticates with bearer tokens, not session cookies)_
+- [x] _(web-only)_ `_csrf_token` is now sent on the `/socket` WebSocket upgrade for cookie auth — native uses bearer tokens, not cookies — `01a415c`
+- [x] `/metrics` restricted to loopback; `/setup` loopback gate dropped in favor of the one-shot token — `c7f0359`, `1aa12f9` — _(N/A: native uses neither `/metrics` nor `/setup`)_
 
 ## Appendix B — Explicitly excluded (no Android impact)
 
