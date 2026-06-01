@@ -68,8 +68,8 @@ _Android home: `ui/terminal/SpecialKeyToolbar.kt` (+ defaults that mirror `confi
 
 _Android home: `ui/terminal/QuickActionBar.kt`._
 
-- [ ] Collapse the quick-action bar to a thin sliver instead of a full row — `cd43619`
-- [ ] Fade the bar's edges to signal more pills are off-screen (scroll affordance) — `d1cd028`
+- [x] Collapse the quick-action bar to a thin sliver instead of a full row — `cd43619` — _(already native: `collapsed` state + ◀/▶ toggle in `QuickActionBar` shrinks the pills via `AnimatedVisibility`)_
+- [x] Fade the bar's edges to signal more pills are off-screen (scroll affordance) — `d1cd028` — _(already native: horizontal-gradient fades keyed off `canScrollBackward`/`canScrollForward`)_
 
 ## 4. Soft-keyboard behavior
 
