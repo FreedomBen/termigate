@@ -142,10 +142,10 @@ _Android home: `ui/settings/SettingsScreen.kt`, `ui/settings/SettingsViewModel.k
 
 - [x] Promote the mobile control-bar toggle to its own settings section — `7fbda47` — _(native: added a "Mobile Control Bar" section in `SettingsScreen` with a flow-backed `showToolbar` pref in `AppPreferences`)_
 - [x] Make the control-bar toggle apply on change (not only on submit) — `486ea05` — _(native: `onShowToolbarChanged` persists immediately and flips the `showToolbarFlow` the terminal screen observes; tested in `SettingsViewModelToolbarToggleTest`)_
-- [ ] Add explicit Save buttons to the Notifications and Mobile Control Bar sections — `fda0f97`
-- [ ] Constrain Detection Mode descriptions so they wrap cleanly — `ab4eaad`
-- [ ] Don't truncate notification descriptions (allow wrapping) — `ac18ebb`
-- [ ] _(server-display)_ Label the config path as "in-container" when containerized — `d8e90ef` _(verify the native settings screen even shows a config path)_
+- [x] Add explicit Save buttons to the Notifications and Mobile Control Bar sections — `fda0f97` — _(N/A: native settings apply on change by design — no Save step — and there is no Notifications section)_
+- [x] Constrain Detection Mode descriptions so they wrap cleanly — `ab4eaad` — _(N/A: native settings has no Detection Mode section)_
+- [x] Don't truncate notification descriptions (allow wrapping) — `ac18ebb` — _(N/A: native settings has no notification descriptions)_
+- [x] _(server-display)_ Label the config path as "in-container" when containerized — `d8e90ef` _(verify the native settings screen even shows a config path)_ — _(N/A: native settings shows the server URL + app version, not a config path)_
 
 ## 11. Modals / confirmations _(web-only — likely N/A)_
 
