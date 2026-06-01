@@ -75,10 +75,10 @@ _Android home: `ui/terminal/QuickActionBar.kt`._
 
 _Android home: `ui/terminal/TerminalScreen.kt` / `TerminalViewModel.kt` (existing `RaiseSoftKeyboardTest.kt`)._
 
-- [ ] Only open the soft keyboard on a tap — not on a scroll/drag — `904d16c`
-- [ ] Don't open the keyboard when switching panes via a tab tap — `7e0237e`
-- [ ] Block all non-tap focus that would raise the keyboard — `d7eb255`
-- [ ] _(web-only — likely N/A)_ Detect the keyboard via a viewport baseline for Android browsers — `0853a41` _(native uses `WindowInsets`/IME insets instead)_
+- [x] Only open the soft keyboard on a tap — not on a scroll/drag — `904d16c` — _(already native: the IME is raised only in `TerminalView.onSingleTapUp` → `showKeyboard()`; `onScroll` just calls `doScroll`)_
+- [x] Don't open the keyboard when switching panes via a tab tap — `7e0237e` — _(N/A: single-pane native app has no pane tabs)_
+- [x] Block all non-tap focus that would raise the keyboard — `d7eb255` — _(already native: the only `showSoftInput` call is gated behind the tap handler; programmatic `requestFocus()` never shows the IME)_
+- [x] _(web-only — likely N/A)_ Detect the keyboard via a viewport baseline for Android browsers — `0853a41` _(native uses `WindowInsets`/IME insets instead)_ — _(N/A: native already observes `WindowInsetsCompat.Type.ime()` in `TerminalScreen`)_
 
 ## 5. Pane navigation & multi-pane layout
 
