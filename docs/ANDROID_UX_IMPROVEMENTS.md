@@ -48,7 +48,7 @@ _Android home: every `ui/**/*Screen.kt` Compose surface; use `Modifier.sizeIn(mi
 - [ ] Enlarge setup password toggle buttons to 44×44 — `b3c56ef` _(setup is web-first-run; verify relevance)_
 - [ ] Give the session-duration select a 44 px (`min-h-11`) touch height — `0987a75` _(setup screen)_
 - [ ] Enlarge the flash/snackbar close button to 44×44 — `538df3c`
-- [ ] Wrap settings checkboxes and radios in 44×44 hit areas — `1cbfff5`
+- [x] Wrap settings checkboxes and radios in 44×44 hit areas — `1cbfff5` — _(native settings has no checkboxes/radios; toggles are 48 dp `Switch`es. Enlarged the closest analog — the Edit-Quick-Action color swatches — from 36 dp to 48 dp.)_
 - [ ] Match pane-tab close-X size to window-tab close-X — `7605812`
 
 ## 2. Mobile control bar / special-key toolbar

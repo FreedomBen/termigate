@@ -335,7 +335,7 @@ private fun EditQuickActionDialog(
                             shape = RoundedCornerShape(8.dp),
                             color = colorForName(c),
                             modifier = Modifier
-                                .height(36.dp)
+                                .heightIn(min = 48.dp)
                                 .weight(1f),
                             border = if (c == color) {
                                 androidx.compose.foundation.BorderStroke(
