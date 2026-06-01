@@ -153,15 +153,15 @@ The native client uses Compose dialogs, so the web's `<dialog>`-vs-assigns
 mechanics don't transfer. Listed for completeness; only the *UX intent*
 (server-confirmed destructive actions) matters.
 
-- [ ] Drive confirm modals from server assigns instead of native `<dialog open>` — `49d2e81`
-- [ ] Remove a closed confirm modal from the DOM instead of hiding it — `ac3a6c0`
+- [x] Drive confirm modals from server assigns instead of native `<dialog open>` — `49d2e81` — _(N/A: native confirmations are Compose `AlertDialog`s driven by state (`confirmAction`/`editingAction`), i.e. already assigns-equivalent)_
+- [x] Remove a closed confirm modal from the DOM instead of hiding it — `ac3a6c0` — _(N/A: a Compose dialog leaves the composition entirely when its state is null (`state?.let { … }`); there is no hidden-DOM equivalent)_
 
 ## 12. First-run / setup landing _(web-only — verify relevance)_
 
 The `/setup` flow is the server's first-run experience. A native client
 connects to an already-configured server, so these likely don't apply.
 
-- [ ] Render a first-run landing page on `/setup` instead of a bare 404 — `50add0e`
+- [x] Render a first-run landing page on `/setup` instead of a bare 404 — `50add0e` — _(N/A: the native client connects to an already-configured server and never visits `/setup`)_
 
 ---
 
