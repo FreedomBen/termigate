@@ -42,7 +42,7 @@ _Android home: every `ui/**/*Screen.kt` Compose surface; use `Modifier.sizeIn(mi
 
 - [ ] Grow terminal top-bar tap targets to 44×44 on mobile — `3102d61`
 - [ ] Raise Settings page tap targets to 44 px on mobile — `e1d05e2`
-- [ ] Raise login form tap targets to 44 px on mobile — `1b792cb`
+- [x] Raise login form tap targets to 44 px on mobile — `1b792cb` — _(native: Connect button now `heightIn(min = 48.dp)`; text fields are 56 dp, password toggle is a 48 dp `IconButton`)_
 - [x] Lift control-bar and pane-close tap targets to 44 px on mobile — `68a0d66` — _(native: `ToolbarKey` now 48 dp via `defaultMinSize`; pane-close is N/A, app is single-pane)_
 - [ ] Enlarge login password-visibility toggle button to 44×44 — `5bda4e1`
 - [ ] Enlarge setup password toggle buttons to 44×44 — `b3c56ef` _(setup is web-first-run; verify relevance)_
